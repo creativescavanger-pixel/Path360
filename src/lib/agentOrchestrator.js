@@ -1,6 +1,9 @@
 import { callOpenAI, callOpenAIStream } from './openaiClient.js'
 
-const DEFAULT_MODEL = 'gemini-2.0-flash'
+const DEFAULT_MODEL =
+  import.meta.env.VITE_DEFAULT_LLM_MODEL ||
+  import.meta.env.VITE_OPENAI_MODEL ||
+  'gpt-4o-mini'
 
 const AGENTS = {
   venture_strategist: {
@@ -57,6 +60,81 @@ Use the frameworks VCs and institutional investors actually use (TAM/SAM/SOM, un
   },
 }
 
+function sanitizeText(value, fallback = 'Unknown') {
+  const text = typeof value === 'string' ? value.trim() : value
+  if (text === null || text === undefined || text === '') return fallback
+  return String(text)
+}
+
+function summarizePriorities(priorities) {
+  if (!Array.isArray(priorities) || priorities.length === 0) return 'None recorded'
+  return priorities
+    .slice(0, 4)
+    .map((item, index) => {
+      if (typeof item === 'string') return `${index + 1}. ${item}`
+      return `${index + 1}. ${item?.priority || 'Priority'}${item?.urgency ? ` (${item.urgency})` : ''}`
+    })
+    .join('\n')
+}
+
+function buildContextBlock(founderContext) {
+  if (!founderContext || Object.keys(founderContext).length === 0) {
+    return '(No founder context available yet — the founder has not completed an assessment.)'
+  }
+
+  const { profile, assessment, memories, progress, document_intakes } = founderContext
+  let block = '--- FOUNDER CONTEXT (use this to personalise every response) ---\n'
+
+  if (profile) {
+    block += `Founder: ${sanitizeText(profile.founder_name)}\n`
+    block += `Venture: ${sanitizeText(profile.venture_name)}\n`
+    block += `Industry: ${sanitizeText(profile.industry)}\n`
+    block += `Stage: ${sanitizeText(profile.venture_stage)}\n`
+    block += `Business model: ${sanitizeText(profile.business_model)}\n`
+    block += `Geography: ${sanitizeText(profile.geography)}\n`
+    block += `Funding goal: ${sanitizeText(profile.funding_goal, 'Not specified')}\n`
+    block += `Venture summary: ${sanitizeText(profile.venture_summary, 'Not provided')}\n`
+  }
+
+  if (assessment) {
+    block += `\nAssessment scores:\n`
+    block += `  Founder Score: ${sanitizeText(assessment.founder_score, 'N/A')}/100\n`
+    block += `  Investor Readiness: ${sanitizeText(assessment.investor_readiness, 'N/A')}/100\n`
+    block += `  Financial Maturity: ${sanitizeText(assessment.financial_maturity, 'N/A')}/100\n`
+    block += `  Strategic Clarity: ${sanitizeText(assessment.strategic_clarity, 'N/A')}/100\n`
+    block += `  Venture Stage: ${sanitizeText(assessment.venture_stage_result || assessment.venture_stage)}\n`
+    block += `  Top priorities:\n${summarizePriorities(assessment.strategic_priorities)}\n`
+
+    if (assessment.vc_verdict) {
+      block += `  VC verdict from last assessment: "${assessment.vc_verdict}"\n`
+    }
+  }
+
+  if (memories && memories.length > 0) {
+    block += `\nFounder memory (patterns observed over time):\n`
+    memories.slice(0, 5).forEach((m) => {
+      block += `  [${sanitizeText(m.memory_type, 'memory')}] ${sanitizeText(m.content, '')}\n`
+    })
+  }
+
+  if (progress && progress.length > 0) {
+    block += `\nFounder progress timeline:\n`
+    progress.slice(0, 5).forEach((e) => {
+      block += `  - ${sanitizeText(e.title)}: ${sanitizeText(e.description, '')}\n`
+    })
+  }
+
+  if (document_intakes && document_intakes.length > 0) {
+    block += `\nRecent guided document prep:\n`
+    document_intakes.slice(0, 3).forEach((d) => {
+      block += `  - ${sanitizeText(d.doctype)}: ${sanitizeText(d.title, 'Untitled prep')}\n`
+    })
+  }
+
+  block += '---\n'
+  return block
+}
+
 export async function askAgent({
   agentType = 'venture_strategist',
   messages = [],
@@ -87,50 +165,6 @@ export async function askAgent({
     messages,
     model: agent.model,
   })
-}
-
-function buildContextBlock(founderContext) {
-  if (!founderContext || Object.keys(founderContext).length === 0) {
-    return '(No founder context available yet — the founder has not completed an assessment.)'
-  }
-
-  const { profile, assessment, memories } = founderContext
-  let block = '--- FOUNDER CONTEXT (use this to personalise every response) ---\n'
-
-  if (profile) {
-    block += `Venture: ${profile.venture_name ?? 'Unknown'}\n`
-    block += `Industry: ${profile.industry ?? 'Unknown'}\n`
-    block += `Stage: ${profile.venture_stage ?? 'Unknown'}\n`
-    block += `Business model: ${profile.business_model ?? 'Unknown'}\n`
-    block += `Geography: ${profile.geography ?? 'Unknown'}\n`
-    block += `Funding goal: ${profile.funding_goal ?? 'Not specified'}\n`
-  }
-
-  if (assessment) {
-    block += `\nAssessment scores:\n`
-    block += `  Founder Score: ${assessment.founder_score}/100\n`
-    block += `  Investor Readiness: ${assessment.investor_readiness}/100\n`
-    block += `  Financial Maturity: ${assessment.financial_maturity}/100\n`
-    block += `  Venture Stage: ${assessment.venture_stage_result}\n`
-
-    if (assessment.strategic_priorities) {
-      block += `  Top priorities: ${JSON.stringify(assessment.strategic_priorities)}\n`
-    }
-
-    if (assessment.vc_verdict) {
-      block += `  VC verdict from last assessment: "${assessment.vc_verdict}"\n`
-    }
-  }
-
-  if (memories && memories.length > 0) {
-    block += `\nFounder memory (patterns observed over time):\n`
-    memories.slice(0, 5).forEach((m) => {
-      block += `  [${m.memory_type}] ${m.content}\n`
-    })
-  }
-
-  block += '---\n'
-  return block
 }
 
 export async function generateDocument({
@@ -164,7 +198,7 @@ Provide:
 3. a sharper investor-facing version.
 Make the language verbal, memorable, and clear.`,
 
-    investor_card: `Create a one-page investor brief for this venture.
+    investor_memo: `Create a one-page investor brief for this venture.
 Structure: Venture in One Line, Founder in One Line, Problem, Solution, Why Now, Market Signal, Business Model, Current Proof, Funding Ask, Key Risk.
 Keep it concise, high-signal, and easy to scan.`,
 
@@ -205,20 +239,16 @@ Write it as if it will be reviewed by a board of directors.`,
 5. Burn rate and runway analysis
 6. Funding requirements and milestones
 Be specific with numbers based on the venture's context.`,
-
-    investor_memo: `Write an institutional investor memo (2-3 pages) that a VC would use internally to champion this deal.
-Structure: Investment Thesis (why now, why this team), Market Analysis, Competitive Positioning, Business Model & Unit Economics, Risks & Mitigants, Comparable Exits, Recommendation.`,
   }
 
-  const basePrompt =
-    docPrompts[docType] ?? `Generate a ${docType} document for this founder.`
+  const basePrompt = docPrompts[docType] ?? `Generate a ${docType} document for this founder.`
 
   const objectiveContext = objectiveId
     ? `\n\nCurrent founder objective: ${objectiveId}. Shape the output so it directly helps with this objective.`
     : ''
 
-  const instructionContext = customInstructions
-    ? `\n\nAdditional instructions from the founder: ${customInstructions}`
+  const instructionContext = customInstructions?.trim()
+    ? `\n\nAdditional instructions from the founder: ${customInstructions.trim()}`
     : ''
 
   const fullPrompt = `${basePrompt}${objectiveContext}${instructionContext}`

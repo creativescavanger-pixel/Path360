@@ -8,7 +8,6 @@ import {
   getNextFoundationQuestion,
   getFirstQuestion,
 } from '../lib/adaptiveQuestions.js'
-import { addMemory } from '../lib/supabaseClient.js'
 import { track, EVENTS } from '../lib/posthogClient.js'
 
 const TOTAL_QUESTIONS = 10
@@ -28,6 +27,7 @@ export default function Assessment() {
   const setAssessmentResults = useDiagnosticStore((s) => s.setAssessmentResults)
   const setQAPairs = useDiagnosticStore((s) => s.setQAPairs)
   const addAssessmentToStore = useDiagnosticStore((s) => s.addAssessment)
+  const addMemoryToStore = useDiagnosticStore((s) => s.addMemory)
 
   const [phase, setPhase] = useState(results ? 'results' : 'questioning')
   const [questions, setQuestions] = useState([])
@@ -182,6 +182,7 @@ export default function Assessment() {
       setCurrentIndex(nextIndex)
       setAnswer(nextPairs[nextIndex]?.answer ?? '')
       setValidationError('')
+      setInfoMessage('')
     } catch (err) {
       console.error(err)
       setValidationError(err?.message || 'Could not load the next question.')
@@ -227,11 +228,20 @@ export default function Assessment() {
   }
 
   async function handleScore() {
+    if (isLoading) return
+
     setIsLoading(true)
+    setValidationError('')
+    setInfoMessage('')
     setPhase('scoring')
 
     try {
       const finalPairs = qaPairs.filter((item) => item?.question && item?.answer?.trim())
+
+      if (!finalPairs.length) {
+        throw new Error('No valid assessment answers found.')
+      }
+
       const history = buildConversationHistory(finalPairs)
       const scores = await generateAssessmentScores(history, founderProfile ?? {})
       const finalResults = { ...scores, rawqa: finalPairs }
@@ -262,7 +272,7 @@ export default function Assessment() {
         })
 
         if (finalResults?.vcverdict) {
-          await addMemory(user.id, 'pattern', finalResults.vcverdict, 5)
+          await addMemoryToStore('pattern', finalResults.vcverdict, 5)
         }
       }
 

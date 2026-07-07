@@ -12,6 +12,8 @@ import GuidedDocumentPrep from './pages/GuidedDocumentPrep.jsx'
 import Memory from './pages/Memory.jsx'
 import Radar from './pages/Radar.jsx'
 import Reports from './pages/Reports.jsx'
+import FounderProfile from './pages/FounderProfile.jsx'
+import StageOnboarding from './pages/StageOnboarding.jsx'
 import AppLayout from './layouts/AppLayout.jsx'
 
 function FullScreenLoader() {
@@ -76,12 +78,22 @@ function Protected({ children }) {
       }
     }
 
-    supabase.auth.getSession().then(({ data }) => {
-      bootstrap(data.session)
-    })
+    async function loadInitialSession() {
+      try {
+        const { data } = await supabase.auth.getSession()
+        await bootstrap(data?.session ?? null)
+      } catch (error) {
+        console.error('Failed to restore session:', error)
+        if (!mounted) return
+        clearSessionOnly()
+        setSession(null)
+        setBootstrapping(false)
+      }
+    }
+
+    loadInitialSession()
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setBootstrapping(true)
       bootstrap(nextSession)
     })
 
@@ -113,10 +125,11 @@ export default function App() {
             </Protected>
           }
         >
-          <Route index element={<Navigate to="/app/dashboard" replace />} />
+          <Route index element={<Navigate to="/app/stage-onboarding" replace />} />
+          <Route path="stage-onboarding" element={<StageOnboarding />} />
           <Route path="assessment" element={<Assessment />} />
           <Route path="dashboard" element={<Dashboard />} />
-          <Route path="founder-profile" element={<Dashboard />} />
+          <Route path="founder-profile" element={<FounderProfile />} />
           <Route path="studio" element={<Studio />} />
           <Route path="studio/prep/:docType" element={<GuidedDocumentPrep />} />
           <Route path="memory" element={<Memory />} />

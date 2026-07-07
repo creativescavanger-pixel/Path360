@@ -106,8 +106,13 @@ function normaliseErrorMessage(err) {
     return 'Generation is temporarily unavailable because the AI API quota has been reached. Please try again a bit later.'
   }
 
-  if (lower.includes('api key') || lower.includes('vite_gemini_api_key')) {
-    return 'Generation is not configured yet. Please add a valid AI API key in the backend settings.'
+  if (
+    lower.includes('api key') ||
+    lower.includes('vite_gemini_api_key') ||
+    lower.includes('vite_openai_api_key') ||
+    lower.includes('not configured')
+  ) {
+    return 'Generation is not configured yet. Please add a valid AI API key in the environment settings.'
   }
 
   return 'Something went wrong while generating this document. Please try again.'
@@ -141,6 +146,7 @@ export default function Studio() {
     setGenerating(true)
     setError('')
     setGeneratedContent(null)
+    setCopyFeedback('')
 
     try {
       const context = getFounderContext()
@@ -148,23 +154,24 @@ export default function Studio() {
       const content = await generateDocument({
         docType: selectedOutput.id,
         founderContext: context,
-        customInstructions,
+        customInstructions: customInstructions.trim(),
         objectiveId: objective?.id ?? null,
       })
 
-      setGeneratedContent(content)
+      const normalizedContent = typeof content === 'string' ? content : String(content || '')
+      setGeneratedContent(normalizedContent)
 
       if (user?.id) {
         const saved = await saveDocument(
           user.id,
           selectedOutput.id,
           `${selectedOutput.label} — ${new Date().toLocaleDateString()}`,
-          content,
+          normalizedContent
         )
         addDocument(saved)
       }
 
-      track(EVENTS.DOCUMENT_GENERATED, {
+      track?.(EVENTS?.DOCUMENT_GENERATED || 'document_generated', {
         doc_type: selectedOutput.id,
         objective: objective?.id ?? null,
       })
@@ -201,6 +208,7 @@ export default function Studio() {
     setSelectedOutput(null)
     setCustomInstructions('')
     setGeneratedContent(null)
+    setGenerating(false)
     setError('')
     setCopyFeedback('')
   }
@@ -251,8 +259,8 @@ export default function Studio() {
             maxWidth: 720,
           }}
         >
-          Start with your objective, not a template. Path360 recommends the right asset, uses your assessment and memory,
-          and creates documents that are ready to refine, export, and use with investors.
+          Start with your objective, not a template. Path360 recommends the right asset, uses your assessment and
+          memory, and creates documents that are ready to refine, export, and use with investors.
         </p>
       </div>
 
@@ -302,6 +310,7 @@ export default function Studio() {
                       setGeneratedContent(null)
                       setCustomInstructions('')
                       setError('')
+                      setCopyFeedback('')
                     }}
                     style={{
                       textAlign: 'left',
@@ -343,8 +352,8 @@ export default function Studio() {
                 2. Recommended outputs
               </div>
               <div style={{ fontSize: 12.5, color: '#6B6965' }}>
-                We match your objective to the most useful documents and practice flows. Guided items start with a short
-                intake before generation.
+                We match your objective to the most useful documents and practice flows. Guided items start with a
+                short intake before generation.
               </div>
             </div>
 
@@ -379,26 +388,27 @@ export default function Studio() {
                     <button
                       key={out.id}
                       type="button"
-                      disabled={locked}
+                      disabled={locked || generating}
                       onClick={() => {
-                        if (!locked) {
-                          if (guided) {
-                            navigate(`/app/studio/prep/${out.id}`)
-                            return
-                          }
+                        if (locked || generating) return
 
-                          setSelectedOutput(out)
-                          setGeneratedContent(null)
-                          setError('')
+                        if (guided) {
+                          navigate(`/app/studio/prep/${out.id}`)
+                          return
                         }
+
+                        setSelectedOutput(out)
+                        setGeneratedContent(null)
+                        setError('')
+                        setCopyFeedback('')
                       }}
                       style={{
                         background: isSelected ? '#1D6B4F' : locked ? '#F7F5F0' : '#FFFFFF',
                         border: isSelected ? '1.5px solid #1D6B4F' : '1px solid #E2DED6',
                         borderRadius: 11,
                         padding: '11px 10px',
-                        cursor: locked ? 'not-allowed' : 'pointer',
-                        opacity: locked ? 0.55 : 1,
+                        cursor: locked ? 'not-allowed' : generating ? 'default' : 'pointer',
+                        opacity: locked ? 0.55 : generating ? 0.75 : 1,
                         textAlign: 'left',
                         position: 'relative',
                         transition: 'all 0.18s ease',

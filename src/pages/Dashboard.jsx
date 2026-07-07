@@ -88,6 +88,8 @@ function ScoreRing({ score = 0, label, tone = '#1A7A4A', size = 86 }) {
 }
 
 function RadarChart({ data, size = 220 }) {
+  if (!data?.length) return null
+
   const cx = size / 2
   const cy = size / 2
   const r = size * 0.34
@@ -169,7 +171,7 @@ function buildQuestionThemes(rawqa = []) {
   }
 
   rawqa.forEach((qa) => {
-    const q = (qa.question || '').toLowerCase()
+    const q = (qa?.question || '').toLowerCase()
     if (!q) return
 
     if (q.includes('vision') || q.includes('strategy') || q.includes('positioning') || q.includes('north star')) {
@@ -190,6 +192,21 @@ function buildQuestionThemes(rawqa = []) {
   return themes
 }
 
+function EmptyInline({ text = 'No data available yet.' }) {
+  return (
+    <div
+      style={{
+        fontSize: 12.5,
+        color: '#8B938B',
+        lineHeight: 1.6,
+        padding: '10px 0',
+      }}
+    >
+      {text}
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const rawResults = useDiagnosticStore((s) => s.assessmentResults)
@@ -201,8 +218,27 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('overview')
 
   useEffect(() => {
-    if (user?.id) {
-      getDocuments(user.id).then(setDocuments).catch(console.error)
+    let cancelled = false
+
+    async function loadDocs() {
+      if (!user?.id) return
+
+      try {
+        const rows = await getDocuments(user.id)
+        if (!cancelled) {
+          setDocuments(rows)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error(error)
+        }
+      }
+    }
+
+    loadDocs()
+
+    return () => {
+      cancelled = true
     }
   }, [user?.id, setDocuments])
 
@@ -225,8 +261,8 @@ export default function Dashboard() {
   const questionThemes = useMemo(() => buildQuestionThemes(results?.rawqa || []), [results])
 
   if (!results) {
-    const founderName = profile?.fullname || 'Founder'
-    const ventureName = profile?.venturename || 'your venture'
+    const founderName = profile?.fullname || profile?.foundername || 'Founder'
+    const ventureName = profile?.venturename || profile?.venture_name || 'your venture'
 
     return (
       <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -273,7 +309,7 @@ export default function Dashboard() {
               onClick={() => navigate('/app/assessment')}
               style={{ minWidth: 210 }}
             >
-              Proceed to Assessment
+              Start Assessment
             </button>
             <div style={{ fontSize: 12.5, color: '#8B938B' }}>Takes about 12–15 minutes. You can pause and resume.</div>
           </div>
@@ -347,49 +383,55 @@ export default function Dashboard() {
             Personalized from your answers and ranked by investor impact.
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {(results.strategicpriorities || []).slice(0, 4).map((p, i) => (
-              <div
-                key={`${p.priority}-${i}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 10,
-                  padding: '10px 0',
-                  borderTop: i === 0 ? 'none' : '1px solid #EEF2EE',
-                }}
-              >
+            {results.strategicpriorities.length ? (
+              results.strategicpriorities.slice(0, 4).map((p, i) => (
                 <div
+                  key={`${p?.priority || 'priority'}-${i}`}
                   style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 8,
-                    background: '#F1F4F0',
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: '#1A7A4A',
-                    flexShrink: 0,
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    padding: '10px 0',
+                    borderTop: i === 0 ? 'none' : '1px solid #EEF2EE',
                   }}
                 >
-                  {i + 1}
-                </div>
-                <div style={{ flex: 1 }}>
                   <div
                     style={{
-                      fontSize: 13,
+                      width: 24,
+                      height: 24,
+                      borderRadius: 8,
+                      background: '#F1F4F0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 11,
                       fontWeight: 700,
-                      color: '#111111',
-                      marginBottom: 4,
+                      color: '#1A7A4A',
+                      flexShrink: 0,
                     }}
                   >
-                    {p.priority}
+                    {i + 1}
                   </div>
-                  <div style={{ fontSize: 12, color: '#5F675F', lineHeight: 1.6 }}>{p.rationale}</div>
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: '#111111',
+                        marginBottom: 4,
+                      }}
+                    >
+                      {p?.priority || 'Priority'}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#5F675F', lineHeight: 1.6 }}>
+                      {p?.rationale || 'No rationale available.'}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <EmptyInline text="No strategic priorities were returned for this assessment yet." />
+            )}
           </div>
         </div>
       </div>
@@ -403,24 +445,25 @@ export default function Dashboard() {
             Founder strengths
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {(results.founderstrengths || []).slice(0, 4).map((item, i) => (
-              <div
-                key={`${item}-${i}`}
-                style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}
-              >
-                <div
-                  style={{
-                    width: 7,
-                    height: 7,
-                    marginTop: 7,
-                    borderRadius: '50%',
-                    background: '#1A7A4A',
-                    flexShrink: 0,
-                  }}
-                />
-                <div style={{ fontSize: 13, color: '#2A2F2A', lineHeight: 1.6 }}>{item}</div>
-              </div>
-            ))}
+            {results.founderstrengths.length ? (
+              results.founderstrengths.slice(0, 4).map((item, i) => (
+                <div key={`${item}-${i}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <div
+                    style={{
+                      width: 7,
+                      height: 7,
+                      marginTop: 7,
+                      borderRadius: '50%',
+                      background: '#1A7A4A',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div style={{ fontSize: 13, color: '#2A2F2A', lineHeight: 1.6 }}>{item}</div>
+                </div>
+              ))
+            ) : (
+              <EmptyInline text="No founder strengths were recorded yet." />
+            )}
           </div>
         </div>
 
@@ -439,7 +482,7 @@ export default function Dashboard() {
               lineHeight: 1.7,
             }}
           >
-            {results.vcverdict}
+            {results.vcverdict || 'No investor verdict available yet.'}
           </div>
         </div>
       </div>
@@ -473,45 +516,49 @@ export default function Dashboard() {
         Questions that shaped your strategy score
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
-        {(questionThemes.strategy || []).slice(0, 4).map((qa, i) => (
-          <div
-            key={i}
-            style={{ background: '#F7F8F5', border: '1px solid #E4E8E3', borderRadius: 12, padding: 12 }}
-          >
+        {questionThemes.strategy.length ? (
+          questionThemes.strategy.slice(0, 4).map((qa, i) => (
             <div
-              style={{
-                fontSize: 11,
-                color: '#8B938B',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                fontWeight: 700,
-                marginBottom: 6,
-              }}
+              key={i}
+              style={{ background: '#F7F8F5', border: '1px solid #E4E8E3', borderRadius: 12, padding: 12 }}
             >
-              Question
+              <div
+                style={{
+                  fontSize: 11,
+                  color: '#8B938B',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  fontWeight: 700,
+                  marginBottom: 6,
+                }}
+              >
+                Question
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#111111',
+                  lineHeight: 1.5,
+                  marginBottom: 6,
+                }}
+              >
+                {qa?.question}
+              </div>
+              <div
+                style={{
+                  fontSize: 12.5,
+                  color: '#5F675F',
+                  lineHeight: 1.65,
+                }}
+              >
+                {qa?.answer}
+              </div>
             </div>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: '#111111',
-                lineHeight: 1.5,
-                marginBottom: 6,
-              }}
-            >
-              {qa.question}
-            </div>
-            <div
-              style={{
-                fontSize: 12.5,
-                color: '#5F675F',
-                lineHeight: 1.65,
-              }}
-            >
-              {qa.answer}
-            </div>
-          </div>
-        ))}
+          ))
+        ) : (
+          <EmptyInline text="No strategy-specific question evidence was identified." />
+        )}
       </div>
 
       <div
@@ -525,77 +572,89 @@ export default function Dashboard() {
         Top strategic gaps
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {(results.criticalgaps || []).map((gap, i) => (
-          <div
-            key={i}
-            style={{
-              background: '#F7F8F5',
-              border: '1px solid #E4E8E3',
-              borderRadius: 12,
-              padding: 12,
-              fontSize: 13,
-              lineHeight: 1.6,
-            }}
-          >
-            {gap}
-          </div>
-        ))}
+        {results.criticalgaps.length ? (
+          results.criticalgaps.map((gap, i) => (
+            <div
+              key={i}
+              style={{
+                background: '#F7F8F5',
+                border: '1px solid #E4E8E3',
+                borderRadius: 12,
+                padding: 12,
+                fontSize: 13,
+                lineHeight: 1.6,
+              }}
+            >
+              {gap}
+            </div>
+          ))
+        ) : (
+          <EmptyInline text="No critical gaps were generated for this assessment." />
+        )}
       </div>
     </div>
   )
 
-  const renderExecution = () => (
-    <div className="p360-card" style={{ padding: 18 }}>
-      <div
-        style={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: '#111111',
-          marginBottom: 12,
-        }}
-      >
-        Execution evidence from your assessment
+  const renderExecution = () => {
+    const executionItems = questionThemes.execution.length ? questionThemes.execution : results.rawqa
+
+    return (
+      <div className="p360-card" style={{ padding: 18 }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: '#111111',
+            marginBottom: 12,
+          }}
+        >
+          Execution evidence from your assessment
+        </div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          {executionItems.length ? (
+            executionItems.slice(0, 5).map((qa, i) => (
+              <div
+                key={i}
+                style={{
+                  background: '#F7F8F5',
+                  border: '1px solid #E4E8E3',
+                  borderRadius: 12,
+                  padding: 12,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: '#8B938B',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    fontWeight: 700,
+                    marginBottom: 6,
+                  }}
+                >
+                  Question
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#111111',
+                    lineHeight: 1.5,
+                    marginBottom: 6,
+                  }}
+                >
+                  {qa?.question}
+                </div>
+                <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>{qa?.answer}</div>
+              </div>
+            ))
+          ) : (
+            <EmptyInline text="No execution-related evidence is available yet." />
+          )}
+        </div>
       </div>
-      <div style={{ display: 'grid', gap: 10 }}>
-        {(questionThemes.execution || results.rawqa || []).slice(0, 5).map((qa, i) => (
-          <div
-            key={i}
-            style={{
-              background: '#F7F8F5',
-              border: '1px solid #E4E8E3',
-              borderRadius: 12,
-              padding: 12,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 11,
-                color: '#8B938B',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                fontWeight: 700,
-                marginBottom: 6,
-              }}
-            >
-              Question
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: '#111111',
-                lineHeight: 1.5,
-                marginBottom: 6,
-              }}
-            >
-              {qa.question}
-            </div>
-            <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>{qa.answer}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
+    )
+  }
 
   const renderInvestor = () => (
     <div className="p360-card" style={{ padding: 18 }}>
@@ -625,7 +684,7 @@ export default function Dashboard() {
           marginBottom: 14,
         }}
       >
-        {results.vcverdict}
+        {results.vcverdict || 'No investor verdict available yet.'}
       </div>
 
       <div
@@ -653,7 +712,7 @@ export default function Dashboard() {
 
         <button
           type="button"
-          onClick={() => navigate('/app/studio/investor-memo-prep')}
+          onClick={() => navigate('/app/studio/prep/investor_memo')}
           style={{
             padding: '10px 14px',
             borderRadius: 10,
@@ -680,34 +739,36 @@ export default function Dashboard() {
         Questions that shaped investor readiness
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
-        {(questionThemes.investor || []).slice(0, 3).map((qa, i) => (
-          <div
-            key={i}
-            style={{
-              background: '#F7F8F5',
-              border: '1px solid #E4E8E3',
-              borderRadius: 12,
-              padding: 12,
-            }}
-          >
+        {questionThemes.investor.length ? (
+          questionThemes.investor.slice(0, 3).map((qa, i) => (
             <div
+              key={i}
               style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: '#111111',
-                marginBottom: 5,
+                background: '#F7F8F5',
+                border: '1px solid #E4E8E3',
+                borderRadius: 12,
+                padding: 12,
               }}
             >
-              {qa.question}
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#111111',
+                  marginBottom: 5,
+                }}
+              >
+                {qa?.question}
+              </div>
+              <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>{qa?.answer}</div>
             </div>
-            <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>{qa.answer}</div>
-          </div>
-        ))}
+          ))
+        ) : (
+          <EmptyInline text="No investor-specific question evidence was identified." />
+        )}
       </div>
 
-      <div
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 10 }}
-      >
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 10 }}>
         {[
           ['Strategic Clarity', results.strategicclarity],
           ['Execution Readiness', results.executionreadiness],
@@ -744,25 +805,29 @@ export default function Dashboard() {
           marginBottom: 14,
         }}
       >
-        This baseline has now been stored so PATH360 can compare future assessments against this point
-        in time and show how the founder has progressed.
+        This baseline has now been stored so PATH360 can compare future assessments against this point in time and show
+        how the founder has progressed.
       </div>
       <div style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
-        {(results.founderstrengths || []).map((item, i) => (
-          <div
-            key={i}
-            style={{
-              background: '#F7F8F5',
-              border: '1px solid #E4E8E3',
-              borderRadius: 12,
-              padding: 12,
-              fontSize: 13,
-              lineHeight: 1.6,
-            }}
-          >
-            {item}
-          </div>
-        ))}
+        {results.founderstrengths.length ? (
+          results.founderstrengths.map((item, i) => (
+            <div
+              key={i}
+              style={{
+                background: '#F7F8F5',
+                border: '1px solid #E4E8E3',
+                borderRadius: 12,
+                padding: 12,
+                fontSize: 13,
+                lineHeight: 1.6,
+              }}
+            >
+              {item}
+            </div>
+          ))
+        ) : (
+          <EmptyInline text="No founder baseline strengths were stored yet." />
+        )}
       </div>
 
       <div
@@ -776,35 +841,39 @@ export default function Dashboard() {
         Questions related to team & growth
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {(questionThemes.teamGrowth || []).slice(0, 4).map((qa, i) => (
-          <div
-            key={i}
-            style={{
-              background: '#F7F8F5',
-              border: '1px solid #E4E8E3',
-              borderRadius: 12,
-              padding: 12,
-            }}
-          >
+        {questionThemes.teamGrowth.length ? (
+          questionThemes.teamGrowth.slice(0, 4).map((qa, i) => (
             <div
+              key={i}
               style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: '#111111',
-                marginBottom: 5,
+                background: '#F7F8F5',
+                border: '1px solid #E4E8E3',
+                borderRadius: 12,
+                padding: 12,
               }}
             >
-              {qa.question}
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#111111',
+                  marginBottom: 5,
+                }}
+              >
+                {qa?.question}
+              </div>
+              <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>{qa?.answer}</div>
             </div>
-            <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>{qa.answer}</div>
-          </div>
-        ))}
+          ))
+        ) : (
+          <EmptyInline text="No team or growth-related questions were identified." />
+        )}
       </div>
     </div>
   )
 
-  const founderName = profile?.fullname || 'Founder'
-  const ventureName = profile?.venturename || 'your venture'
+  const founderName = profile?.fullname || profile?.foundername || 'Founder'
+  const ventureName = profile?.venturename || profile?.venture_name || 'your venture'
 
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -835,6 +904,7 @@ export default function Dashboard() {
                 color: active ? '#FFFFFF' : '#5F675F',
                 fontSize: 12.5,
                 fontWeight: active ? 700 : 600,
+                cursor: 'pointer',
               }}
             >
               {t.label}
@@ -880,13 +950,13 @@ export default function Dashboard() {
             Welcome, {founderName}. Your venture is {results.investorreadiness}% investor ready.
           </div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>
-            Stage: {String(results.venturestage).replace('-', ' ')} ·{' '}
-            {results.strategicpriorities.length} priorities identified
+            Stage: {String(results.venturestage || 'unknown').replaceAll('_', ' ')} · {results.strategicpriorities.length}{' '}
+            priorities identified
           </div>
         </div>
 
         <button
-          onClick={() => navigate('/app/assessment')}
+          onClick={() => navigate('/app/assessment?restart=1')}
           style={{
             padding: '11px 18px',
             borderRadius: 12,
@@ -896,9 +966,10 @@ export default function Dashboard() {
             fontSize: 13,
             fontWeight: 700,
             whiteSpace: 'nowrap',
+            cursor: 'pointer',
           }}
         >
-          Proceed to Assessment
+          Improve Assessment
         </button>
       </div>
 
@@ -930,6 +1001,7 @@ export default function Dashboard() {
               color: '#1A7A4A',
               fontWeight: 700,
               fontSize: 12.5,
+              cursor: 'pointer',
             }}
           >
             Create new
@@ -956,9 +1028,7 @@ export default function Dashboard() {
                 >
                   {doc.title || doc.doctype || 'Untitled document'}
                 </div>
-                <div style={{ fontSize: 11.5, color: '#8B938B' }}>
-                  {doc.doctype || 'Document'}
-                </div>
+                <div style={{ fontSize: 11.5, color: '#8B938B' }}>{doc.doctype || 'Document'}</div>
               </div>
             ))}
           </div>
@@ -980,6 +1050,7 @@ export default function Dashboard() {
                 color: '#1A7A4A',
                 fontWeight: 700,
                 fontSize: 13,
+                cursor: 'pointer',
               }}
             >
               Create one now
@@ -998,21 +1069,20 @@ export default function Dashboard() {
           }}
         >
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#111111' }}>
-              Assessment Q&A history
-            </div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111111' }}>Assessment Q&A history</div>
             <div style={{ fontSize: 11.5, color: '#8B938B', marginTop: 3 }}>
               Every question and answer used in this assessment run.
             </div>
           </div>
           <button
-            onClick={() => navigate('/app/assessment')}
+            onClick={() => navigate('/app/assessment?restart=1')}
             style={{
               border: 'none',
               background: 'transparent',
               color: '#1A7A4A',
               fontWeight: 700,
               fontSize: 12,
+              cursor: 'pointer',
             }}
           >
             Improve answers
@@ -1023,7 +1093,7 @@ export default function Dashboard() {
           <div style={{ display: 'grid', gap: 10 }}>
             {results.rawqa.map((qa, index) => (
               <div
-                key={`${index}-${qa.question}`}
+                key={`${index}-${qa?.question || 'question'}`}
                 style={{
                   borderTop: index === 0 ? 'none' : '1px solid #EEF2EE',
                   paddingTop: index === 0 ? 0 : 10,
@@ -1050,7 +1120,7 @@ export default function Dashboard() {
                     lineHeight: 1.5,
                   }}
                 >
-                  {qa.question}
+                  {qa?.question}
                 </div>
                 <div
                   style={{
@@ -1060,7 +1130,7 @@ export default function Dashboard() {
                     whiteSpace: 'pre-wrap',
                   }}
                 >
-                  {qa.answer}
+                  {qa?.answer}
                 </div>
               </div>
             ))}

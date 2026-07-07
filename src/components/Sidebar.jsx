@@ -89,7 +89,6 @@ const styles = {
     border: '1px solid #D6E4D7',
     borderRadius: 14,
     padding: '12px 12px',
-    marginBottom: 10,
   },
   tier: {
     fontSize: 10,
@@ -108,17 +107,6 @@ const styles = {
     fontSize: 11,
     color: '#6E6B65',
     marginTop: 3,
-  },
-  signOut: {
-    width: '100%',
-    padding: 10,
-    borderRadius: 10,
-    border: '1px solid #D9D4CA',
-    background: 'transparent',
-    color: '#6E6B65',
-    fontSize: 12,
-    cursor: 'pointer',
-    textAlign: 'center',
   },
 }
 
@@ -161,14 +149,12 @@ export default function Sidebar() {
   const founderProfile = useDiagnosticStore((s) => s.founderProfile)
   const subscriptionTier = useDiagnosticStore((s) => s.subscriptionTier)
   const assessmentResults = useDiagnosticStore((s) => s.assessmentResults)
-  const clearSessionOnly = useDiagnosticStore((s) => s.clearSessionOnly)
   const setAssessmentResults = useDiagnosticStore((s) => s.setAssessmentResults)
   const setQAPairs = useDiagnosticStore((s) => s.setQAPairs)
 
   async function handleSignOut() {
     try {
       await signOut()
-      if (clearSessionOnly) clearSessionOnly()
       navigate('/')
     } catch (e) {
       console.error(e)
@@ -191,12 +177,14 @@ export default function Sidebar() {
 
   const displayName =
     founderProfile?.venturename ||
+    founderProfile?.foundername ||
     founderProfile?.fullname ||
     'Your Venture'
 
   const displayMeta =
     founderProfile?.industry ||
-    founderProfile?.fullname ||
+    founderProfile?.role ||
+    founderProfile?.email ||
     'Profile not completed'
 
   return (
@@ -235,10 +223,6 @@ export default function Sidebar() {
           <div style={styles.founderName}>{displayName}</div>
           <div style={styles.founderMeta}>{displayMeta}</div>
         </div>
-
-        <button type="button" onClick={handleSignOut} style={styles.signOut}>
-          Sign out
-        </button>
       </div>
     </aside>
   )

@@ -2,13 +2,23 @@ import { createClient } from '@supabase/supabase-js'
 
 const url = import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITESUPABASEURL
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITESUPABASEANONKEY
-const FOUNDER_FILES_BUCKET = 'founder-files'
+const FOUNDER_FILES_BUCKET = 'founder_profiles'
 
 if (!url || !key) {
   console.error('Missing Supabase env vars. Check your .env file.')
 }
 
-export const supabase = createClient(url, key)
+export const supabase = createClient(url, key, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+})
+
+function isMissingRelationError(error) {
+  return error?.code === 'PGRST205' || error?.code === '42P01'
+}
 
 export async function signUp(email, password) {
   const response = await supabase.auth.signUp({
@@ -36,7 +46,8 @@ export async function signOut() {
 }
 
 export async function getCurrentUser() {
-  const { data } = await supabase.auth.getUser()
+  const { data, error } = await supabase.auth.getUser()
+  if (error) throw error
   return data?.user ?? null
 }
 
@@ -47,12 +58,20 @@ export async function getCurrentSession() {
 }
 
 export async function saveFounderProfile(userId, profile) {
+  const normalizedProfile = { ...(profile || {}) }
+
+  if (normalizedProfile.foundername && !normalizedProfile.fullname) {
+    normalizedProfile.fullname = normalizedProfile.foundername
+  }
+
+  delete normalizedProfile.foundername
+
   const { data, error } = await supabase
     .from('founderprofiles')
     .upsert(
       {
         userid: userId,
-        ...profile,
+        ...normalizedProfile,
         updatedat: new Date().toISOString(),
       },
       { onConflict: 'userid' }
@@ -206,9 +225,6 @@ export async function getAllConversations(userId) {
   return data ?? []
 }
 
-/**
- * Document intake: store guided Q&A before generation
- */
 export async function saveDocumentIntake(userId, docType, title, answers, linkedAssessmentId = null) {
   const payload = {
     userid: userId,
@@ -245,9 +261,6 @@ export async function getDocumentIntakes(userId, docType = null) {
   return data ?? []
 }
 
-/**
- * Founder progress: journey milestones
- */
 export async function addFounderProgress(userId, eventType, title, description = '', metadata = {}) {
   const payload = {
     userid: userId,
@@ -321,7 +334,14 @@ export async function getFounderFiles(userId) {
     .eq('userid', userId)
     .order('createdat', { ascending: false })
 
-  if (error) throw error
+  if (error) {
+    if (isMissingRelationError(error)) {
+      console.warn('founderfiles table not found; returning empty founderFiles list.')
+      return []
+    }
+    throw error
+  }
+
   return data ?? []
 }
 
@@ -346,29 +366,18 @@ export function downloadGeneratedDocumentFile(doc) {
   const content = doc?.content || ''
   const title = doc?.title || 'generated-document'
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
+  const objectUrl = URL.createObjectURL(blob)
   const link = document.createElement('a')
-  link.href = url
+  link.href = objectUrl
   link.download = `${title.replace(/[^a-zA-Z0-9-_ ]/g, '').trim() || 'generated-document'}.txt`
   document.body.appendChild(link)
   link.click()
   link.remove()
-  URL.revokeObjectURL(url)
+  URL.revokeObjectURL(objectUrl)
 }
 
-/**
- * Workspace load – now also pulls document intakes & progress
- */
 export async function loadFounderWorkspace(userId) {
-  const [
-    founderProfile,
-    latestAssessment,
-    memories,
-    documents,
-    conversations,
-    documentIntakes,
-    progressEvents,
-  ] = await Promise.all([
+  const results = await Promise.allSettled([
     getFounderProfile(userId),
     getLatestAssessment(userId),
     getMemories(userId, 20),
@@ -376,7 +385,39 @@ export async function loadFounderWorkspace(userId) {
     getAllConversations(userId),
     getDocumentIntakes(userId),
     getFounderProgress(userId, 20),
+    getFounderFiles(userId),
   ])
+
+  const [
+    founderProfileResult,
+    latestAssessmentResult,
+    memoriesResult,
+    documentsResult,
+    conversationsResult,
+    documentIntakesResult,
+    progressEventsResult,
+    founderFilesResult,
+  ] = results
+
+  const founderProfile = founderProfileResult.status === 'fulfilled' ? founderProfileResult.value : null
+  const latestAssessment = latestAssessmentResult.status === 'fulfilled' ? latestAssessmentResult.value : null
+  const memories = memoriesResult.status === 'fulfilled' ? memoriesResult.value : []
+  const documents = documentsResult.status === 'fulfilled' ? documentsResult.value : []
+  const conversations = conversationsResult.status === 'fulfilled' ? conversationsResult.value : []
+  const documentIntakes = documentIntakesResult.status === 'fulfilled' ? documentIntakesResult.value : []
+  const progressEvents = progressEventsResult.status === 'fulfilled' ? progressEventsResult.value : []
+  const founderFiles = founderFilesResult.status === 'fulfilled' ? founderFilesResult.value : []
+
+  const criticalErrors = results
+    .filter((result, index) => {
+      if (result.status !== 'rejected') return false
+      return index !== 7
+    })
+    .map((result) => result.reason)
+
+  if (criticalErrors.length > 0) {
+    throw criticalErrors[0]
+  }
 
   const conversationMap = (conversations ?? []).reduce((acc, row) => {
     if (row?.agenttype) {
@@ -391,12 +432,12 @@ export async function loadFounderWorkspace(userId) {
       ? {
           ...latestAssessment,
           venturestage: latestAssessment.venturestageresult ?? latestAssessment.venturestage ?? null,
-          rawqa: latestAssessment.rawqa ?? [],
+          rawqa: Array.isArray(latestAssessment.rawqa) ? latestAssessment.rawqa : [],
         }
       : null,
     memories: memories ?? [],
     documents: documents ?? [],
-    founderFiles: [],
+    founderFiles: founderFiles ?? [],
     conversations: conversationMap,
     documentIntakes: documentIntakes ?? [],
     progressEvents: progressEvents ?? [],

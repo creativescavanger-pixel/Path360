@@ -1,0 +1,63 @@
+name: Build and Package
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      include_docker:
+        description: 'Create Docker image tar as artifact'
+        required: false
+        default: 'false'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Upload `dist/` artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Create full offline zip
+        run: sh scripts/package_full_offline.sh
+
+      - name: Upload full offline zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-offline-zip
+          path: path360-full-offline-*.zip
+
+      - name: Build and save Docker image (optional)
+        if: ${{ inputs.include_docker == 'true' }}
+        run: |
+          docker build -t path360-app:offline .
+          docker save path360-app:offline -o path360-app-offline.tar
+
+      - name: Upload docker image tar (optional)
+        if: ${{ inputs.include_docker == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-tar
+          path: path360-app-offline.tar

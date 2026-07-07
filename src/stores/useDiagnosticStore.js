@@ -27,6 +27,10 @@ const useDiagnosticStore = create((set, get) => ({
   documentIntakes: [],
   progressEvents: [],
 
+  // NEW: stage-first onboarding state
+  stageAssessment: null,
+  hasCompletedStageOnboarding: false,
+
   setUser: (user) => set({ user }),
 
   setFounderProfile: (profile) => set({ founderProfile: profile }),
@@ -39,6 +43,19 @@ const useDiagnosticStore = create((set, get) => ({
   setQAPairs: (qaPairs) => set({ qaPairs: Array.isArray(qaPairs) ? qaPairs : [] }),
   setDocumentIntakes: (intakes) => set({ documentIntakes: Array.isArray(intakes) ? intakes : [] }),
   setProgressEvents: (events) => set({ progressEvents: Array.isArray(events) ? events : [] }),
+
+  // NEW: stage assessment setters
+  setStageAssessment: (assessment) =>
+    set(() => ({
+      stageAssessment: assessment,
+      hasCompletedStageOnboarding: true,
+    })),
+
+  clearStageAssessment: () =>
+    set(() => ({
+      stageAssessment: null,
+      hasCompletedStageOnboarding: false,
+    })),
 
   getConversation: (agentType) => {
     const key = agentType || get().activeAgent || DEFAULT_AGENT
@@ -75,58 +92,80 @@ const useDiagnosticStore = create((set, get) => ({
     const user = get().user
     if (!user?.id) throw new Error('No authenticated user found.')
 
-    const current = get().founderProfile || {}
-    const nextProfile = { ...current, ...profilePatch }
-    const saved = await saveFounderProfile(user.id, nextProfile)
-    set({ founderProfile: saved })
-
-    // Milestone: profile_updated
     try {
-      await addFounderProgressRecord(user.id, 'profile_updated', 'Founder profile updated', 'Your founder profile was saved and is now available across PATH360.', {
-        ventureName: saved?.venturename || saved?.venture_name || null,
-      })
-    } catch (e) {
-      console.warn('Failed to record founder profile milestone', e)
-    }
+      const current = get().founderProfile || {}
+      const nextProfile = { ...current, ...profilePatch }
+      const saved = await saveFounderProfile(user.id, nextProfile)
+      set({ founderProfile: saved })
 
-    return saved
+      try {
+        await addFounderProgressRecord(
+          user.id,
+          'profile_updated',
+          'Founder profile updated',
+          'Your founder profile was saved and is now available across PATH360.',
+          {
+            ventureName: saved?.venturename || saved?.venture_name || null,
+          }
+        )
+      } catch (e) {
+        console.warn('Failed to record founder profile milestone', e)
+      }
+
+      return saved
+    } catch (err) {
+      console.error('updateFounderProfile failed', err)
+      throw err
+    }
   },
 
   addAssessment: async (results) => {
     const user = get().user
     if (!user?.id) throw new Error('No authenticated user found.')
 
-    const saved = await saveAssessment(user.id, results)
-    set({ assessmentResults: saved, qaPairs: Array.isArray(saved.rawqa) ? saved.rawqa : [] })
-
-    // Milestone: assessment_completed
     try {
-      await addFounderProgressRecord(
-        user.id,
-        'assessment_completed',
-        'Assessment completed',
-        'Your founder baseline has been updated with a new assessment.',
-        {
-          founderscore: saved?.founderscore ?? null,
-          investorreadiness: saved?.investorreadiness ?? null,
-        }
-      )
-    } catch (e) {
-      console.warn('Failed to record assessment milestone', e)
-    }
+      const saved = await saveAssessment(user.id, results)
+      set({
+        assessmentResults: saved,
+        qaPairs: Array.isArray(saved?.rawqa) ? saved.rawqa : [],
+      })
 
-    return saved
+      try {
+        await addFounderProgressRecord(
+          user.id,
+          'assessment_completed',
+          'Assessment completed',
+          'Your founder baseline has been updated with a new assessment.',
+          {
+            founderscore: saved?.founderscore ?? null,
+            investorreadiness: saved?.investorreadiness ?? null,
+          }
+        )
+      } catch (e) {
+        console.warn('Failed to record assessment milestone', e)
+      }
+
+      return saved
+    } catch (err) {
+      console.error('addAssessment failed', err)
+      throw err
+    }
   },
 
   addMemory: async (memoryType, content, importanceScore = 3) => {
     const user = get().user
     if (!user?.id) throw new Error('No authenticated user found.')
 
-    const saved = await addMemoryRecord(user.id, memoryType, content, importanceScore)
-    set((state) => ({
-      memories: [saved, ...(Array.isArray(state.memories) ? state.memories : [])],
-    }))
-    return saved
+    try {
+      const saved = await addMemoryRecord(user.id, memoryType, content, importanceScore)
+      set((state) => ({
+        memories: [saved, ...(Array.isArray(state.memories) ? state.memories : [])],
+      }))
+      return saved
+    } catch (err) {
+      console.error('addMemory failed', err)
+      throw err
+    }
   },
 
   addDocument: (document) =>
@@ -138,11 +177,16 @@ const useDiagnosticStore = create((set, get) => ({
     const user = get().user
     if (!user?.id) throw new Error('No authenticated user found.')
 
-    const saved = await saveDocument(user.id, docType, title, content)
-    set((state) => ({
-      documents: [saved, ...(Array.isArray(state.documents) ? state.documents : [])],
-    }))
-    return saved
+    try {
+      const saved = await saveDocument(user.id, docType, title, content)
+      set((state) => ({
+        documents: [saved, ...(Array.isArray(state.documents) ? state.documents : [])],
+      }))
+      return saved
+    } catch (err) {
+      console.error('createAndStoreDocument failed', err)
+      throw err
+    }
   },
 
   addFounderFile: (file) =>
@@ -155,87 +199,107 @@ const useDiagnosticStore = create((set, get) => ({
     if (!user?.id) throw new Error('No authenticated user found.')
 
     const key = agentType || get().activeAgent || DEFAULT_AGENT
-    const saved = await saveConversation(user.id, key, messages)
 
-    set((state) => ({
-      conversations: {
-        ...(state.conversations || {}),
-        [key]: Array.isArray(saved?.messages)
-          ? saved.messages
-          : Array.isArray(messages)
-            ? messages
-            : [],
-      },
-    }))
+    try {
+      const saved = await saveConversation(user.id, key, messages)
 
-    return saved
+      set((state) => ({
+        conversations: {
+          ...(state.conversations || {}),
+          [key]: Array.isArray(saved?.messages)
+            ? saved.messages
+            : Array.isArray(messages)
+              ? messages
+              : [],
+        },
+      }))
+
+      return saved
+    } catch (err) {
+      console.error('saveConversationForAgent failed', err)
+      throw err
+    }
   },
 
-  /**
-   * Document intake actions
-   */
   loadDocumentIntakes: async (docType = null) => {
     const user = get().user
     if (!user?.id) throw new Error('No authenticated user found.')
 
-    const intakes = await getDocumentIntakes(user.id, docType)
-    set({ documentIntakes: Array.isArray(intakes) ? intakes : [] })
-    return intakes
+    try {
+      const intakes = await getDocumentIntakes(user.id, docType)
+      set({ documentIntakes: Array.isArray(intakes) ? intakes : [] })
+      return intakes
+    } catch (err) {
+      console.error('loadDocumentIntakes failed', err)
+      throw err
+    }
   },
 
   createDocumentIntake: async (docType, title, answers, linkedAssessmentId = null) => {
     const user = get().user
     if (!user?.id) throw new Error('No authenticated user found.')
 
-    const saved = await saveDocumentIntake(user.id, docType, title, answers, linkedAssessmentId)
-    set((state) => ({
-      documentIntakes: [saved, ...(Array.isArray(state.documentIntakes) ? state.documentIntakes : [])],
-    }))
-
-    // Milestone: document_prep_completed
     try {
-      const event = await addFounderProgressRecord(
-        user.id,
-        'document_prep_completed',
-        'Document prep completed',
-        'Your document intake answers were saved and are ready for generation.',
-        {
-          doctype: docType,
-          intakeid: saved?.id || null,
-        }
-      )
+      const saved = await saveDocumentIntake(user.id, docType, title, answers, linkedAssessmentId)
 
       set((state) => ({
-        progressEvents: [event, ...(Array.isArray(state.progressEvents) ? state.progressEvents : [])],
+        documentIntakes: [saved, ...(Array.isArray(state.documentIntakes) ? state.documentIntakes : [])],
       }))
-    } catch (e) {
-      console.warn('Failed to record document prep milestone', e)
-    }
 
-    return saved
+      try {
+        const event = await addFounderProgressRecord(
+          user.id,
+          'document_prep_completed',
+          'Document prep completed',
+          'Your document intake answers were saved and are ready for generation.',
+          {
+            doctype: docType,
+            intakeid: saved?.id || null,
+          }
+        )
+
+        set((state) => ({
+          progressEvents: [event, ...(Array.isArray(state.progressEvents) ? state.progressEvents : [])],
+        }))
+      } catch (e) {
+        console.warn('Failed to record document prep milestone', e)
+      }
+
+      return saved
+    } catch (err) {
+      console.error('createDocumentIntake failed', err)
+      throw err
+    }
   },
 
-  /**
-   * Founder progress actions
-   */
   loadProgress: async () => {
     const user = get().user
     if (!user?.id) throw new Error('No authenticated user found.')
 
-    const events = await getFounderProgress(user.id, 20)
-    set({ progressEvents: Array.isArray(events) ? events : [] })
-    return events
+    try {
+      const events = await getFounderProgress(user.id, 20)
+      set({ progressEvents: Array.isArray(events) ? events : [] })
+      return events
+    } catch (err) {
+      console.error('loadProgress failed', err)
+      throw err
+    }
   },
 
   addFounderProgress: async (eventType, title, description = '', metadata = {}) => {
     const user = get().user
     if (!user?.id) throw new Error('No authenticated user found.')
 
-    const saved = await addFounderProgressRecord(user.id, eventType, title, description, metadata)
-    set((state) => ({
-      progressEvents: [saved, ...(Array.isArray(state.progressEvents) ? state.progressEvents : [])],
-    }))
-    return saved
+    try {
+      const saved = await addFounderProgressRecord(user.id, eventType, title, description, metadata)
+      set((state) => ({
+        progressEvents: [saved, ...(Array.isArray(state.progressEvents) ? state.progressEvents : [])],
+      }))
+      return saved
+    } catch (err) {
+      console.error('addFounderProgress failed', err)
+      throw err
+    }
   },
 
   getFounderContext: () => {
@@ -301,19 +365,28 @@ const useDiagnosticStore = create((set, get) => ({
   },
 
   hydrateWorkspace: async (userId) => {
-    const workspace = await loadFounderWorkspace(userId)
-    set({
-      founderProfile: workspace?.founderProfile ?? null,
-      assessmentResults: workspace?.assessmentResults ?? null,
-      memories: Array.isArray(workspace?.memories) ? workspace.memories : [],
-      documents: Array.isArray(workspace?.documents) ? workspace.documents : [],
-      founderFiles: Array.isArray(workspace?.founderFiles) ? workspace.founderFiles : [],
-      conversations: workspace?.conversations || {},
-      qaPairs: Array.isArray(workspace?.assessmentResults?.rawqa) ? workspace.assessmentResults.rawqa : [],
-      documentIntakes: Array.isArray(workspace?.documentIntakes) ? workspace.documentIntakes : [],
-      progressEvents: Array.isArray(workspace?.progressEvents) ? workspace.progressEvents : [],
-    })
-    return workspace
+    try {
+      const workspace = await loadFounderWorkspace(userId)
+      set({
+        founderProfile: workspace?.founderProfile ?? null,
+        assessmentResults: workspace?.assessmentResults ?? null,
+        memories: Array.isArray(workspace?.memories) ? workspace.memories : [],
+        documents: Array.isArray(workspace?.documents) ? workspace.documents : [],
+        founderFiles: Array.isArray(workspace?.founderFiles) ? workspace.founderFiles : [],
+        conversations: workspace?.conversations || {},
+        qaPairs: Array.isArray(workspace?.assessmentResults?.rawqa) ? workspace.assessmentResults.rawqa : [],
+        documentIntakes: Array.isArray(workspace?.documentIntakes) ? workspace.documentIntakes : [],
+        progressEvents: Array.isArray(workspace?.progressEvents) ? workspace.progressEvents : [],
+
+        // If you later load stageAssessment from Supabase, map it here:
+        stageAssessment: workspace?.stageAssessment ?? null,
+        hasCompletedStageOnboarding: !!workspace?.stageAssessment,
+      })
+      return workspace
+    } catch (err) {
+      console.error('hydrateWorkspace failed', err)
+      throw err
+    }
   },
 
   clearWorkspace: () =>
@@ -328,6 +401,8 @@ const useDiagnosticStore = create((set, get) => ({
       qaPairs: [],
       documentIntakes: [],
       progressEvents: [],
+      stageAssessment: null,
+      hasCompletedStageOnboarding: false,
     }),
 
   clearSessionOnly: () =>
@@ -343,6 +418,8 @@ const useDiagnosticStore = create((set, get) => ({
       qaPairs: [],
       documentIntakes: [],
       progressEvents: [],
+      stageAssessment: null,
+      hasCompletedStageOnboarding: false,
     }),
 }))
 

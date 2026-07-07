@@ -71,7 +71,7 @@ export default function Auth() {
 
         setUser(user)
         identifyUser?.(user.id, { email: user.email })
-        navigate('/app/dashboard', { replace: true })
+        navigate('/app/stage-onboarding', { replace: true })
         return
       }
 
@@ -104,7 +104,7 @@ export default function Auth() {
       })
 
       setFounderProfile(profile)
-      navigate('/app/assessment', { replace: true })
+      navigate('/app/stage-onboarding', { replace: true })
     } catch (err) {
       setError(err.message || 'Something went wrong.')
     } finally {

@@ -1,15 +1,19 @@
-import { Outlet, Link, useNavigate } from 'react-router-dom'
+import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
 import Sidebar from '../components/Sidebar.jsx'
 import Topbar from '../components/Topbar.jsx'
 import AIStrategistRail from '../components/AIStrategistRail.jsx'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
-import supabase from '../lib/supabaseClient.js'
+import { signOut } from '../lib/supabaseClient.js'
 
 export default function AppLayout() {
   const navigate = useNavigate()
+  const location = useLocation()
+
   const assessmentResults = useDiagnosticStore((s) => s.assessmentResults)
   const founderProfile = useDiagnosticStore((s) => s.founderProfile)
-  const resetAll = useDiagnosticStore((s) => s.resetAll)
+  const clearSessionOnly = useDiagnosticStore((s) => s.clearSessionOnly)
+  const hasCompletedStageOnboarding = useDiagnosticStore((s) => s.hasCompletedStageOnboarding)
 
   const founderName =
     founderProfile?.foundername ||
@@ -24,16 +28,23 @@ export default function AppLayout() {
     founderProfile?.companyname ||
     'Your business'
 
+  useEffect(() => {
+    const isOnStageOnboarding = location.pathname === '/app/stage-onboarding'
+    if (!hasCompletedStageOnboarding && !isOnStageOnboarding) {
+      navigate('/app/stage-onboarding', { replace: true })
+    }
+  }, [hasCompletedStageOnboarding, location.pathname, navigate])
+
   async function handleLogout(e) {
     e.preventDefault()
 
     try {
-      await supabase.auth.signOut()
+      await signOut()
     } catch (error) {
       console.error('Logout failed:', error)
     } finally {
-      resetAll()
-      navigate('/auth', { replace: true })
+      clearSessionOnly()
+      navigate('/', { replace: true })
     }
   }
 
@@ -163,7 +174,7 @@ export default function AppLayout() {
             padding: 22,
           }}
         >
-          {!assessmentResults && (
+          {!assessmentResults && hasCompletedStageOnboarding && location.pathname !== '/app/stage-onboarding' && (
             <div
               className="fade-up"
               style={{

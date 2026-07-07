@@ -1,4 +1,6 @@
 // src/lib/documentGuides.js
+// Industry-led guided document intakes for PATH360.
+// Based on YC-style clarity and Sequoia-style business plans and pitch decks. [web:1370][web:1387][web:1397]
 
 export const DOCUMENT_GUIDES = {
   pitch_deck: {
@@ -12,18 +14,19 @@ export const DOCUMENT_GUIDES = {
     helper:
       'Use plain language. Be specific. Add numbers, dates, milestones, customer names, pricing, and fundraising details wherever you can.',
     outputFormat: [
-      'Company purpose',
+      'Cover / Company purpose',
       'Problem',
       'Solution',
       'Why now',
-      'Market',
+      'Market size (TAM/SAM/SOM)',
       'Product',
       'Traction',
       'Business model',
-      'Competition and moat',
+      'Go-to-market',
+      'Competition & moat',
       'Team',
       'Financial snapshot',
-      'Fundraising ask',
+      'Fundraising ask & use of funds',
     ],
     sections: [
       {
@@ -104,7 +107,7 @@ export const DOCUMENT_GUIDES = {
           },
           {
             key: 'market_size',
-            label: 'What is the market size? Include TAM/SAM if possible and show your math.',
+            label: 'What is the market size? Include TAM/SAM and your logic.',
             type: 'textarea',
             required: true,
             maxLength: 1000,
@@ -397,6 +400,100 @@ export const DOCUMENT_GUIDES = {
     ],
   },
 
+  // NEW: Business Case – short, decision-grade version of the Business Plan.
+  business_case: {
+    id: 'business_case',
+    title: 'Business Case Prep',
+    studioLabel: 'Business Case',
+    intakeType: 'business_case',
+    ctaLabel: 'Start guided prep',
+    intro:
+      'This guided intake prepares a short business case that explains why this venture deserves support now.',
+    helper:
+      'Think like an internal champion or investment committee. Keep answers sharp and decision-grade.',
+    outputFormat: [
+      'Opportunity summary',
+      'Why now',
+      'Problem and solution',
+      'Market and customer',
+      'Business model and expected value',
+      'Key risks and trade-offs',
+      'Recommendation',
+    ],
+    sections: [
+      {
+        key: 'summary',
+        title: 'Opportunity Summary',
+        description: 'Frame the opportunity in one page or less.',
+        questions: [
+          {
+            key: 'company_one_line',
+            label: 'In one or two sentences, what is the company and opportunity?',
+            type: 'textarea',
+            required: true,
+            maxLength: 400,
+          },
+          {
+            key: 'why_now',
+            label: 'Why is this the right moment to pursue this opportunity?',
+            type: 'textarea',
+            required: true,
+            maxLength: 500,
+          },
+        ],
+      },
+      {
+        key: 'problem_solution',
+        title: 'Problem & Solution',
+        description: 'Explain what is broken and what you are doing about it.',
+        questions: [
+          {
+            key: 'problem',
+            label: 'What is the problem, and who experiences it?',
+            type: 'textarea',
+            required: true,
+            maxLength: 600,
+          },
+          {
+            key: 'solution',
+            label: 'What is your solution and why is it compelling versus the status quo?',
+            type: 'textarea',
+            required: true,
+            maxLength: 600,
+          },
+        ],
+      },
+      {
+        key: 'value_risk',
+        title: 'Value, Economics & Risk',
+        description: 'Make the economic logic and risks explicit.',
+        questions: [
+          {
+            key: 'value_case',
+            label: 'Where does the economic value come from (revenue, savings, strategic upside)?',
+            type: 'textarea',
+            required: true,
+            maxLength: 700,
+          },
+          {
+            key: 'risks',
+            label: 'What are the main risks and trade-offs?',
+            type: 'textarea',
+            required: true,
+            maxLength: 700,
+          },
+          {
+            key: 'recommendation',
+            label: 'What is your recommendation and what concrete next step are you asking for?',
+            type: 'textarea',
+            required: true,
+            maxLength: 500,
+          },
+        ],
+      },
+    ],
+  },
+
   investor_memo: {
     id: 'investor_memo',
     title: 'Investor One-Pager Prep',
@@ -405,8 +502,7 @@ export const DOCUMENT_GUIDES = {
     ctaLabel: 'Start guided prep',
     intro:
       'Prepare a concise investor-facing one-pager with the facts, framing, and ask an investor expects to scan quickly.',
-    helper:
-      'Keep answers brief but sharp. Lead with facts, traction, and a clear reason to care.',
+    helper: 'Keep answers brief but sharp. Lead with facts, traction, and a clear reason to care.',
     outputFormat: [
       'Company snapshot',
       'Problem',
@@ -515,13 +611,8 @@ export const DOCUMENT_GUIDES = {
     ctaLabel: 'Start guided prep',
     intro:
       'Creates crisp spoken versions of the company story for meetings, intros, and investor events.',
-    helper:
-      'Write conversationally. Avoid jargon. Make it understandable in one hearing.',
-    outputFormat: [
-      '30-second version',
-      '60-second version',
-      '90-second meeting opener',
-    ],
+    helper: 'Write conversationally. Avoid jargon. Make it understandable in one hearing.',
+    outputFormat: ['30-second version', '60-second version', '90-second meeting opener'],
     sections: [
       {
         key: 'core',

@@ -62,7 +62,7 @@ const FALLBACK_QUESTIONS = [
     phase: 'gaps',
     question: 'What is currently weakest: team, traction, product, market, or financial model, and why?',
     hint: 'Honesty improves the assessment.',
-    dimension: 'risk_awareness',
+    dimension: 'team_strength',
   },
   {
     id: 'fallback-q10',
@@ -80,15 +80,36 @@ function getQuestionBank() {
   return FALLBACK_QUESTIONS
 }
 
+function normalizeQuestion(item) {
+  if (!item) return null
+  if (typeof item === 'string') {
+    return {
+      id: null,
+      phase: null,
+      question: item,
+      hint: '',
+      dimension: 'strategic_clarity',
+    }
+  }
+
+  return {
+    id: item.id ?? null,
+    phase: item.phase ?? null,
+    question: item.question ?? '',
+    hint: item.hint ?? '',
+    dimension: item.dimension ?? 'strategic_clarity',
+  }
+}
+
 export function getFirstQuestion() {
   const bank = getQuestionBank()
-  return bank[0] ?? null
+  return normalizeQuestion(bank[0])
 }
 
 export function getNextFoundationQuestion(answeredCount) {
   const bank = getQuestionBank()
   if (answeredCount < bank.length) {
-    return bank[answeredCount]
+    return normalizeQuestion(bank[answeredCount])
   }
   return null
 }
@@ -96,28 +117,30 @@ export function getNextFoundationQuestion(answeredCount) {
 export function buildConversationHistory(qaPairs) {
   const history = []
   for (const qa of qaPairs) {
-    history.push({ role: 'assistant', content: qa.question })
-    if (qa.answer) history.push({ role: 'user', content: qa.answer })
+    if (qa?.question) {
+      history.push({ role: 'assistant', content: qa.question })
+    }
+    if (qa?.answer) {
+      history.push({ role: 'user', content: qa.answer })
+    }
   }
   return history
 }
 
 export async function generateNextQuestion(_conversationHistory, questionNumber) {
   const bank = getQuestionBank()
-  const fallbackIndex = questionNumber - bank.length
-  if (fallbackIndex >= 0 && fallbackIndex < FALLBACK_QUESTIONS.length) {
-    return FALLBACK_QUESTIONS[fallbackIndex].question
-  }
-  return null
+  const next = bank[questionNumber]
+  const normalized = normalizeQuestion(next)
+  return normalized?.question || null
 }
 
 function containsAny(text, patterns) {
-  const lower = text.toLowerCase()
+  const lower = String(text || '').toLowerCase()
   return patterns.some((p) => lower.includes(p))
 }
 
 function scoreAnswer(answer, dimension) {
-  const text = (answer || '').trim()
+  const text = String(answer || '').trim()
   if (!text) return 20
 
   let score = 40
@@ -153,11 +176,19 @@ function scoreAnswer(answer, dimension) {
     score += 10
   }
 
+  if (dimension === 'team_strength' && containsAny(text, ['team', 'hire', 'cofounder', 'operator', 'leader'])) {
+    score += 10
+  }
+
+  if (dimension === 'product_clarity' && containsAny(text, ['product', 'workflow', 'feature', 'use case', 'solution'])) {
+    score += 10
+  }
+
   return Math.min(score, 92)
 }
 
 function detectStage(allText) {
-  const text = allText.toLowerCase()
+  const text = String(allText || '').toLowerCase()
 
   if (containsAny(text, ['series a', 'scaling', 'predictable growth'])) return 'series_a'
   if (containsAny(text, ['paying customers', 'revenue', 'traction', 'seed'])) return 'seed'
@@ -178,21 +209,20 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
 
   const dimensionMap = [
     'strategic_clarity',
-    'strategic_clarity',
+    'market_understanding',
     'execution_readiness',
     'financial_maturity',
     'market_understanding',
+    'strategic_clarity',
+    'risk_awareness',
+    'investor_readiness',
     'team_strength',
     'investor_readiness',
-    'strategic_clarity',
-    'product_clarity',
-    'risk_awareness',
   ]
 
   const baseScores = {
-    founder_score: 0,
-    investor_readiness: 0,
     strategic_clarity: 0,
+    investor_readiness: 0,
     execution_readiness: 0,
     financial_maturity: 0,
     market_understanding: 0,
@@ -210,41 +240,49 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
     else baseScores[dimension] = Math.round((baseScores[dimension] + score) / 2)
   })
 
-  if (!baseScores.product_clarity) baseScores.product_clarity = 55
+  if (!baseScores.product_clarity) {
+    baseScores.product_clarity = Math.round(
+      ((baseScores.strategic_clarity || 55) + (baseScores.market_understanding || 55)) / 2
+    )
+  }
+
+  if (!baseScores.team_strength) baseScores.team_strength = 55
 
   if (!baseScores.growth_potential) {
     baseScores.growth_potential = Math.round(
-      (baseScores.market_understanding + baseScores.execution_readiness) / 2 || 55
+      ((baseScores.market_understanding || 55) + (baseScores.execution_readiness || 55)) / 2
     )
   }
 
   const founder_score = Math.round(
     (
-      baseScores.strategic_clarity +
-      baseScores.execution_readiness +
-      baseScores.financial_maturity +
-      baseScores.market_understanding +
-      baseScores.team_strength +
-      baseScores.product_clarity +
-      baseScores.growth_potential +
-      baseScores.risk_awareness
+      (baseScores.strategic_clarity || 55) +
+      (baseScores.execution_readiness || 55) +
+      (baseScores.financial_maturity || 55) +
+      (baseScores.market_understanding || 55) +
+      (baseScores.team_strength || 55) +
+      (baseScores.product_clarity || 55) +
+      (baseScores.growth_potential || 55) +
+      (baseScores.risk_awareness || 55)
     ) / 8
   )
 
   const investor_readiness = Math.round(
     (
       founder_score +
-      baseScores.financial_maturity +
-      baseScores.execution_readiness +
-      baseScores.market_understanding
+      (baseScores.financial_maturity || 55) +
+      (baseScores.execution_readiness || 55) +
+      (baseScores.market_understanding || 55)
     ) / 4
   )
 
-  const venture_stage = detectStage(`${fullText} ${founderProfile?.venture_stage ?? ''}`)
+  const venture_stage = detectStage(
+    `${fullText} ${founderProfile?.venture_stage ?? ''} ${founderProfile?.venturestage ?? ''}`
+  )
 
   const priorities = []
 
-  if (baseScores.market_understanding < 65) {
+  if ((baseScores.market_understanding || 0) < 65) {
     priorities.push({
       priority: 'Tighten customer definition and first beachhead segment',
       urgency: 'Critical',
@@ -252,7 +290,7 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
     })
   }
 
-  if (baseScores.financial_maturity < 65) {
+  if ((baseScores.financial_maturity || 0) < 65) {
     priorities.push({
       priority: 'Clarify revenue model, pricing, and milestone-based funding logic',
       urgency: 'High',
@@ -260,7 +298,7 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
     })
   }
 
-  if (baseScores.execution_readiness < 65) {
+  if ((baseScores.execution_readiness || 0) < 65) {
     priorities.push({
       priority: 'Strengthen execution plan for the next 6-12 months',
       urgency: 'High',
@@ -268,7 +306,7 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
     })
   }
 
-  if (baseScores.risk_awareness < 65) {
+  if ((baseScores.risk_awareness || 0) < 65) {
     priorities.push({
       priority: 'Articulate the top venture risks and mitigation plan',
       urgency: 'Medium',
@@ -286,10 +324,10 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
 
   const strengths = []
 
-  if (baseScores.strategic_clarity >= 70) strengths.push('Clear articulation of problem and strategic direction')
-  if (baseScores.execution_readiness >= 70) strengths.push('Strong execution orientation')
-  if (baseScores.market_understanding >= 70) strengths.push('Good understanding of customer and market dynamics')
-  if (baseScores.team_strength >= 70) strengths.push('Credible founder or team positioning')
+  if ((baseScores.strategic_clarity || 0) >= 70) strengths.push('Clear articulation of problem and strategic direction')
+  if ((baseScores.execution_readiness || 0) >= 70) strengths.push('Strong execution orientation')
+  if ((baseScores.market_understanding || 0) >= 70) strengths.push('Good understanding of customer and market dynamics')
+  if ((baseScores.team_strength || 0) >= 70) strengths.push('Credible founder or team positioning')
 
   const fallbackStrengths = [
     'Founder demonstrates initiative',
@@ -303,9 +341,9 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
 
   const criticalGaps = []
 
-  if (baseScores.financial_maturity < 65) criticalGaps.push('Financial model and pricing logic need work')
+  if ((baseScores.financial_maturity || 0) < 65) criticalGaps.push('Financial model and pricing logic need work')
   if (investor_readiness < 65) criticalGaps.push('Investor readiness is not yet strong enough for a convincing raise')
-  if (baseScores.market_understanding < 65) criticalGaps.push('Customer segmentation and market focus remain underdeveloped')
+  if ((baseScores.market_understanding || 0) < 65) criticalGaps.push('Customer segmentation and market focus remain underdeveloped')
 
   while (criticalGaps.length < 3) {
     criticalGaps.push('Narrative and proof points need sharpening')
@@ -323,6 +361,7 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
     growthpotential: baseScores.growth_potential || 55,
     riskawareness: baseScores.risk_awareness || 55,
     venturestage: venture_stage,
+    venturestageresult: venture_stage,
     strategicpriorities: priorities.slice(0, 4),
     founderstrengths: strengths.slice(0, 3),
     criticalgaps: criticalGaps.slice(0, 3),
