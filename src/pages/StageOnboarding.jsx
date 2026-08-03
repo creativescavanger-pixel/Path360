@@ -191,6 +191,101 @@ const STATUS_SCORE = {
   strong_evidence: 3,
 }
 
+function buildStageSummary(result) {
+  const { declaredStage, diagnosedStage, scoreRatio, statusByItem } = result
+
+  const reasons = []
+  const gaps = []
+
+  if (
+    statusByItem['problem_clarity'] === 'established' ||
+    statusByItem['problem_clarity'] === 'strong_evidence'
+  ) {
+    reasons.push('Your problem definition is clear and recognised by target customers.')
+  } else {
+    gaps.push('Sharpen how you describe the problem so it is obvious to your target customer.')
+  }
+
+  if (
+    statusByItem['customer_interviews_count'] === 'established' ||
+    statusByItem['customer_interviews_count'] === 'strong_evidence'
+  ) {
+    reasons.push('You have spoken to several target customers and seen repeated patterns.')
+  } else {
+    gaps.push('Run more structured customer interviews to deepen validation.')
+  }
+
+  if (
+    statusByItem['solution_mvp'] === 'established' ||
+    statusByItem['solution_mvp'] === 'strong_evidence'
+  ) {
+    reasons.push('Customers can interact with a prototype or MVP.')
+  } else {
+    gaps.push('Bring a clear prototype or MVP into customer hands.')
+  }
+
+  if (
+    statusByItem['revenue_payments'] === 'established' ||
+    statusByItem['revenue_payments'] === 'strong_evidence'
+  ) {
+    reasons.push('Customers are paying for your product or service.')
+  } else {
+    gaps.push('Convert pilots and interest into initial paid usage.')
+  }
+
+  if (
+    statusByItem['revenue_retention'] === 'established' ||
+    statusByItem['revenue_retention'] === 'strong_evidence'
+  ) {
+    reasons.push('You see customers staying, renewing or buying again.')
+  } else {
+    gaps.push('Focus on retention and repeat use to build durable traction.')
+  }
+
+  let stageLabel = diagnosedStage
+  const declaredOpt = STAGE_OPTIONS.find((o) => o.id === declaredStage)
+  if (declaredOpt?.label) {
+    stageLabel = declaredOpt.label
+  }
+
+  let headline
+  switch (diagnosedStage) {
+    case 'idea':
+      headline = 'You are in the Idea / Exploration stage.'
+      break
+    case 'discovery':
+      headline = 'You are in the Discovery stage.'
+      break
+    case 'validation':
+      headline = 'You are in the Validation stage.'
+      break
+    case 'mvp':
+      headline = 'You are in the MVP stage.'
+      break
+    case 'early_revenue':
+      headline = 'You are in the Early Revenue stage.'
+      break
+    case 'pmf':
+      headline = 'You are approaching Product–Market Fit.'
+      break
+    case 'growth':
+      headline = 'You are in the Growth stage.'
+      break
+    default:
+      headline = 'We have estimated your current stage from your answers.'
+  }
+
+  const ratioPct = Math.round((scoreRatio || 0) * 100)
+
+  return {
+    headline,
+    stageLabel,
+    ratioPct,
+    reasons,
+    gaps,
+  }
+}
+
 export default function StageOnboarding() {
   const navigate = useNavigate()
   const founderProfile = useDiagnosticStore((s) => s.founderProfile)
@@ -200,6 +295,7 @@ export default function StageOnboarding() {
   const [statusByItem, setStatusByItem] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [stageSummary, setStageSummary] = useState(null)
 
   const founderName =
     founderProfile?.fullname ||
@@ -284,8 +380,9 @@ export default function StageOnboarding() {
         completedAt: new Date().toISOString(),
       }
 
-      setStageAssessment(result)
-      navigate('/app/dashboard', { replace: true })
+      const summary = buildStageSummary(result)
+      setStageAssessment({ ...result, summary })
+      setStageSummary(summary)
     } catch (err) {
       setError('Something went wrong while saving your stage assessment.')
     } finally {
@@ -294,6 +391,207 @@ export default function StageOnboarding() {
   }
 
   const canSubmit = selectedStage && !submitting
+
+  if (stageSummary) {
+    return (
+      <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
+        <div
+          style={{
+            background: '#FFFFFF',
+            border: '1px solid #E2DED6',
+            borderRadius: 18,
+            padding: 20,
+            marginBottom: 18,
+            boxShadow: '0 6px 16px rgba(22,24,27,0.04)',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: '#4D6B57',
+              marginBottom: 6,
+            }}
+          >
+            Stage summary
+          </div>
+          <h1
+            style={{
+              fontSize: 24,
+              lineHeight: 1.2,
+              letterSpacing: '-0.04em',
+              fontWeight: 800,
+              margin: '0 0 8px',
+            }}
+          >
+            {founderName}, here’s where {ventureName} is today.
+          </h1>
+          <p
+            style={{
+              fontSize: 14,
+              lineHeight: 1.75,
+              color: '#5F675F',
+              margin: 0,
+            }}
+          >
+            This is a non-AI diagnostic based on your checklist answers. Path360 will use this stage to tailor your
+            assessment and future guidance.
+          </p>
+        </div>
+
+        <section
+          style={{
+            background: '#FFFFFF',
+            border: '1px solid #E2DED6',
+            borderRadius: 16,
+            padding: 18,
+            marginBottom: 18,
+          }}
+        >
+          <div style={{ marginBottom: 12 }}>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: '#1C1C1A',
+                marginBottom: 4,
+              }}
+            >
+              {stageSummary.headline}
+            </div>
+            <div
+              style={{
+                fontSize: 12.5,
+                color: '#6B6965',
+              }}
+            >
+              Overall checklist completion: {stageSummary.ratioPct}% of maturity indicators marked as “in progress”
+              or above.
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)',
+              gap: 16,
+            }}
+          >
+            <div
+              style={{
+                borderRadius: 12,
+                background: '#F7F5F0',
+                padding: 12,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: '#1C1C1A',
+                  marginBottom: 6,
+                }}
+              >
+                Why this stage fits
+              </div>
+              <ul
+                style={{
+                  listStyle: 'none',
+                  padding: 0,
+                  margin: 0,
+                  fontSize: 12.5,
+                  color: '#6B6965',
+                  lineHeight: 1.7,
+                }}
+              >
+                {stageSummary.reasons.length > 0 ? (
+                  stageSummary.reasons.map((reason, idx) => (
+                    <li key={idx} style={{ marginBottom: 4 }}>
+                      • {reason}
+                    </li>
+                  ))
+                ) : (
+                  <li>We need more evidence in each area to strengthen this stage diagnosis.</li>
+                )}
+              </ul>
+            </div>
+
+            <div
+              style={{
+                borderRadius: 12,
+                background: '#FCF2E8',
+                padding: 12,
+                border: '1px solid #EEE0CF',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: '#1C1C1A',
+                  marginBottom: 6,
+                }}
+              >
+                What to focus on next
+              </div>
+              <ul
+                style={{
+                  listStyle: 'none',
+                  padding: 0,
+                  margin: 0,
+                  fontSize: 12.5,
+                  color: '#6B6965',
+                  lineHeight: 1.7,
+                }}
+              >
+                {stageSummary.gaps.slice(0, 4).map((gap, idx) => (
+                  <li key={idx} style={{ marginBottom: 4 }}>
+                    • {gap}
+                  </li>
+                ))}
+                {stageSummary.gaps.length === 0 && (
+                  <li>Use the assessment to deepen your investor-readiness view and surface finer-grained gaps.</li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ fontSize: 12.5, color: '#6B6965' }}>
+            Next, Path360 will run your founder assessment so we can combine stage and readiness into one view.
+          </div>
+
+          <button
+            type="button"
+            onClick={() => navigate('/app/dashboard', { replace: true })}
+            style={{
+              padding: '10px 18px',
+              borderRadius: 12,
+              border: 'none',
+              background: '#163A2C',
+              color: '#FFFFFF',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Continue to assessment
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ padding: 24, maxWidth: 1080, margin: '0 auto' }}>
@@ -498,7 +796,7 @@ export default function StageOnboarding() {
         }}
       >
         <div style={{ fontSize: 12.5, color: '#6B6965' }}>
-          Once complete, Path360 will unlock your dashboard and adapt future guidance to your stage.
+          Once complete, Path360 will show you a stage summary and then unlock your dashboard and assessment.
         </div>
 
         <button
@@ -516,7 +814,7 @@ export default function StageOnboarding() {
             cursor: canSubmit ? 'pointer' : 'default',
           }}
         >
-          {submitting ? 'Saving…' : 'Confirm stage and continue'}
+          {submitting ? 'Saving…' : 'Confirm stage'}
         </button>
       </div>
 

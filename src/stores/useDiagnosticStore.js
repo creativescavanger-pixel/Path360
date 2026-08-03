@@ -14,6 +14,43 @@ import {
 
 const DEFAULT_AGENT = 'venture_strategist'
 
+// Simple keys for local persistence (local app first)
+const LOCAL_STAGE_KEY = 'path360_stage_assessment'
+const LOCAL_STAGE_COMPLETED_KEY = 'path360_stage_completed'
+
+// Helpers
+function loadLocalStage() {
+  try {
+    const raw = window.localStorage?.getItem(LOCAL_STAGE_KEY)
+    const completedRaw = window.localStorage?.getItem(LOCAL_STAGE_COMPLETED_KEY)
+    const assessment = raw ? JSON.parse(raw) : null
+    const completed = completedRaw === 'true'
+    return { assessment, completed }
+  } catch {
+    return { assessment: null, completed: false }
+  }
+}
+
+function saveLocalStage(assessment, completed) {
+  try {
+    if (assessment) {
+      window.localStorage?.setItem(LOCAL_STAGE_KEY, JSON.stringify(assessment))
+      window.localStorage?.setItem(LOCAL_STAGE_COMPLETED_KEY, completed ? 'true' : 'false')
+    } else {
+      window.localStorage?.removeItem(LOCAL_STAGE_KEY)
+      window.localStorage?.removeItem(LOCAL_STAGE_COMPLETED_KEY)
+    }
+  } catch {
+    // Ignore localStorage errors in local app
+  }
+}
+
+// Bootstrap local stage on initial store creation
+let initialStage = { assessment: null, completed: false }
+if (typeof window !== 'undefined') {
+  initialStage = loadLocalStage()
+}
+
 const useDiagnosticStore = create((set, get) => ({
   user: null,
   founderProfile: null,
@@ -27,9 +64,9 @@ const useDiagnosticStore = create((set, get) => ({
   documentIntakes: [],
   progressEvents: [],
 
-  // NEW: stage-first onboarding state
-  stageAssessment: null,
-  hasCompletedStageOnboarding: false,
+  // Stage-first onboarding state (loaded from localStorage if present)
+  stageAssessment: initialStage.assessment,
+  hasCompletedStageOnboarding: initialStage.completed,
 
   setUser: (user) => set({ user }),
 
@@ -44,18 +81,25 @@ const useDiagnosticStore = create((set, get) => ({
   setDocumentIntakes: (intakes) => set({ documentIntakes: Array.isArray(intakes) ? intakes : [] }),
   setProgressEvents: (events) => set({ progressEvents: Array.isArray(events) ? events : [] }),
 
-  // NEW: stage assessment setters
-  setStageAssessment: (assessment) =>
+  // Stage assessment setters (now also persist locally)
+  setStageAssessment: (assessment) => {
+    const next = {
+      ...assessment,
+    }
     set(() => ({
-      stageAssessment: assessment,
-      hasCompletedStageOnboarding: true,
-    })),
+      stageAssessment: next,
+      hasCompletedStageOnboarding: !!next,
+    }))
+    saveLocalStage(next, !!next)
+  },
 
-  clearStageAssessment: () =>
+  clearStageAssessment: () => {
     set(() => ({
       stageAssessment: null,
       hasCompletedStageOnboarding: false,
-    })),
+    }))
+    saveLocalStage(null, false)
+  },
 
   getConversation: (agentType) => {
     const key = agentType || get().activeAgent || DEFAULT_AGENT
@@ -367,6 +411,8 @@ const useDiagnosticStore = create((set, get) => ({
   hydrateWorkspace: async (userId) => {
     try {
       const workspace = await loadFounderWorkspace(userId)
+      const localStage = typeof window !== 'undefined' ? loadLocalStage() : { assessment: null, completed: false }
+
       set({
         founderProfile: workspace?.founderProfile ?? null,
         assessmentResults: workspace?.assessmentResults ?? null,
@@ -378,9 +424,10 @@ const useDiagnosticStore = create((set, get) => ({
         documentIntakes: Array.isArray(workspace?.documentIntakes) ? workspace.documentIntakes : [],
         progressEvents: Array.isArray(workspace?.progressEvents) ? workspace.progressEvents : [],
 
-        // If you later load stageAssessment from Supabase, map it here:
-        stageAssessment: workspace?.stageAssessment ?? null,
-        hasCompletedStageOnboarding: !!workspace?.stageAssessment,
+        // For now, local app stage wins; Supabase can override later if needed
+        stageAssessment: localStage.assessment ?? workspace?.stageAssessment ?? null,
+        hasCompletedStageOnboarding:
+          localStage.completed || !!localStage.assessment || !!workspace?.stageAssessment,
       })
       return workspace
     } catch (err) {
@@ -389,7 +436,8 @@ const useDiagnosticStore = create((set, get) => ({
     }
   },
 
-  clearWorkspace: () =>
+  clearWorkspace: () => {
+    saveLocalStage(null, false)
     set({
       founderProfile: null,
       assessmentResults: null,
@@ -403,9 +451,11 @@ const useDiagnosticStore = create((set, get) => ({
       progressEvents: [],
       stageAssessment: null,
       hasCompletedStageOnboarding: false,
-    }),
+    })
+  },
 
-  clearSessionOnly: () =>
+  clearSessionOnly: () => {
+    saveLocalStage(null, false)
     set({
       user: null,
       founderProfile: null,
@@ -420,7 +470,8 @@ const useDiagnosticStore = create((set, get) => ({
       progressEvents: [],
       stageAssessment: null,
       hasCompletedStageOnboarding: false,
-    }),
+    })
+  },
 }))
 
 export default useDiagnosticStore

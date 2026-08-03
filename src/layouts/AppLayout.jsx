@@ -3,8 +3,10 @@ import { useEffect } from 'react'
 import Sidebar from '../components/Sidebar.jsx'
 import Topbar from '../components/Topbar.jsx'
 import AIStrategistRail from '../components/AIStrategistRail.jsx'
+import StageBanner from '../components/StageBanner.jsx'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 import { signOut } from '../lib/supabaseClient.js'
+import { getPageIdentity } from '../lib/pageIdentity.js'
 
 export default function AppLayout() {
   const navigate = useNavigate()
@@ -28,12 +30,14 @@ export default function AppLayout() {
     founderProfile?.companyname ||
     'Your business'
 
+  const pageIdentity = getPageIdentity(location.pathname)
+  const isOnStageOnboarding = location.pathname === '/app/stage-onboarding'
+
   useEffect(() => {
-    const isOnStageOnboarding = location.pathname === '/app/stage-onboarding'
     if (!hasCompletedStageOnboarding && !isOnStageOnboarding) {
       navigate('/app/stage-onboarding', { replace: true })
     }
-  }, [hasCompletedStageOnboarding, location.pathname, navigate])
+  }, [hasCompletedStageOnboarding, isOnStageOnboarding, navigate])
 
   async function handleLogout(e) {
     e.preventDefault()
@@ -174,7 +178,59 @@ export default function AppLayout() {
             padding: 22,
           }}
         >
-          {!assessmentResults && hasCompletedStageOnboarding && location.pathname !== '/app/stage-onboarding' && (
+          {!isOnStageOnboarding && <StageBanner />}
+
+          {!isOnStageOnboarding && (
+            <div
+              style={{
+                marginBottom: 18,
+                background: pageIdentity.softBg,
+                border: `1px solid ${pageIdentity.border}`,
+                borderRadius: 16,
+                padding: 18,
+                boxShadow: '0 6px 16px rgba(22,24,27,0.04)',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  color: pageIdentity.accent,
+                  marginBottom: 6,
+                }}
+              >
+                {pageIdentity.eyebrow}
+              </div>
+
+              <div
+                style={{
+                  fontSize: 24,
+                  fontWeight: 800,
+                  letterSpacing: '-0.03em',
+                  color: '#1C1C1A',
+                  marginBottom: 6,
+                  lineHeight: 1.15,
+                }}
+              >
+                {pageIdentity.title}
+              </div>
+
+              <div
+                style={{
+                  fontSize: 13,
+                  color: '#5F675F',
+                  lineHeight: 1.75,
+                  maxWidth: 760,
+                }}
+              >
+                {pageIdentity.description}
+              </div>
+            </div>
+          )}
+
+          {!assessmentResults && hasCompletedStageOnboarding && !isOnStageOnboarding && (
             <div
               className="fade-up"
               style={{
