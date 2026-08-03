@@ -2,6 +2,8 @@
 // Industry-led guided document intakes for PATH360.
 // Based on YC-style clarity and Sequoia-style business plans and pitch decks. [web:1370][web:1387][web:1397]
 
+import { getDocTypeConfig } from '../config/documentTypes.js'
+
 export const DOCUMENT_GUIDES = {
   pitch_deck: {
     id: 'pitch_deck',
@@ -784,7 +786,7 @@ export function getDocumentGuide(docType) {
 }
 
 export function isGuidedDocType(docType) {
-  return !!DOCUMENT_GUIDES[docType]
+  return !!DOCUMENT_GUIDES[docType] || !!getDocTypeConfig(docType)?.guided
 }
 
 export function getAllGuidedDocTypes() {

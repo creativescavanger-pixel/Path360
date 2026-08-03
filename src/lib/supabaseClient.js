@@ -1,11 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 
-const url = import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITESUPABASEURL
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITESUPABASEANONKEY
+const url = import.meta.env.VITE_SUPABASE_URL?.trim()
+const key = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
 const FOUNDER_FILES_BUCKET = 'founder_profiles'
 
 if (!url || !key) {
-  console.error('Missing Supabase env vars. Check your .env file.')
+  console.error(
+    'Missing Supabase frontend env vars. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your Vite environment.'
+  )
 }
 
 export const supabase = createClient(url, key, {
@@ -55,6 +57,36 @@ export async function getCurrentSession() {
   const { data, error } = await supabase.auth.getSession()
   if (error) throw error
   return data?.session ?? null
+}
+
+export async function deleteAccountViaEdgeFunction() {
+  const session = await getCurrentSession()
+  const token = session?.access_token
+
+  if (!token) {
+    throw new Error('No active Supabase session found.')
+  }
+
+  const edgeFunctionUrl = import.meta.env.VITE_SUPABASE_DELETE_ACCOUNT_URL?.trim()
+  if (!edgeFunctionUrl) {
+    throw new Error('Missing VITE_SUPABASE_DELETE_ACCOUNT_URL env var.')
+  }
+
+  const response = await fetch(edgeFunctionUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  })
+
+  const body = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(body?.error || `Delete account request failed with status ${response.status}`)
+  }
+
+  return body
 }
 
 export async function saveFounderProfile(userId, profile) {
@@ -154,21 +186,35 @@ export async function getMemories(userId, limit = 20) {
 }
 
 export async function saveDocument(userId, docType, title, content) {
+  if (!userId) {
+    console.error('saveDocument: missing userId')
+    throw new Error('No user id when saving document')
+  }
+
+  const payload = {
+    userid: userId,
+    doctype: docType,
+    title,
+    content,
+    status: 'complete',
+    version: 1,
+    createdat: new Date().toISOString(),
+  }
+
+  console.log('[saveDocument] inserting into generateddocuments', payload)
+
   const { data, error } = await supabase
     .from('generateddocuments')
-    .insert({
-      userid: userId,
-      doctype: docType,
-      title,
-      content,
-      status: 'complete',
-      version: 1,
-      createdat: new Date().toISOString(),
-    })
-    .select()
+    .insert(payload)
+    .select('*')
     .single()
 
-  if (error) throw error
+  if (error) {
+    console.error('[saveDocument] Supabase error', error)
+    throw error
+  }
+
+  console.log('[saveDocument] inserted generateddocument row', data)
   return data
 }
 

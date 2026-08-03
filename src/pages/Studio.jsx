@@ -1,10 +1,15 @@
-import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+// src/pages/Studio.jsx
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 import { generateDocument } from '../lib/agentOrchestrator.js'
 import { saveDocument } from '../lib/supabaseClient.js'
 import { track, EVENTS } from '../lib/posthogClient.js'
 import { isGuidedDocType } from '../lib/documentGuides.js'
+import { getStudioDraftByDocType, getStudioDraftById, saveStudioDraft } from '../lib/studioDocuments.js'
+import { getAllDocTypes, getDocTypeConfig } from '../config/documentTypes.js'
+import { exportTextDocumentFromStructuredDoc } from '../lib/documentExports.js'
 
 const OBJECTIVES = [
   {
@@ -34,64 +39,7 @@ const OBJECTIVES = [
   },
 ]
 
-const OUTPUT_TYPES = [
-  {
-    id: 'business_plan',
-    label: 'Business Plan',
-    short: 'Full strategic operating plan.',
-    tier: 'starter',
-    objectives: ['clarify_strategy', 'raise_funding'],
-  },
-  {
-    id: 'business_case',
-    label: 'Business Case',
-    short: 'Why this venture deserves support.',
-    tier: 'starter',
-    objectives: ['clarify_strategy', 'raise_funding'],
-  },
-  {
-    id: 'business_model',
-    label: 'Business Model Summary',
-    short: 'How you create, deliver, and capture value.',
-    tier: 'starter',
-    objectives: ['explain_business', 'clarify_strategy'],
-  },
-  {
-    id: 'pitch_deck',
-    label: 'Pitch Deck Narrative',
-    short: 'Slide-by-slide story structure.',
-    tier: 'starter',
-    objectives: ['raise_funding', 'strengthen_pitch'],
-  },
-  {
-    id: 'elevator_pitch',
-    label: 'Elevator Pitch',
-    short: '30–60 second verbal summary.',
-    tier: 'starter',
-    objectives: ['strengthen_pitch', 'investor_meeting'],
-  },
-  {
-    id: 'investor_memo',
-    label: 'Investor One-Pager',
-    short: 'High-signal summary for quick review.',
-    tier: 'starter',
-    objectives: ['raise_funding', 'investor_meeting'],
-  },
-  {
-    id: 'mock_interview',
-    label: 'Mock Investor Interview',
-    short: 'Practice questions and suggested answers.',
-    tier: 'growth',
-    objectives: ['investor_meeting', 'strengthen_pitch'],
-  },
-  {
-    id: 'pitch_practice',
-    label: 'Pitch Practice Prompts',
-    short: 'Tight prompts to rehearse your story.',
-    tier: 'growth',
-    objectives: ['strengthen_pitch'],
-  },
-]
+const OUTPUT_TYPES = getAllDocTypes()
 
 function canUseTier(docTier, isGrowthOrAbove) {
   if (docTier === 'starter') return true
@@ -118,8 +66,36 @@ function normaliseErrorMessage(err) {
   return 'Something went wrong while generating this document. Please try again.'
 }
 
+function getDraftField(draft, ...keys) {
+  for (const key of keys) {
+    if (draft?.[key] !== undefined && draft?.[key] !== null) return draft[key]
+  }
+  return null
+}
+
+function makeSafeFilename(value) {
+  return String(value || 'document')
+    .replace(/[^a-zA-Z0-9-_ ]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .toLowerCase()
+}
+
+function findObjectiveById(id) {
+  if (!id) return null
+  return OBJECTIVES.find((obj) => obj.id === id) || null
+}
+
+function findOutputById(id) {
+  if (!id) return null
+  return OUTPUT_TYPES.find((out) => out.id === id) || getDocTypeConfig(id)
+}
+
 export default function Studio() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const autosaveTimer = useRef(null)
+  const hasHydratedFromQuery = useRef(false)
 
   const [objective, setObjective] = useState(null)
   const [selectedOutput, setSelectedOutput] = useState(null)
@@ -128,6 +104,10 @@ export default function Studio() {
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState('')
   const [copyFeedback, setCopyFeedback] = useState('')
+  const [draftId, setDraftId] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState('')
+  const [loadingDraft, setLoadingDraft] = useState(false)
 
   const getFounderContext = useDiagnosticStore((s) => s.getFounderContext)
   const addDocument = useDiagnosticStore((s) => s.addDocument)
@@ -140,6 +120,156 @@ export default function Studio() {
     return OUTPUT_TYPES.filter((out) => out.objectives.includes(objective.id))
   }, [objective])
 
+  async function persistDraft({
+    nextObjective = objective,
+    nextSelectedOutput = selectedOutput,
+    nextInstructions = customInstructions,
+    nextGeneratedContent = generatedContent,
+    nextStatus = nextGeneratedContent ? 'generated' : 'draft',
+  } = {}) {
+    if (!user?.id || !nextSelectedOutput?.id) return null
+
+    setSaving(true)
+    setSaveStatus('Saving...')
+
+    try {
+      const saved = await saveStudioDraft({
+        id: draftId || undefined,
+        userId: user.id,
+        docType: nextSelectedOutput.id,
+        objectiveId: nextObjective?.id || null,
+        title: `${nextSelectedOutput.label} — ${new Date().toLocaleDateString()}`,
+        status: nextStatus,
+        customInstructions: nextInstructions,
+        generatedContent: nextGeneratedContent,
+        draftData: {
+          objectiveId: nextObjective?.id || null,
+          selectedOutputId: nextSelectedOutput.id,
+          customInstructions: nextInstructions || '',
+        },
+      })
+
+      setDraftId(saved?.id || null)
+      setSaveStatus('Saved just now')
+      return saved
+    } catch (err) {
+      console.error(err)
+      setSaveStatus('Save failed')
+      return null
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function hydrateFromDraft(draft) {
+    if (!draft) return
+
+    const restoredDraftId = getDraftField(draft, 'id')
+    const restoredInstructions =
+      getDraftField(draft, 'customInstructions', 'custom_instructions', 'custominstructions') || ''
+    const restoredGeneratedContent =
+      getDraftField(draft, 'generatedContent', 'generated_content', 'generatedcontent') || null
+    const restoredObjectiveId = getDraftField(draft, 'objectiveId', 'objective_id', 'objectiveid')
+    const restoredDocType = getDraftField(draft, 'docType', 'doc_type', 'doctype')
+    const restoredDraftData = getDraftField(draft, 'draftData', 'draft_data', 'draftdata') || {}
+
+    const objectiveFromDraft =
+      findObjectiveById(restoredObjectiveId) ||
+      findObjectiveById(
+        restoredDraftData?.objectiveId || restoredDraftData?.objective_id || restoredDraftData?.objectiveid
+      )
+
+    const outputFromDraft =
+      findOutputById(restoredDocType) ||
+      findOutputById(
+        restoredDraftData?.selectedOutputId ||
+          restoredDraftData?.selected_output_id ||
+          restoredDraftData?.selectedoutputid
+      )
+
+    setDraftId(restoredDraftId || null)
+    setCustomInstructions(restoredInstructions)
+    setGeneratedContent(restoredGeneratedContent)
+    setSaveStatus('Draft loaded')
+
+    if (objectiveFromDraft) {
+      setObjective(objectiveFromDraft)
+    }
+
+    if (outputFromDraft) {
+      setSelectedOutput(outputFromDraft)
+    }
+  }
+
+  async function loadDraftForOutput(output) {
+    if (!user?.id || !output?.id) return
+
+    setLoadingDraft(true)
+    setSaveStatus('')
+
+    try {
+      const draft = await getStudioDraftByDocType(user.id, output.id)
+
+      if (!draft) {
+        setDraftId(null)
+        setGeneratedContent(null)
+        setCustomInstructions('')
+        setSaveStatus('No saved draft yet')
+        return
+      }
+
+      hydrateFromDraft(draft)
+    } catch (err) {
+      console.error(err)
+      setSaveStatus('Could not load draft')
+    } finally {
+      setLoadingDraft(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!user?.id || hasHydratedFromQuery.current) return
+
+    const draftParam = searchParams.get('draft')
+    if (!draftParam) return
+
+    hasHydratedFromQuery.current = true
+    setLoadingDraft(true)
+
+    getStudioDraftById(draftParam)
+      .then((draft) => {
+        if (!draft) {
+          setSaveStatus('Draft not found')
+          return
+        }
+        hydrateFromDraft(draft)
+      })
+      .catch((err) => {
+        console.error(err)
+        setSaveStatus('Could not load draft')
+      })
+      .finally(() => {
+        setLoadingDraft(false)
+      })
+  }, [user?.id, searchParams])
+
+  useEffect(() => {
+    if (!user?.id || !selectedOutput?.id) return
+
+    clearTimeout(autosaveTimer.current)
+    autosaveTimer.current = setTimeout(() => {
+      persistDraft()
+    }, 900)
+
+    return () => clearTimeout(autosaveTimer.current)
+  }, [user?.id, selectedOutput?.id, objective?.id, customInstructions])
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(autosaveTimer.current)
+    }
+  }, [])
+
   async function handleGenerate() {
     if (!selectedOutput || generating) return
 
@@ -149,6 +279,8 @@ export default function Studio() {
     setCopyFeedback('')
 
     try {
+      await persistDraft({ nextStatus: 'draft' })
+
       const context = getFounderContext()
 
       const content = await generateDocument({
@@ -161,19 +293,44 @@ export default function Studio() {
       const normalizedContent = typeof content === 'string' ? content : String(content || '')
       setGeneratedContent(normalizedContent)
 
+      const savedDraft = await persistDraft({
+        nextGeneratedContent: normalizedContent,
+        nextStatus: 'generated',
+      })
+
       if (user?.id) {
-        const saved = await saveDocument(
-          user.id,
-          selectedOutput.id,
-          `${selectedOutput.label} — ${new Date().toLocaleDateString()}`,
-          normalizedContent
-        )
-        addDocument(saved)
+        try {
+          console.log('[Studio] calling saveDocument', {
+            userId: user.id,
+            docType: selectedOutput.id,
+          })
+
+          const saved = await saveDocument(
+            user.id,
+            selectedOutput.id,
+            `${selectedOutput.label} — ${new Date().toLocaleDateString()}`,
+            normalizedContent
+          )
+
+          console.log('[Studio] saveDocument result', saved)
+          addDocument(saved)
+        } catch (err) {
+          console.error('[Studio] saveDocument failed', err)
+        }
+      }
+
+      if (savedDraft) {
+        setDraftId(savedDraft.id)
       }
 
       track?.(EVENTS?.DOCUMENT_GENERATED || 'document_generated', {
         doc_type: selectedOutput.id,
         objective: objective?.id ?? null,
+      })
+
+      track?.(EVENTS?.STUDIO_DRAFT_GENERATED, {
+        docType: selectedOutput.id,
+        guided: isGuidedDocType(selectedOutput.id),
       })
     } catch (err) {
       console.error(err)
@@ -196,14 +353,21 @@ export default function Studio() {
     }
   }
 
-  function handleNew() {
+  async function handleManualSave() {
+    await persistDraft()
+  }
+
+  async function handleEditGenerated() {
     setGeneratedContent(null)
-    setCustomInstructions('')
-    setError('')
-    setCopyFeedback('')
+    setSaveStatus('Editing draft')
+    await persistDraft({
+      nextGeneratedContent: null,
+      nextStatus: 'draft',
+    })
   }
 
   function handleResetFlow() {
+    clearTimeout(autosaveTimer.current)
     setObjective(null)
     setSelectedOutput(null)
     setCustomInstructions('')
@@ -211,6 +375,117 @@ export default function Studio() {
     setGenerating(false)
     setError('')
     setCopyFeedback('')
+    setDraftId(null)
+    setSaveStatus('')
+    setLoadingDraft(false)
+  }
+
+  function handleNewVersion() {
+    setGeneratedContent(null)
+    setError('')
+    setCopyFeedback('')
+    setSaveStatus('Ready for a new version')
+  }
+
+  function handleSelectObjective(obj) {
+    clearTimeout(autosaveTimer.current)
+    setObjective(obj)
+    setSelectedOutput(null)
+    setGeneratedContent(null)
+    setCustomInstructions('')
+    setDraftId(null)
+    setError('')
+    setCopyFeedback('')
+    setSaveStatus('')
+  }
+
+  async function handleSelectOutput(out) {
+    setSelectedOutput(out)
+    setGeneratedContent(null)
+    setError('')
+    setCopyFeedback('')
+    setDraftId(null)
+    setSaveStatus('')
+
+    const guided = isGuidedDocType(out.id)
+
+    if (guided) {
+      const saved = await persistDraft({
+        nextObjective: objective,
+        nextSelectedOutput: out,
+        nextInstructions: customInstructions,
+        nextGeneratedContent: null,
+        nextStatus: 'draft',
+      })
+
+      navigate(`/app/studio/prep/${out.id}${saved?.id ? `?draft=${saved.id}` : ''}`)
+      return
+    }
+
+    await loadDraftForOutput(out)
+  }
+
+  function handleReview() {
+    navigate(draftId ? `/app/reports?studioDraft=${draftId}` : '/app/reports')
+  }
+
+  async function handleDownload(format) {
+    if (!generatedContent) return
+
+    track?.(EVENTS?.DOCUMENT_EXPORTED, {
+      docType: selectedOutput?.id || null,
+      format,
+      guided: isGuidedDocType(selectedOutput?.id),
+    })
+
+    if (user?.id && draftId) {
+      try {
+        const structuredDocument = {
+          title: selectedOutput?.label || 'Document',
+          docType: selectedOutput?.id || 'studio_document',
+          mode: 'document',
+          summary: '',
+          downloadFormats: [format],
+          sections: [
+            {
+              title: selectedOutput?.label || 'Generated Content',
+              content: generatedContent,
+            },
+          ],
+          slides: [],
+          metadata: {
+            generatedAt: new Date().toISOString(),
+            objectiveId: objective?.id ?? null,
+            parseError: false,
+          },
+        }
+
+        await exportTextDocumentFromStructuredDoc({
+          userId: user.id,
+          draftId,
+          docType: structuredDocument.docType,
+          title: structuredDocument.title,
+          structuredDocument,
+          exportScope: 'full_document',
+        })
+      } catch (err) {
+        console.error('Failed to save Studio export record', err)
+      }
+    }
+
+    const blob = new Blob([generatedContent], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const safeName = makeSafeFilename(
+      `${selectedOutput?.label || 'document'}-${new Date().toISOString().slice(0, 10)}`
+    )
+
+    a.href = url
+    a.download = `${safeName}.${format}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -304,14 +579,7 @@ export default function Studio() {
                   <button
                     key={obj.id}
                     type="button"
-                    onClick={() => {
-                      setObjective(obj)
-                      setSelectedOutput(null)
-                      setGeneratedContent(null)
-                      setCustomInstructions('')
-                      setError('')
-                      setCopyFeedback('')
-                    }}
+                    onClick={() => handleSelectObjective(obj)}
                     style={{
                       textAlign: 'left',
                       borderRadius: 12,
@@ -391,16 +659,7 @@ export default function Studio() {
                       disabled={locked || generating}
                       onClick={() => {
                         if (locked || generating) return
-
-                        if (guided) {
-                          navigate(`/app/studio/prep/${out.id}`)
-                          return
-                        }
-
-                        setSelectedOutput(out)
-                        setGeneratedContent(null)
-                        setError('')
-                        setCopyFeedback('')
+                        handleSelectOutput(out)
                       }}
                       style={{
                         background: isSelected ? '#1D6B4F' : locked ? '#F7F5F0' : '#FFFFFF',
@@ -505,6 +764,21 @@ export default function Studio() {
                 </div>
               </div>
 
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  marginBottom: 10,
+                }}
+              >
+                <div style={{ fontSize: 12, color: '#6B6965' }}>
+                  {loadingDraft ? 'Loading draft...' : saveStatus || 'Not saved yet'}
+                </div>
+                {saving && <div style={{ fontSize: 12, color: '#8C8A84' }}>Working…</div>}
+              </div>
+
               <div style={{ marginBottom: 12 }}>
                 <label
                   style={{
@@ -554,23 +828,43 @@ export default function Studio() {
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={handleGenerate}
-                disabled={generating}
-                style={{
-                  background: '#1D6B4F',
-                  border: '1px solid #1D6B4F',
-                  borderRadius: 9,
-                  padding: '10px 18px',
-                  color: '#FFFFFF',
-                  fontWeight: 600,
-                  fontSize: 13,
-                  cursor: generating ? 'default' : 'pointer',
-                }}
-              >
-                {generating ? 'Generating… (20–40s)' : `Generate ${selectedOutput.label}`}
-              </button>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={handleManualSave}
+                  disabled={saving || generating}
+                  style={{
+                    background: '#FFFFFF',
+                    border: '1px solid #D8D3C9',
+                    borderRadius: 9,
+                    padding: '10px 18px',
+                    color: '#1C1C1A',
+                    fontWeight: 600,
+                    fontSize: 13,
+                    cursor: saving || generating ? 'default' : 'pointer',
+                  }}
+                >
+                  Save draft
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={generating}
+                  style={{
+                    background: '#1D6B4F',
+                    border: '1px solid #1D6B4F',
+                    borderRadius: 9,
+                    padding: '10px 18px',
+                    color: '#FFFFFF',
+                    fontWeight: 600,
+                    fontSize: 13,
+                    cursor: generating ? 'default' : 'pointer',
+                  }}
+                >
+                  {generating ? 'Generating… (20–40s)' : `Generate ${selectedOutput.label}`}
+                </button>
+              </div>
             </section>
           )}
 
@@ -598,7 +892,7 @@ export default function Studio() {
                     {selectedOutput.label} created
                   </div>
                   <div style={{ fontSize: 11.5, color: '#8C8A84', marginTop: 2 }}>
-                    Generated from your latest founder context. You can refine, copy, or generate a new version.
+                    Generated from your latest founder context. You can review, edit, copy, or create a new version.
                   </div>
                 </div>
 
@@ -620,7 +914,84 @@ export default function Studio() {
 
                   <button
                     type="button"
-                    onClick={handleNew}
+                    onClick={handleReview}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: 8,
+                      border: '1px solid #E2DED6',
+                      background: '#FFFFFF',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                    }}
+                  >
+                    Review
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleEditGenerated}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: 8,
+                      border: '1px solid #E2DED6',
+                      background: '#FFFFFF',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                    }}
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDownload('docx')}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: 8,
+                      border: '1px solid #E2DED6',
+                      background: '#FFFFFF',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                    }}
+                  >
+                    Download DOCX
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDownload('pdf')}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: 8,
+                      border: '1px solid #E2DED6',
+                      background: '#FFFFFF',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                    }}
+                  >
+                    Download PDF
+                  </button>
+
+                  {selectedOutput?.id === 'pitch_deck' && (
+                    <button
+                      type="button"
+                      onClick={() => handleDownload('pptx')}
+                      style={{
+                        padding: '7px 14px',
+                        borderRadius: 8,
+                        border: '1px solid #E2DED6',
+                        background: '#FFFFFF',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                      }}
+                    >
+                      Download PPTX
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleNewVersion}
                     style={{
                       padding: '7px 14px',
                       borderRadius: 8,
@@ -648,6 +1019,16 @@ export default function Studio() {
                     Start again
                   </button>
                 </div>
+              </div>
+
+              <div
+                style={{
+                  fontSize: 12,
+                  color: '#6B6965',
+                  marginBottom: 10,
+                }}
+              >
+                {saveStatus || 'Saved'}
               </div>
 
               <div
@@ -730,7 +1111,13 @@ export default function Studio() {
             now start with a guided intake before drafting.
           </div>
 
-          <div style={{ fontSize: 12, color: '#6B6965', lineHeight: 1.6 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: '#6B6965',
+              lineHeight: 1.6,
+            }}
+          >
             After generating, you will find saved documents in your Reports workspace so you can review, export, and
             reuse them later.
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 import { getDocuments } from '../lib/supabaseClient.js'
+import { getStudioDocuments } from '../lib/studioDocuments.js'
 
 function safeNumber(value, fallback = 0) {
   const n = Number(value)
@@ -207,6 +208,21 @@ function EmptyInline({ text = 'No data available yet.' }) {
   )
 }
 
+function getField(record, ...keys) {
+  for (const key of keys) {
+    if (record?.[key] !== undefined && record?.[key] !== null) return record[key]
+  }
+  return null
+}
+
+function prettifyDocType(docType = '') {
+  return String(docType || '')
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const rawResults = useDiagnosticStore((s) => s.assessmentResults)
@@ -216,6 +232,7 @@ export default function Dashboard() {
   const user = useDiagnosticStore((s) => s.user)
 
   const [activeTab, setActiveTab] = useState('overview')
+  const [studioDocs, setStudioDocs] = useState([])
 
   useEffect(() => {
     let cancelled = false
@@ -242,6 +259,31 @@ export default function Dashboard() {
     }
   }, [user?.id, setDocuments])
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadStudioDocs() {
+      if (!user?.id) return
+
+      try {
+        const rows = await getStudioDocuments(user.id)
+        if (!cancelled) {
+          setStudioDocs(rows || [])
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error(error)
+        }
+      }
+    }
+
+    loadStudioDocs()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
   const results = useMemo(() => normalizeResults(rawResults), [rawResults])
 
   const radarData = useMemo(() => {
@@ -259,6 +301,30 @@ export default function Dashboard() {
   }, [results])
 
   const questionThemes = useMemo(() => buildQuestionThemes(results?.rawqa || []), [results])
+
+  const recentItems = useMemo(() => {
+    const generated = (documents || []).map((doc) => ({
+      id: `generated-${doc.id}`,
+      source: 'generated',
+      title: doc.title || doc.doctype || 'Untitled document',
+      type: doc.doctype || 'Document',
+      updated: doc.createdat || null,
+      raw: doc,
+    }))
+
+    const drafts = (studioDocs || []).map((doc) => ({
+      id: `studio-${getField(doc, 'id')}`,
+      source: 'studio',
+      title: getField(doc, 'title') || 'Untitled Studio draft',
+      type: prettifyDocType(getField(doc, 'docType', 'doc_type', 'doctype') || 'studio_document'),
+      updated: getField(doc, 'updatedAt', 'updated_at', 'updatedat'),
+      raw: doc,
+    }))
+
+    return [...drafts, ...generated]
+      .sort((a, b) => new Date(b.updated || 0) - new Date(a.updated || 0))
+      .slice(0, 4)
+  }, [documents, studioDocs])
 
   if (!results) {
     const founderName = profile?.fullname || profile?.foundername || 'Founder'
@@ -990,45 +1056,101 @@ export default function Dashboard() {
         >
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#111111' }}>Recent Documents</div>
-            <div style={{ fontSize: 11.5, color: '#8B938B', marginTop: 3 }}>Generated documents</div>
+            <div style={{ fontSize: 11.5, color: '#8B938B', marginTop: 3 }}>
+              Generated documents and Studio drafts
+            </div>
           </div>
 
-          <button
-            onClick={() => navigate('/app/studio')}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              color: '#1A7A4A',
-              fontWeight: 700,
-              fontSize: 12.5,
-              cursor: 'pointer',
-            }}
-          >
-            Create new
-          </button>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button
+              onClick={() => navigate('/app/reports')}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: '#5F675F',
+                fontWeight: 700,
+                fontSize: 12.5,
+                cursor: 'pointer',
+              }}
+            >
+              View library
+            </button>
+            <button
+              onClick={() => navigate('/app/studio')}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: '#1A7A4A',
+                fontWeight: 700,
+                fontSize: 12.5,
+                cursor: 'pointer',
+              }}
+            >
+              Create new
+            </button>
+          </div>
         </div>
 
-        {documents?.length ? (
+        {recentItems?.length ? (
           <div style={{ display: 'grid', gap: 10 }}>
-            {documents.slice(0, 4).map((doc, i) => (
+            {recentItems.map((item, i) => (
               <div
-                key={doc.id || i}
+                key={item.id || i}
                 style={{
                   borderTop: i === 0 ? 'none' : '1px solid #EEF2EE',
                   paddingTop: i === 0 ? 0 : 10,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 12,
+                  flexWrap: 'wrap',
                 }}
               >
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: '#111111',
-                    marginBottom: 3,
-                  }}
-                >
-                  {doc.title || doc.doctype || 'Untitled document'}
+                <div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#111111',
+                      marginBottom: 3,
+                    }}
+                  >
+                    {item.title}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: '#8B938B' }}>{item.type}</div>
                 </div>
-                <div style={{ fontSize: 11.5, color: '#8B938B' }}>{doc.doctype || 'Document'}</div>
+
+                {item.source === 'studio' ? (
+                  <button
+                    onClick={() =>
+                      navigate(`/app/reports?studioDraft=${getField(item.raw, 'id')}`)
+                    }
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#1A7A4A',
+                      fontWeight: 700,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Review
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => navigate('/app/reports')}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#1A7A4A',
+                      fontWeight: 700,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Open
+                  </button>
+                )}
               </div>
             ))}
           </div>

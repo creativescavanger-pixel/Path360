@@ -1,8 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const supabaseUrl = Deno.env.get('SUPABASE_URL')?.trim() ?? ''
+const anonKey = Deno.env.get('SUPABASE_ANON_KEY')?.trim() ?? ''
+const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim() ?? ''
+
+if (!supabaseUrl || !serviceRoleKey) {
+  throw new Error('Missing Supabase server env vars. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY before deploying the edge function.')
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

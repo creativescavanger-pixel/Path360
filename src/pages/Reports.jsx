@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 import {
   downloadGeneratedDocumentFile,
@@ -6,6 +7,10 @@ import {
   uploadFounderFile,
   saveFounderFileRecord,
 } from '../lib/supabaseClient.js'
+import { getStudioDocuments } from '../lib/studioDocuments.js'
+import { isGuidedDocType } from '../lib/documentGuides.js'
+import { getDocTypeLabel } from '../config/documentTypes.js'
+import { getDocumentExportsByDraft, createSignedExportUrl } from '../lib/documentExports.js'
 
 function SectionCard({ title, subtitle, children }) {
   return (
@@ -32,6 +37,7 @@ function StatusPill({ status }) {
     complete: { bg: '#EEF4EF', text: '#2A6A51', border: '#D6E4D7', label: 'Ready' },
     uploaded: { bg: '#F3F1EA', text: '#8A6E2A', border: '#E6DDC8', label: 'Uploaded' },
     draft: { bg: '#F7F5F0', text: '#8C8A84', border: '#E2DED6', label: 'Draft' },
+    generated: { bg: '#EEF4EF', text: '#2A6A51', border: '#D6E4D7', label: 'Generated' },
   }
 
   const theme = colorMap[status] ?? colorMap.draft
@@ -76,7 +82,28 @@ function guessFileKind(name = '') {
   return 'File'
 }
 
+function prettifyDocType(docType = '') {
+  return (
+    getDocTypeLabel(docType) ||
+    String(docType || '')
+      .split('_')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ')
+  )
+}
+
+function getField(record, ...keys) {
+  for (const key of keys) {
+    if (record?.[key] !== undefined && record?.[key] !== null) return record[key]
+  }
+  return null
+}
+
 export default function Reports() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+
   const user = useDiagnosticStore((s) => s.user)
   const documents = useDiagnosticStore((s) => s.documents || [])
   const founderFiles = useDiagnosticStore((s) => s.founderFiles || [])
@@ -85,8 +112,69 @@ export default function Reports() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [selectedItem, setSelectedItem] = useState(null)
+  const [studioDocs, setStudioDocs] = useState([])
+  const [loadingStudioDocs, setLoadingStudioDocs] = useState(false)
+
+  useEffect(() => {
+    console.log('[Reports] documents for user', user?.id, documents)
+  }, [user?.id, documents])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadStudioDocs() {
+      if (!user?.id) {
+        setStudioDocs([])
+        return
+      }
+
+      setLoadingStudioDocs(true)
+
+      try {
+        const data = await getStudioDocuments(user.id)
+        if (!active) return
+        setStudioDocs(data || [])
+      } catch (err) {
+        console.error(err)
+        if (!active) return
+        setError(err?.message || 'Could not load Studio drafts.')
+      } finally {
+        if (active) setLoadingStudioDocs(false)
+      }
+    }
+
+    loadStudioDocs()
+
+    return () => {
+      active = false
+    }
+  }, [user?.id])
 
   const reportLibrary = useMemo(() => {
+    const studio = studioDocs.map((doc) => {
+      const id = getField(doc, 'id')
+      const title = getField(doc, 'title') || 'Untitled Studio draft'
+      const docType = getField(doc, 'docType', 'doc_type', 'doctype') || 'studio_document'
+      const status = getField(doc, 'status') || 'draft'
+      const updated = getField(doc, 'updatedAt', 'updated_at', 'updatedat')
+      const generatedContent = getField(doc, 'generatedContent', 'generated_content', 'generatedcontent')
+      const customInstructions = getField(doc, 'customInstructions', 'custom_instructions', 'custominstructions')
+
+      return {
+        id: `studio-${id}`,
+        source: 'studio',
+        title,
+        type: prettifyDocType(docType),
+        status,
+        updated,
+        description:
+          generatedContent?.slice(0, 180) ||
+          customInstructions?.slice(0, 180) ||
+          'Saved Studio draft ready for review or editing.',
+        raw: doc,
+      }
+    })
+
     const generated = documents.map((doc) => ({
       id: `generated-${doc.id}`,
       source: 'generated',
@@ -109,8 +197,23 @@ export default function Reports() {
       raw: file,
     }))
 
-    return [...generated, ...uploaded].sort((a, b) => new Date(b.updated) - new Date(a.updated))
-  }, [documents, founderFiles])
+    return [...studio, ...generated, ...uploaded].sort(
+      (a, b) => new Date(b.updated || 0) - new Date(a.updated || 0)
+    )
+  }, [documents, founderFiles, studioDocs])
+
+  useEffect(() => {
+    const studioDraftId = searchParams.get('studioDraft')
+    if (!studioDraftId || reportLibrary.length === 0) return
+
+    const match = reportLibrary.find(
+      (item) => item.source === 'studio' && String(getField(item.raw, 'id')) === String(studioDraftId)
+    )
+
+    if (match) {
+      setSelectedItem(match)
+    }
+  }, [searchParams, reportLibrary])
 
   async function handleUpload(event) {
     const file = event.target.files?.[0]
@@ -149,7 +252,84 @@ export default function Reports() {
 
     if (item.source === 'uploaded') {
       await downloadFounderFile(item.raw.filepath, item.raw.filename)
+      return
     }
+
+    if (item.source === 'studio') {
+      const draftId = getField(item.raw, 'id')
+
+      if (draftId) {
+        try {
+          const exports = await getDocumentExportsByDraft(draftId)
+          if (exports && exports.length > 0) {
+            const latest = exports[0]
+            if (latest?.storage_path) {
+              const signedUrl = await createSignedExportUrl(latest.storage_path)
+              if (signedUrl) {
+                const a = document.createElement('a')
+                const safeTitle = String(latest.title || item.title || 'studio-document')
+                  .replace(/[^a-zA-Z0-9-_ ]/g, '')
+                  .trim()
+                  .replace(/\s+/g, '-')
+                  .toLowerCase()
+
+                a.href = signedUrl
+                a.download = `${safeTitle || 'studio-document'}.${latest.format || 'txt'}`
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                return
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Failed to download Studio export; falling back to inline content.', err)
+        }
+      }
+
+      const generatedContent = getField(
+        item.raw,
+        'generatedContent',
+        'generated_content',
+        'generatedcontent'
+      )
+      if (!generatedContent) return
+
+      const blob = new Blob([generatedContent], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const safeTitle = String(item.title || 'studio-document')
+        .replace(/[^a-zA-Z0-9-_ ]/g, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .toLowerCase()
+
+      a.href = url
+      a.download = `${safeTitle || 'studio-document'}.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    }
+  }
+
+  function handleOpenInStudio(item) {
+    if (!item || item.source !== 'studio') return
+
+    const docType = getField(item.raw, 'docType', 'doc_type', 'doctype')
+    const draftId = getField(item.raw, 'id')
+
+    if (!docType) {
+      setError('This Studio draft is missing its document type.')
+      return
+    }
+
+    if (isGuidedDocType(docType)) {
+      navigate(`/app/studio/prep/${docType}${draftId ? `?draft=${draftId}` : ''}`)
+      return
+    }
+
+    navigate(`/app/studio${draftId ? `?draft=${draftId}` : ''}`)
   }
 
   return (
@@ -200,9 +380,9 @@ export default function Reports() {
               maxWidth: 820,
             }}
           >
-            This workspace brings your generated documents and uploaded business files into one place so your founder
-            journey feels continuous. You should be able to move from diagnosis to story, from story to pitch, and from
-            pitch to investor-ready materials without losing context.
+            This workspace brings your generated documents, Studio drafts, and uploaded business files into one place so
+            your founder journey feels continuous. You should be able to move from diagnosis to story, from story to
+            pitch, and from pitch to investor-ready materials without losing context.
           </p>
         </div>
 
@@ -217,9 +397,17 @@ export default function Reports() {
           <div style={{ display: 'grid', gap: 16 }}>
             <SectionCard
               title="Library"
-              subtitle="Generated outputs and uploaded files live together here, so founders can open, review, and export their full business story."
+              subtitle="Generated outputs, saved Studio drafts, and uploaded files live together here, so founders can open, review, edit, and export their full business story."
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  marginBottom: 14,
+                }}
+              >
                 <label
                   style={{
                     display: 'inline-flex',
@@ -239,7 +427,9 @@ export default function Reports() {
                   <input type="file" onChange={handleUpload} style={{ display: 'none' }} disabled={uploading} />
                 </label>
 
-                <div style={{ fontSize: 12, color: '#8C8A84' }}>{reportLibrary.length} item(s) in library</div>
+                <div style={{ fontSize: 12, color: '#8C8A84' }}>
+                  {loadingStudioDocs ? 'Loading library…' : `${reportLibrary.length} item(s) in library`}
+                </div>
               </div>
 
               {error && (
@@ -296,7 +486,9 @@ export default function Reports() {
                         }}
                       >
                         <div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: '#1C1C1A', marginBottom: 4 }}>{report.title}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#1C1C1A', marginBottom: 4 }}>
+                            {report.title}
+                          </div>
                           <div style={{ fontSize: 11.5, color: '#8C8A84' }}>
                             {report.type} · {formatDateLabel(report.updated)}
                           </div>
@@ -326,6 +518,25 @@ export default function Reports() {
                         >
                           Open
                         </button>
+
+                        {report.source === 'studio' && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenInStudio(report)}
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: 9,
+                              border: '1px solid #E2DED6',
+                              background: '#FFFFFF',
+                              color: '#1C1C1A',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Open in Studio
+                          </button>
+                        )}
 
                         <button
                           type="button"
@@ -366,7 +577,9 @@ export default function Reports() {
                       padding: 16,
                     }}
                   >
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1C1C1A', marginBottom: 4 }}>{selectedItem.title}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1C1C1A', marginBottom: 4 }}>
+                      {selectedItem.title}
+                    </div>
                     <div style={{ fontSize: 12, color: '#6B6965' }}>
                       {selectedItem.type} · {formatDateLabel(selectedItem.updated)}
                     </div>
@@ -396,14 +609,61 @@ export default function Reports() {
                       >
                         {selectedItem.raw.content}
                       </pre>
+                    ) : selectedItem.source === 'studio' ? (
+                      <pre
+                        style={{
+                          margin: 0,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          fontSize: 12.5,
+                          lineHeight: 1.8,
+                          color: '#1C1C1A',
+                          fontFamily: "'DM Sans', sans-serif",
+                        }}
+                      >
+                        {getField(
+                          selectedItem.raw,
+                          'generatedContent',
+                          'generated_content',
+                          'generatedcontent'
+                        ) ||
+                          getField(
+                            selectedItem.raw,
+                            'customInstructions',
+                            'custom_instructions',
+                            'custominstructions'
+                          ) ||
+                          'This Studio draft has no generated content yet. Open it in Studio to continue drafting.'}
+                      </pre>
                     ) : (
                       <div style={{ fontSize: 13, color: '#6B6965', lineHeight: 1.8 }}>
-                        This uploaded file is stored in your founder library. Use the download button to open the original
-                        file locally. In the next step, this can be extended into richer in-app previews for PDFs, docs,
-                        and spreadsheets.
+                        This uploaded file is stored in your founder library. Use the download button to open the
+                        original file locally. In the next step, this can be extended into richer in-app previews for
+                        PDFs, docs, and spreadsheets.
                       </div>
                     )}
                   </div>
+
+                  {selectedItem.source === 'studio' && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenInStudio(selectedItem)}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 9,
+                          border: '1px solid #E2DED6',
+                          background: '#FFFFFF',
+                          color: '#1C1C1A',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Continue in Studio
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div
@@ -417,8 +677,8 @@ export default function Reports() {
                     lineHeight: 1.7,
                   }}
                 >
-                  Select any generated document or uploaded file to review it here. This should become the place where a
-                  founder sees the thread of their business story becoming clearer over time.
+                  Select any generated document, Studio draft, or uploaded file to review it here. This should become the
+                  place where a founder sees the thread of their business story becoming clearer over time.
                 </div>
               )}
             </SectionCard>

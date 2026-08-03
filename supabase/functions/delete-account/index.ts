@@ -1,7 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const supabaseUrl = Deno.env.get('SUPABASE_URL')?.trim() ?? ''
+const anonKey = Deno.env.get('SUPABASE_ANON_KEY')?.trim() ?? ''
+const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim() ?? ''
+
+if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+  throw new Error(
+    'Missing Supabase server env vars. Set SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY before deploying the edge function.'
+  )
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,6 +29,7 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Admin client with service role key (for deletes)
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
@@ -29,7 +37,8 @@ Deno.serve(async (req) => {
       },
     })
 
-    const userClient = createClient(supabaseUrl, serviceRoleKey, {
+    // User client with anon key + JWT (to resolve current user)
+    const userClient = createClient(supabaseUrl, anonKey, {
       global: {
         headers: {
           Authorization: authHeader,
@@ -54,7 +63,7 @@ Deno.serve(async (req) => {
     }
 
     const userId = user.id
-    const bucketName = 'founder-files'
+    const bucketName = 'founder_profiles' // aligned with your actual Storage bucket
 
     const { data: fileRows, error: fileRowsError } = await admin
       .from('founderfiles')
