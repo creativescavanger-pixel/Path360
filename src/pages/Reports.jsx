@@ -11,6 +11,7 @@ import { getStudioDocuments } from '../lib/studioDocuments.js'
 import { isGuidedDocType } from '../lib/documentGuides.js'
 import { getDocTypeLabel } from '../config/documentTypes.js'
 import { getDocumentExportsByDraft, createSignedExportUrl } from '../lib/documentExports.js'
+import { renderStructuredDocumentBodyToText } from '../lib/documentRenderer.js'
 
 function SectionCard({ title, subtitle, children }) {
   return (
@@ -100,6 +101,11 @@ function getField(record, ...keys) {
   return null
 }
 
+function normalizeGeneratedContent(content) {
+  if (content === undefined || content === null) return ''
+  return typeof content === 'string' ? content : renderStructuredDocumentBodyToText(content)
+}
+
 export default function Reports() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -159,6 +165,7 @@ export default function Reports() {
       const updated = getField(doc, 'updatedAt', 'updated_at', 'updatedat')
       const generatedContent = getField(doc, 'generatedContent', 'generated_content', 'generatedcontent')
       const customInstructions = getField(doc, 'customInstructions', 'custom_instructions', 'custominstructions')
+      const previewContent = normalizeGeneratedContent(generatedContent)
 
       return {
         id: `studio-${id}`,
@@ -168,7 +175,7 @@ export default function Reports() {
         status,
         updated,
         description:
-          generatedContent?.slice(0, 180) ||
+          previewContent?.slice(0, 180) ||
           customInstructions?.slice(0, 180) ||
           'Saved Studio draft ready for review or editing.',
         raw: doc,
@@ -287,11 +294,8 @@ export default function Reports() {
         }
       }
 
-      const generatedContent = getField(
-        item.raw,
-        'generatedContent',
-        'generated_content',
-        'generatedcontent'
+      const generatedContent = normalizeGeneratedContent(
+        getField(item.raw, 'generatedContent', 'generated_content', 'generatedcontent')
       )
       if (!generatedContent) return
 
@@ -621,11 +625,13 @@ export default function Reports() {
                           fontFamily: "'DM Sans', sans-serif",
                         }}
                       >
-                        {getField(
-                          selectedItem.raw,
-                          'generatedContent',
-                          'generated_content',
-                          'generatedcontent'
+                        {normalizeGeneratedContent(
+                          getField(
+                            selectedItem.raw,
+                            'generatedContent',
+                            'generated_content',
+                            'generatedcontent'
+                          )
                         ) ||
                           getField(
                             selectedItem.raw,

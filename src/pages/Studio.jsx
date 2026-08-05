@@ -10,6 +10,7 @@ import { isGuidedDocType } from '../lib/documentGuides.js'
 import { getStudioDraftByDocType, getStudioDraftById, saveStudioDraft } from '../lib/studioDocuments.js'
 import { getAllDocTypes, getDocTypeConfig } from '../config/documentTypes.js'
 import { exportTextDocumentFromStructuredDoc } from '../lib/documentExports.js'
+import { renderStructuredDocumentBodyToText } from '../lib/documentRenderer.js'
 
 const OBJECTIVES = [
   {
@@ -89,6 +90,11 @@ function findObjectiveById(id) {
 function findOutputById(id) {
   if (!id) return null
   return OUTPUT_TYPES.find((out) => out.id === id) || getDocTypeConfig(id)
+}
+
+function normalizeGeneratedContent(content) {
+  if (content === undefined || content === null) return ''
+  return typeof content === 'string' ? content : renderStructuredDocumentBodyToText(content)
 }
 
 export default function Studio() {
@@ -290,7 +296,7 @@ export default function Studio() {
         objectiveId: objective?.id ?? null,
       })
 
-      const normalizedContent = typeof content === 'string' ? content : String(content || '')
+      const normalizedContent = normalizeGeneratedContent(content)
       setGeneratedContent(normalizedContent)
 
       const savedDraft = await persistDraft({
@@ -460,14 +466,16 @@ export default function Studio() {
           },
         }
 
-        await exportTextDocumentFromStructuredDoc({
+        const exportPayload = {
           userId: user.id,
           draftId,
           docType: structuredDocument.docType,
           title: structuredDocument.title,
           structuredDocument,
           exportScope: 'full_document',
-        })
+        }
+
+        await exportTextDocumentFromStructuredDoc(exportPayload)
       } catch (err) {
         console.error('Failed to save Studio export record', err)
       }

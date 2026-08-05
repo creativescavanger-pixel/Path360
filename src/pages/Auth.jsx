@@ -71,16 +71,8 @@ export default function Auth() {
 
         setUser(user)
         identifyUser?.(user.id, { email: user.email })
-        navigate('/app/stage-onboarding', { replace: true })
+        navigate('/app/dashboard', { replace: true })
         return
-      }
-
-      if (!form.fullName.trim()) {
-        throw new Error('Full name is required.')
-      }
-
-      if (form.password.length < 8) {
-        throw new Error('Password must be at least 8 characters.')
       }
 
       const authData = await signUp(form.email, form.password)
@@ -104,7 +96,7 @@ export default function Auth() {
       })
 
       setFounderProfile(profile)
-      navigate('/app/stage-onboarding', { replace: true })
+      navigate('/app/dashboard', { replace: true })
     } catch (err) {
       setError(err.message || 'Something went wrong.')
     } finally {

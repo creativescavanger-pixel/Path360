@@ -1,3 +1,5 @@
+// src/App.jsx
+
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import supabase from './lib/supabaseClient.js'
@@ -12,6 +14,7 @@ import GuidedDocumentPrep from './pages/GuidedDocumentPrep.jsx'
 import Memory from './pages/Memory.jsx'
 import Radar from './pages/Radar.jsx'
 import Reports from './pages/Reports.jsx'
+import Academy from './pages/Academy.jsx'
 import FounderProfile from './pages/FounderProfile.jsx'
 import StageOnboarding from './pages/StageOnboarding.jsx'
 import AppLayout from './layouts/AppLayout.jsx'
@@ -48,6 +51,9 @@ function Protected({ children }) {
   const setUser = useDiagnosticStore((s) => s.setUser)
   const clearSessionOnly = useDiagnosticStore((s) => s.clearSessionOnly)
 
+  // NEW: read stageAssessment so we can gate onboarding
+  const stageAssessment = useDiagnosticStore((s) => s.stageAssessment)
+
   useEffect(() => {
     let mounted = true
 
@@ -71,6 +77,7 @@ function Protected({ children }) {
         console.error('Failed to bootstrap founder workspace:', error)
 
         if (!mounted) return
+        // Even if hydrateWorkspace fails, keep the user so they can at least log in
         setUser(sessionValue.user)
         setSession(sessionValue)
       } finally {
@@ -107,7 +114,20 @@ function Protected({ children }) {
     return <FullScreenLoader />
   }
 
-  return session ? children : <Navigate to="/auth" replace />
+  if (!session) {
+    return <Navigate to="/auth" replace />
+  }
+
+  // NEW: if the user is authenticated but has not completed stage onboarding,
+  // send them to the stage onboarding route.
+  //
+  // We only gate here for routes under /app; StageOnboarding itself is inside AppLayout.
+  if (!stageAssessment) {
+    // Note: we use a relative path under /app since Protected wraps AppLayout for /app routes.
+    return <Navigate to="/app/stage-onboarding" replace />
+  }
+
+  return children
 }
 
 export default function App() {
@@ -125,8 +145,13 @@ export default function App() {
             </Protected>
           }
         >
-          <Route index element={<Navigate to="/app/stage-onboarding" replace />} />
+          {/* When stageAssessment exists, index goes to dashboard */}
+          <Route index element={<Navigate to="/app/dashboard" replace />} />
+
+          {/* Stage onboarding lives inside the app layout; Protected will redirect
+              here until stageAssessment is set by StageOnboarding */}
           <Route path="stage-onboarding" element={<StageOnboarding />} />
+
           <Route path="assessment" element={<Assessment />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="founder-profile" element={<FounderProfile />} />
@@ -135,6 +160,7 @@ export default function App() {
           <Route path="memory" element={<Memory />} />
           <Route path="radar" element={<Radar />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="academy" element={<Academy />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

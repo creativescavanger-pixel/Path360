@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 
@@ -289,6 +289,8 @@ function buildStageSummary(result) {
 export default function StageOnboarding() {
   const navigate = useNavigate()
   const founderProfile = useDiagnosticStore((s) => s.founderProfile)
+  const user = useDiagnosticStore((s) => s.user)
+  const updateFounderProfile = useDiagnosticStore((s) => s.updateFounderProfile)
   const setStageAssessment = useDiagnosticStore((s) => s.setStageAssessment)
 
   const [selectedStage, setSelectedStage] = useState(null)
@@ -306,6 +308,15 @@ export default function StageOnboarding() {
     founderProfile?.venturename ||
     founderProfile?.venture_name ||
     'your venture'
+
+  useEffect(() => {
+    if (!selectedStage) {
+      const profileStage = founderProfile?.venturestage || founderProfile?.venture_stage || null
+      if (profileStage) {
+        setSelectedStage(profileStage)
+      }
+    }
+  }, [founderProfile, selectedStage])
 
   function updateStatus(itemId, statusId) {
     setStatusByItem((prev) => ({ ...prev, [itemId]: statusId }))
@@ -378,6 +389,14 @@ export default function StageOnboarding() {
         scoreRatio: derived.scoreRatio,
         statusByItem,
         completedAt: new Date().toISOString(),
+      }
+
+      if (user?.id && selectedStage) {
+        try {
+          await updateFounderProfile({ venturestage: selectedStage })
+        } catch (profileError) {
+          console.warn('Failed to persist onboarding stage to profile:', profileError)
+        }
       }
 
       const summary = buildStageSummary(result)

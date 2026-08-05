@@ -231,6 +231,9 @@ export default function Dashboard() {
   const setDocuments = useDiagnosticStore((s) => s.setDocuments)
   const user = useDiagnosticStore((s) => s.user)
 
+  // NEW: read stageAssessment so we can prefer onboarding stage in the hero
+  const stageAssessment = useDiagnosticStore((s) => s.stageAssessment)
+
   const [activeTab, setActiveTab] = useState('overview')
   const [studioDocs, setStudioDocs] = useState([])
 
@@ -941,6 +944,10 @@ export default function Dashboard() {
   const founderName = profile?.fullname || profile?.foundername || 'Founder'
   const ventureName = profile?.venturename || profile?.venture_name || 'your venture'
 
+  // Prefer onboarding stage label from stageAssessment.summary if present
+  const stageLabelFromAssessment = stageAssessment?.summary?.stageLabel
+  const stageToDisplay = String(stageLabelFromAssessment || results.venturestage || 'unknown').replaceAll('_', ' ')
+
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div
@@ -1016,8 +1023,7 @@ export default function Dashboard() {
             Welcome, {founderName}. Your venture is {results.investorreadiness}% investor ready.
           </div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>
-            Stage: {String(results.venturestage || 'unknown').replaceAll('_', ' ')} · {results.strategicpriorities.length}{' '}
-            priorities identified
+            Stage: {stageToDisplay} · {results.strategicpriorities.length} priorities identified
           </div>
         </div>
 

@@ -87,3 +87,45 @@ export function renderStructuredDocumentToText(structuredDocument) {
 
   return lines.join('\n')
 }
+
+export function renderStructuredDocumentBodyToText(structuredDocument) {
+  if (!structuredDocument) return ''
+  if (typeof structuredDocument === 'string') return structuredDocument
+
+  const sections = Array.isArray(structuredDocument.sections)
+    ? structuredDocument.sections
+    : []
+
+  if (sections.length > 0) {
+    return sections
+      .map((section) => String(section?.content || '').trim())
+      .filter(Boolean)
+      .join('\n\n')
+  }
+
+  const slides = Array.isArray(structuredDocument.slides)
+    ? structuredDocument.slides
+    : []
+
+  if (slides.length > 0) {
+    return slides
+      .map((slide) => {
+        const slideLines = []
+        if (slide.title) slideLines.push(String(slide.title))
+        if (slide.objective) slideLines.push(String(slide.objective))
+        if (Array.isArray(slide.keyPoints) && slide.keyPoints.length > 0) {
+          slideLines.push(...slide.keyPoints.map((pt) => String(pt)))
+        }
+        if (slide.proof) slideLines.push(String(slide.proof))
+        return slideLines.filter(Boolean).join('\n')
+      })
+      .filter(Boolean)
+      .join('\n\n')
+  }
+
+  if (structuredDocument.content) {
+    return String(structuredDocument.content)
+  }
+
+  return ''
+}

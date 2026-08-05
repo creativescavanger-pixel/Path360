@@ -1,3 +1,5 @@
+// src/stores/useDiagnosticStore.js
+
 import { create } from 'zustand'
 import {
   loadFounderWorkspace,
@@ -45,6 +47,20 @@ function saveLocalStage(assessment, completed) {
   }
 }
 
+function deriveStageAssessmentFromProfile(profile) {
+  const stageId = profile?.venturestage || profile?.venture_stage || null
+  if (!stageId) return null
+
+  return {
+    declaredStage: stageId,
+    diagnosedStage: stageId,
+    scoreRatio: 0,
+    statusByItem: {},
+    completedAt: null,
+    summary: null,
+  }
+}
+
 // Bootstrap local stage on initial store creation
 let initialStage = { assessment: null, completed: false }
 if (typeof window !== 'undefined') {
@@ -81,7 +97,7 @@ const useDiagnosticStore = create((set, get) => ({
   setDocumentIntakes: (intakes) => set({ documentIntakes: Array.isArray(intakes) ? intakes : [] }),
   setProgressEvents: (events) => set({ progressEvents: Array.isArray(events) ? events : [] }),
 
-  // Stage assessment setters (now also persist locally)
+  // Stage assessment setters (persist locally)
   setStageAssessment: (assessment) => {
     const next = {
       ...assessment,
@@ -335,7 +351,13 @@ const useDiagnosticStore = create((set, get) => ({
     if (!user?.id) throw new Error('No authenticated user found.')
 
     try {
-      const saved = await addFounderProgressRecord(user.id, eventType, title, description, metadata)
+      const saved = await addFounderProgressRecord(
+        user.id,
+        eventType,
+        title,
+        description,
+        metadata
+      )
       set((state) => ({
         progressEvents: [saved, ...(Array.isArray(state.progressEvents) ? state.progressEvents : [])],
       }))
@@ -411,7 +433,19 @@ const useDiagnosticStore = create((set, get) => ({
   hydrateWorkspace: async (userId) => {
     try {
       const workspace = await loadFounderWorkspace(userId)
-      const localStage = typeof window !== 'undefined' ? loadLocalStage() : { assessment: null, completed: false }
+
+      // Load any locally persisted stage onboarding state
+      const localStage =
+        typeof window !== 'undefined' ? loadLocalStage() : { assessment: null, completed: false }
+
+      // Backend may have a stageAssessment; profile may have venturestage.
+      // We can use these as fallbacks for stageAssessment, but we do NOT
+      // consider them proof that onboarding has been completed.
+      const profileStageAssessment = deriveStageAssessmentFromProfile(workspace?.founderProfile)
+      const workspaceStageAssessment = workspace?.stageAssessment ?? profileStageAssessment
+
+      const stageAssessment = localStage.assessment ?? workspaceStageAssessment ?? null
+      const hasCompletedStageOnboarding = localStage.completed || !!localStage.assessment
 
       set({
         founderProfile: workspace?.founderProfile ?? null,
@@ -424,10 +458,8 @@ const useDiagnosticStore = create((set, get) => ({
         documentIntakes: Array.isArray(workspace?.documentIntakes) ? workspace.documentIntakes : [],
         progressEvents: Array.isArray(workspace?.progressEvents) ? workspace.progressEvents : [],
 
-        // For now, local app stage wins; Supabase can override later if needed
-        stageAssessment: localStage.assessment ?? workspace?.stageAssessment ?? null,
-        hasCompletedStageOnboarding:
-          localStage.completed || !!localStage.assessment || !!workspace?.stageAssessment,
+        stageAssessment,
+        hasCompletedStageOnboarding,
       })
       return workspace
     } catch (err) {

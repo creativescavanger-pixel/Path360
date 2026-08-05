@@ -1,3 +1,5 @@
+// src/layouts/AppLayout.jsx
+
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import Sidebar from '../components/Sidebar.jsx'
@@ -15,7 +17,10 @@ export default function AppLayout() {
   const assessmentResults = useDiagnosticStore((s) => s.assessmentResults)
   const founderProfile = useDiagnosticStore((s) => s.founderProfile)
   const clearSessionOnly = useDiagnosticStore((s) => s.clearSessionOnly)
-  const hasCompletedStageOnboarding = useDiagnosticStore((s) => s.hasCompletedStageOnboarding)
+
+  // NEW: read stageAssessment and derive hasCompletedStageOnboarding from it
+  const stageAssessment = useDiagnosticStore((s) => s.stageAssessment)
+  const hasCompletedStageOnboarding = !!stageAssessment
 
   const founderName =
     founderProfile?.foundername ||
@@ -33,11 +38,13 @@ export default function AppLayout() {
   const pageIdentity = getPageIdentity(location.pathname)
   const isOnStageOnboarding = location.pathname === '/app/stage-onboarding'
 
+  // IMPORTANT: we no longer redirect from here.
+  // The router-level Protected component in App.jsx handles onboarding gating
+  // based on stageAssessment. AppLayout simply renders the layout and content.
   useEffect(() => {
-    if (!hasCompletedStageOnboarding && !isOnStageOnboarding) {
-      navigate('/app/stage-onboarding', { replace: true })
-    }
-  }, [hasCompletedStageOnboarding, isOnStageOnboarding, navigate])
+    // If you ever need to enforce something layout-specific, you can do it here,
+    // but the main onboarding redirect is now in App.jsx.
+  }, [])
 
   async function handleLogout(e) {
     e.preventDefault()

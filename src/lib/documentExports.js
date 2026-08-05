@@ -1,7 +1,7 @@
 // src/lib/documentExports.js
 
 import { supabase } from './supabaseClient.js'
-import { renderStructuredDocumentToText } from './documentRenderer.js'
+import { renderStructuredDocumentBodyToText } from './documentRenderer.js'
 
 const EXPORTS_BUCKET = 'document-exports'
 
@@ -142,7 +142,7 @@ export async function exportTextDocumentFromStructuredDoc({
   structuredDocument,
   exportScope = 'full_document',
 }) {
-  const text = renderStructuredDocumentToText(structuredDocument)
+  const text = renderStructuredDocumentBodyToText(structuredDocument)
   const format = 'txt'
   const file = new Blob([text], { type: 'text/plain;charset=utf-8' })
 

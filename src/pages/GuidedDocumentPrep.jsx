@@ -8,6 +8,7 @@ import {
   saveStudioDocumentDraft,
 } from '../lib/studioDocuments.js'
 import { generateDocument } from '../lib/agentOrchestrator.js'
+import { renderStructuredDocumentBodyToText } from '../lib/documentRenderer.js'
 import { track, EVENTS } from '../lib/posthogClient.js'
 
 function buildInitialAnswers(guide) {
@@ -47,6 +48,11 @@ function getField(record, ...keys) {
     }
   }
   return null
+}
+
+function normalizeGeneratedContent(content) {
+  if (content === undefined || content === null) return ''
+  return typeof content === 'string' ? content : renderStructuredDocumentBodyToText(content)
 }
 
 function getFieldIds(guideId, questionKey) {
@@ -472,7 +478,7 @@ export default function GuidedDocumentPrep() {
         objectiveId: null,
       })
 
-      const normalized = typeof content === 'string' ? content : String(content || '')
+      const normalized = normalizeGeneratedContent(content)
       setGeneratedContent(normalized)
 
       track(EVENTS.STUDIO_DRAFT_GENERATED, {

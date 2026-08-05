@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { to: '/app/studio', label: 'Creation Studio', icon: '•' },
   { to: '/app/memory', label: 'Memory', icon: '•' },
   { to: '/app/radar', label: 'Venture Radar', icon: '•' },
+  { to: '/app/academy', label: 'Academy', icon: '•' },
   { to: '/app/reports', label: 'Reports', icon: '•' },
 ]
 
