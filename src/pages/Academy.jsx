@@ -525,63 +525,7 @@ function MissionOne({ work, updateWork, progress, loadingJournal, saving, upload
       {error ? <div style={{ marginBottom: 14, padding: 12, borderRadius: 11, background: '#FBECEC', border: '1px solid #E8CACA', color: '#8A2F2F', fontSize: 12.5, lineHeight: 1.55 }}>{error}</div> : null}
       {notice ? <div style={{ marginBottom: 14, padding: 12, borderRadius: 11, background: '#EEF4EF', border: '1px solid #D6E4D7', color: '#1D6B4F', fontSize: 12.5, lineHeight: 1.55 }}>{notice}</div> : null}
 
-      {completionReady ? (
-        <section
-          style={{
-            marginBottom: 18,
-            padding: 18,
-            borderRadius: 16,
-            border: '1px solid #BFD9C7',
-            background: '#EEF7F1',
-            display: 'flex',
-            gap: 14,
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 10.5,
-                color: '#1D6B4F',
-                fontWeight: 800,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                marginBottom: 5,
-              }}
-            >
-              Mission complete
-            </div>
-
-            <div
-              style={{
-                fontSize: 16,
-                fontWeight: 800,
-                color: '#19563E',
-                marginBottom: 4,
-              }}
-            >
-              You have created your first evidence-backed opportunity record.
-            </div>
-
-            <div
-              style={{
-                fontSize: 12.5,
-                color: '#4E6A5A',
-                lineHeight: 1.55,
-              }}
-            >
-              Next, learn how to separate ordinary complaints from friction
-              worth investigating.
-            </div>
-          </div>
-
-          <Button variant="green" onClick={onContinue}>
-            Continue to Mission 2 →
-          </Button>
-        </section>
-      ) : null}
+      
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 255px', gap: 18, alignItems: 'start' }}>
         <main style={{ display: 'grid', gap: 18 }}>
@@ -642,10 +586,85 @@ function MissionOne({ work, updateWork, progress, loadingJournal, saving, upload
             <JournalField label="What do I want to investigate next?" hint="Choose one small learning question or next conversation, not a large build task." value={work.decision} onChange={(event) => updateWork('decision', event.target.value)} placeholder="Next, I want to investigate whether…" />
           </section>
 
-          <section style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap', paddingBottom: 30 }}>
-            <Button variant="secondary" onClick={onBack}>Save later</Button>
-            <Button variant="green" onClick={onSave} disabled={saving || loadingJournal}>{saving ? 'Saving…' : 'Save to Founder Working Journal'}</Button>
+          <section
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: 10,
+              flexWrap: 'wrap',
+              paddingBottom: completionReady ? 14 : 30,
+            }}
+          >
+            <Button variant="secondary" onClick={onBack}>
+              Save later
+            </Button>
+
+            <Button
+              variant="green"
+              onClick={onSave}
+              disabled={saving || loadingJournal}
+            >
+              {saving ? 'Saving…' : 'Save to Founder Working Journal'}
+            </Button>
           </section>
+
+          {completionReady ? (
+            <section
+              style={{
+                marginBottom: 30,
+                padding: 18,
+                borderRadius: 16,
+                border: '1px solid #BFD9C7',
+                background: '#EEF7F1',
+                display: 'flex',
+                gap: 14,
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 10.5,
+                    color: '#1D6B4F',
+                    fontWeight: 800,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    marginBottom: 5,
+                  }}
+                >
+                  Mission complete
+                </div>
+
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 800,
+                    color: '#19563E',
+                    marginBottom: 4,
+                  }}
+                >
+                  You have created your first evidence-backed opportunity record.
+                </div>
+
+                <div
+                  style={{
+                    fontSize: 12.5,
+                    color: '#4E6A5A',
+                    lineHeight: 1.55,
+                  }}
+                >
+                  Next, learn how to separate ordinary complaints from friction worth
+                  investigating.
+                </div>
+              </div>
+
+              <Button variant="green" onClick={onContinue}>
+                Continue to Mission 2 →
+              </Button>
+            </section>
+          ) : null}
         </main>
 
         <aside style={{ position: 'sticky', top: 18, display: 'grid', gap: 14 }}>
