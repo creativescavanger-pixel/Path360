@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import supabase from '../lib/supabaseClient.js'
+import MissionTwo from './MissionTwo.jsx'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 
 const COURSE = {
@@ -28,6 +29,7 @@ const MISSIONS = [
     title: 'Notice friction worth solving',
     duration: '15 min',
     description: 'Separate passing annoyances from recurring, costly friction.',
+    available: true,
   },
   {
     key: 'choose-a-user',
@@ -236,7 +238,12 @@ export default function Academy() {
   const journalTableHelp = 'Create the founder_working_journal table before saving Academy work.'
 
   useEffect(() => {
-    if (activeMissionKey !== 'opportunity-foundations' || !user?.id) return
+    if (
+      !['opportunity-foundations', 'notice-friction'].includes(activeMissionKey) ||
+      !user?.id
+    ) {
+      return
+    }
 
     let active = true
     async function loadJournal() {
@@ -247,7 +254,7 @@ export default function Academy() {
           .from('founder_working_journal')
           .select('*')
           .eq('founder_id', user.id)
-          .eq('mission_key', 'opportunity-foundations')
+          .eq('mission_key', activeMissionKey)
           .order('version', { ascending: false })
 
         if (loadError) throw loadError
@@ -297,6 +304,12 @@ export default function Academy() {
     setNotice('')
   }
 
+  function continueToMissionThree() {
+    setSearchParams({ mission: 'choose-a-user' })
+    setError('')
+    setNotice('')
+  }
+
   async function handleEvidenceUpload(event) {
     const file = event.target.files?.[0]
     if (!file) return
@@ -310,7 +323,7 @@ export default function Academy() {
     try {
       const extension = file.name.includes('.') ? file.name.split('.').pop() : 'file'
       const safeBaseName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 80)
-      const filePath = `${user.id}/opportunity-foundations/${Date.now()}-${safeBaseName || `evidence.${extension}`}`
+      const filePath = `${user.id}/${activeMissionKey}/${Date.now()}-${safeBaseName || `evidence.${extension}`}`
       const { error: uploadError } = await supabase.storage
         .from('academy-evidence')
         .upload(filePath, file, { upsert: false })
@@ -340,11 +353,19 @@ export default function Academy() {
     setError('')
     setNotice('')
 
+    const mission = MISSIONS.find((item) => item.key === activeMissionKey)
+
+    if (!mission) {
+      setError('Choose an Academy mission before saving.')
+      setSaving(false)
+      return
+    }
+
     const nextVersion = latestVersion + 1
     const payload = {
       founder_id: user.id,
-      mission_key: 'opportunity-foundations',
-      mission_title: 'You do not need a perfect idea to begin',
+      mission_key: mission.key,
+      mission_title: mission.title,
       course_key: COURSE.key,
       venture_name: ventureName,
       content: work,
@@ -399,6 +420,30 @@ export default function Academy() {
           work.status === 'evidence-backed' && latestVersion > 0
         }
         onContinue={continueToNextMission}
+      />
+    )
+  }
+
+  if (activeMission?.key === 'notice-friction') {
+    return (
+      <MissionTwo
+        work={work}
+        updateWork={updateWork}
+        progress={progress}
+        loadingJournal={loadingJournal}
+        saving={saving}
+        uploading={uploading}
+        latestVersion={latestVersion}
+        journalVersions={journalVersions}
+        notice={notice}
+        error={error}
+        onBack={returnHome}
+        onSave={saveJournal}
+        onUpload={handleEvidenceUpload}
+        completionReady={
+          work.status === 'evidence-backed' && latestVersion > 0
+        }
+        onContinue={continueToMissionThree}
       />
     )
   }
@@ -465,7 +510,11 @@ export default function Academy() {
                 <button
                   key={mission.key}
                   type="button"
-                  onClick={mission.available ? openMission : undefined}
+                  onClick={
+                    mission.available
+                      ? () => setSearchParams({ mission: mission.key })
+                      : undefined
+                  }
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', padding: '10px 11px', borderRadius: 11,
                     border: mission.available ? '1px solid #D6E4D7' : '1px solid #E7E2D9',
