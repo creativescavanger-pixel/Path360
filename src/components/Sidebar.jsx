@@ -595,7 +595,9 @@ export default function Sidebar() {
   const assessmentResults = useDiagnosticStore((s) => s.assessmentResults)
   const startProgressReview = useDiagnosticStore((s) => s.startProgressReview)
 
-  const assessmentComplete = Boolean(assessmentResults?.id)
+  const assessmentComplete = Boolean(
+    assessmentResults?.id || assessmentResults?.assessmentid
+  )
 
   const tierLabel =
     {
@@ -630,6 +632,10 @@ export default function Sidebar() {
     }
 
     try {
+      if (typeof startProgressReview !== 'function') {
+        throw new Error('startProgressReview not available')
+      }
+
       startProgressReview()
       navigate('/app/assessment?review=1')
     } catch (error) {
