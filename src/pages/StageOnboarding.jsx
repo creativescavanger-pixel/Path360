@@ -1,857 +1,1070 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 
-const STAGE_OPTIONS = [
-  { id: 'idea', label: 'I’m exploring an idea' },
-  { id: 'discovery', label: 'I’m validating a problem with customers' },
-  { id: 'validation', label: 'I’m testing a solution or prototype' },
-  { id: 'mvp', label: 'I have an MVP in the market' },
-  { id: 'early_revenue', label: 'I have paying customers' },
-  { id: 'pmf', label: 'I’m seeing strong retention and growth' },
-  { id: 'unsure', label: 'I’m not sure yet' },
-]
-
-const STATUS_OPTIONS = [
-  { id: 'not_started', label: 'Not started' },
-  { id: 'in_progress', label: 'In progress' },
-  { id: 'established', label: 'Established' },
-  { id: 'strong_evidence', label: 'Strong evidence' },
-]
-
-const CHECKLIST_SECTIONS = [
+const STAGES = [
   {
-    id: 'problem',
-    title: 'Problem definition',
-    subtitle: 'Is your problem clearly defined and meaningful?',
-    items: [
-      {
-        id: 'problem_clarity',
-        label: 'I can clearly describe the problem I am solving.',
-        description:
-          'You should be able to describe the problem in one sentence that a target customer would recognise immediately.',
-      },
-      {
-        id: 'problem_target',
-        label: 'I know who experiences this problem most.',
-        description:
-          'You should know which type of customer experiences this problem, and be able to describe their context.',
-      },
-      {
-        id: 'problem_frequency',
-        label: 'I understand how often this problem occurs.',
-        description:
-          'You should have a sense of whether this is an occasional irritation or a frequent operational issue.',
-      },
-      {
-        id: 'problem_consequence',
-        label: 'I know the consequences of leaving this problem unsolved.',
-        description:
-          'You should know what cost, delay, risk or missed opportunity this problem creates.',
-      },
-    ],
+    id: 'idea',
+    title: 'Idea',
+    subtitle: 'You are validating the problem, customer, and opportunity.',
+    color: '#7C5CFC',
   },
   {
-    id: 'customer',
-    title: 'Customer validation',
-    subtitle: 'Have real customers confirmed that this problem matters?',
-    items: [
-      {
-        id: 'customer_interviews_count',
-        label: 'I have spoken directly to several target customers.',
-        description:
-          'You should have multiple conversations with real target users, not just friends or colleagues.',
-      },
-      {
-        id: 'customer_interviews_quality',
-        label: 'I see repeated patterns in customer interviews.',
-        description:
-          'You should recognise recurring pains, language and behaviours from different customers.',
-      },
-      {
-        id: 'customer_current_solutions',
-        label: 'I understand how customers solve this problem today.',
-        description:
-          'You should know the main alternatives, tools and workarounds customers use, and where they fall short.',
-      },
-      {
-        id: 'customer_action_signals',
-        label: 'I have evidence that some customers are willing to take action.',
-        description:
-          'You should see concrete signals such as follow-ups, signups, pilots or requests for more information.',
-      },
-    ],
+    id: 'validation',
+    title: 'Validation',
+    subtitle: 'You are testing demand and proving early customer interest.',
+    color: '#2D8CFF',
   },
   {
-    id: 'solution',
-    title: 'Solution readiness',
-    subtitle: 'Is there a solution that customers can see, test or use?',
-    items: [
-      {
-        id: 'solution_state',
-        label: 'I have defined a clear solution concept.',
-        description:
-          'You should know what you are building and how it addresses the problem, beyond a vague idea.',
-      },
-      {
-        id: 'solution_mvp',
-        label: 'Customers can interact with a prototype or MVP.',
-        description:
-          'You should have a prototype, manual version or MVP that real users can try.',
-      },
-      {
-        id: 'solution_feedback_loop',
-        label: 'I collect structured feedback from users and act on it.',
-        description:
-          'You should regularly capture feedback from users and use it to improve the product.',
-      },
-    ],
+    id: 'mvp',
+    title: 'MVP',
+    subtitle: 'You have a usable product and are learning from real users.',
+    color: '#00A984',
   },
   {
     id: 'traction',
-    title: 'Traction signals',
-    subtitle: 'Is the market showing interest or pull?',
-    items: [
-      {
-        id: 'traction_signals',
-        label: 'I have traction signals such as signups, pilots or active users.',
-        description:
-          'You should see observable behaviour from users, not just conversations.',
-      },
-      {
-        id: 'traction_icp_clarity',
-        label: 'I have a clear Ideal Customer Profile (ICP).',
-        description:
-          'You should be able to describe your best-fit customer type, their context and buying behaviour.',
-      },
-      {
-        id: 'traction_user_disappointment',
-        label: 'I have evidence that users would be disappointed if the product disappeared.',
-        description:
-          'You should know how deeply users rely on your solution and how they would react if they lost it.',
-      },
-    ],
+    title: 'Traction',
+    subtitle: 'You have repeatable signals of demand, customers, or revenue.',
+    color: '#F59E0B',
   },
   {
-    id: 'revenue',
-    title: 'Revenue readiness',
-    subtitle: 'Are customers paying, and is revenue becoming repeatable?',
-    items: [
-      {
-        id: 'revenue_payments',
-        label: 'Customers are paying for the product or service.',
-        description:
-          'You should have moved beyond free pilots to paid usage, even if small.',
-      },
-      {
-        id: 'revenue_pattern',
-        label: 'Revenue shows some repeatable pattern.',
-        description:
-          'You should see early signs of recurring or predictable revenue, not just one-off deals.',
-      },
-      {
-        id: 'revenue_retention',
-        label: 'Customers stay, renew or buy again.',
-        description:
-          'You should see customers continuing to use or pay over time.',
-      },
-    ],
-  },
-  {
-    id: 'business',
-    title: 'Business readiness',
-    subtitle: 'Is the business model and operating discipline emerging?',
-    items: [
-      {
-        id: 'business_market_model',
-        label: 'I have defined my target market and customer segment.',
-        description:
-          'You should have a basic market model and segment definition, not just a broad idea.',
-      },
-      {
-        id: 'business_metrics_tracking',
-        label: 'I track key business metrics and progress regularly.',
-        description:
-          'You should monitor metrics such as users, revenue, pipeline or experiments over time.',
-      },
-      {
-        id: 'business_cash_runway',
-        label: 'I understand my cash position and runway.',
-        description:
-          'You should know how much cash you have and how long it will last at current spending levels.',
-      },
-    ],
+    id: 'growth',
+    title: 'Growth',
+    subtitle: 'You are scaling a working business model and team.',
+    color: '#E45757',
   },
 ]
 
-const STATUS_SCORE = {
-  not_started: 0,
-  in_progress: 1,
-  established: 2,
-  strong_evidence: 3,
+const ITEMS = [
+  {
+    id: 'problem',
+    label: 'Problem clarity',
+    description: 'You can clearly explain the problem, who has it, and why it matters now.',
+  },
+  {
+    id: 'customer',
+    label: 'Customer evidence',
+    description: 'You have spoken to, tested with, or sold to real target customers.',
+  },
+  {
+    id: 'solution',
+    label: 'Solution readiness',
+    description: 'You have a concept, prototype, MVP, or working product.',
+  },
+  {
+    id: 'business',
+    label: 'Business model',
+    description: 'You understand how the venture can make money and what drives its economics.',
+  },
+  {
+    id: 'traction',
+    label: 'Market traction',
+    description: 'You have meaningful usage, pilots, revenue, retention, or growth signals.',
+  },
+  {
+    id: 'team',
+    label: 'Team readiness',
+    description: 'You have the people, capabilities, or hiring plan needed for the next stage.',
+  },
+  {
+    id: 'capital',
+    label: 'Capital readiness',
+    description: 'You understand your funding needs, runway, and likely funding path.',
+  },
+]
+
+const STATUS_OPTIONS = [
+  {
+    id: 'not_started',
+    label: 'Not started',
+    shortLabel: 'Not started',
+    score: 0,
+    color: '#9CA3AF',
+  },
+  {
+    id: 'early',
+    label: 'Early progress',
+    shortLabel: 'Early',
+    score: 1,
+    color: '#60A5FA',
+  },
+  {
+    id: 'active',
+    label: 'Actively working',
+    shortLabel: 'Active',
+    score: 2,
+    color: '#A78BFA',
+  },
+  {
+    id: 'strong',
+    label: 'Strong evidence',
+    shortLabel: 'Strong',
+    score: 3,
+    color: '#34D399',
+  },
+]
+
+function getStatusScore(status) {
+  return STATUS_OPTIONS.find((option) => option.id === status)?.score ?? 0
 }
 
-function buildStageSummary(result) {
-  const { declaredStage, diagnosedStage, scoreRatio, statusByItem } = result
+function getStageFromScore(score) {
+  if (score <= 0.45) return 'idea'
+  if (score <= 1.1) return 'validation'
+  if (score <= 1.8) return 'mvp'
+  if (score <= 2.45) return 'traction'
+  return 'growth'
+}
 
-  const reasons = []
-  const gaps = []
+function getStageIndex(stageId) {
+  return Math.max(
+    0,
+    STAGES.findIndex((stage) => stage.id === stageId)
+  )
+}
 
-  if (
-    statusByItem['problem_clarity'] === 'established' ||
-    statusByItem['problem_clarity'] === 'strong_evidence'
-  ) {
-    reasons.push('Your problem definition is clear and recognised by target customers.')
-  } else {
-    gaps.push('Sharpen how you describe the problem so it is obvious to your target customer.')
-  }
+function scoreToPercent(score) {
+  return Math.max(0, Math.min(100, Math.round((score / 3) * 100)))
+}
 
-  if (
-    statusByItem['customer_interviews_count'] === 'established' ||
-    statusByItem['customer_interviews_count'] === 'strong_evidence'
-  ) {
-    reasons.push('You have spoken to several target customers and seen repeated patterns.')
-  } else {
-    gaps.push('Run more structured customer interviews to deepen validation.')
-  }
+function createEmptyStatuses() {
+  return ITEMS.reduce((all, item) => {
+    all[item.id] = 'not_started'
+    return all
+  }, {})
+}
 
-  if (
-    statusByItem['solution_mvp'] === 'established' ||
-    statusByItem['solution_mvp'] === 'strong_evidence'
-  ) {
-    reasons.push('Customers can interact with a prototype or MVP.')
-  } else {
-    gaps.push('Bring a clear prototype or MVP into customer hands.')
-  }
-
-  if (
-    statusByItem['revenue_payments'] === 'established' ||
-    statusByItem['revenue_payments'] === 'strong_evidence'
-  ) {
-    reasons.push('Customers are paying for your product or service.')
-  } else {
-    gaps.push('Convert pilots and interest into initial paid usage.')
-  }
-
-  if (
-    statusByItem['revenue_retention'] === 'established' ||
-    statusByItem['revenue_retention'] === 'strong_evidence'
-  ) {
-    reasons.push('You see customers staying, renewing or buying again.')
-  } else {
-    gaps.push('Focus on retention and repeat use to build durable traction.')
-  }
-
-  let stageLabel = diagnosedStage
-  const declaredOpt = STAGE_OPTIONS.find((o) => o.id === declaredStage)
-  if (declaredOpt?.label) {
-    stageLabel = declaredOpt.label
-  }
-
-  let headline
-  switch (diagnosedStage) {
-    case 'idea':
-      headline = 'You are in the Idea / Exploration stage.'
-      break
-    case 'discovery':
-      headline = 'You are in the Discovery stage.'
-      break
-    case 'validation':
-      headline = 'You are in the Validation stage.'
-      break
-    case 'mvp':
-      headline = 'You are in the MVP stage.'
-      break
-    case 'early_revenue':
-      headline = 'You are in the Early Revenue stage.'
-      break
-    case 'pmf':
-      headline = 'You are approaching Product–Market Fit.'
-      break
-    case 'growth':
-      headline = 'You are in the Growth stage.'
-      break
-    default:
-      headline = 'We have estimated your current stage from your answers.'
-  }
-
-  const ratioPct = Math.round((scoreRatio || 0) * 100)
+function normalizeAssessment(assessment) {
+  const fallback = createEmptyStatuses()
 
   return {
-    headline,
-    stageLabel,
-    ratioPct,
-    reasons,
-    gaps,
+    declaredStage: assessment?.declaredStage || '',
+    diagnosedStage: assessment?.diagnosedStage || '',
+    statusByItem: {
+      ...fallback,
+      ...(assessment?.statusByItem || {}),
+    },
+    notes: assessment?.notes || '',
+    completedAt: assessment?.completedAt || null,
+    averageScore: Number(assessment?.averageScore || 0),
   }
 }
 
 export default function StageOnboarding() {
   const navigate = useNavigate()
-  const founderProfile = useDiagnosticStore((s) => s.founderProfile)
-  const user = useDiagnosticStore((s) => s.user)
-  const updateFounderProfile = useDiagnosticStore((s) => s.updateFounderProfile)
-  const setStageAssessment = useDiagnosticStore((s) => s.setStageAssessment)
 
-  const [selectedStage, setSelectedStage] = useState(null)
-  const [statusByItem, setStatusByItem] = useState({})
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-  const [stageSummary, setStageSummary] = useState(null)
+  const user = useDiagnosticStore((state) => state.user)
+  const founderProfile = useDiagnosticStore((state) => state.founderProfile)
+  const stageAssessment = useDiagnosticStore((state) => state.stageAssessment)
+  const hasCompletedStageOnboarding = useDiagnosticStore(
+    (state) => state.hasCompletedStageOnboarding
+  )
+  const setStageAssessment = useDiagnosticStore(
+    (state) => state.setStageAssessment
+  )
+  const updateFounderProfile = useDiagnosticStore(
+    (state) => state.updateFounderProfile
+  )
 
-  const founderName =
-    founderProfile?.fullname ||
-    founderProfile?.foundername ||
-    'Founder'
+  const existing = useMemo(
+    () => normalizeAssessment(stageAssessment),
+    [stageAssessment]
+  )
 
-  const ventureName =
-    founderProfile?.venturename ||
-    founderProfile?.venture_name ||
-    'your venture'
+  const [selectedStage, setSelectedStage] = useState(existing.declaredStage)
+  const [statusByItem, setStatusByItem] = useState(existing.statusByItem)
+  const [notes, setNotes] = useState(existing.notes)
+  const [showResults, setShowResults] = useState(
+    Boolean(hasCompletedStageOnboarding && existing.completedAt)
+  )
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
-    if (!selectedStage) {
-      const profileStage = founderProfile?.venturestage || founderProfile?.venture_stage || null
-      if (profileStage) {
-        setSelectedStage(profileStage)
-      }
-    }
-  }, [founderProfile, selectedStage])
+    const next = normalizeAssessment(stageAssessment)
 
-  function updateStatus(itemId, statusId) {
-    setStatusByItem((prev) => ({ ...prev, [itemId]: statusId }))
+    setSelectedStage(next.declaredStage)
+    setStatusByItem(next.statusByItem)
+    setNotes(next.notes)
+    setShowResults(Boolean(next.completedAt))
+  }, [stageAssessment])
+
+  const averageScore = useMemo(() => {
+    const total = ITEMS.reduce(
+      (sum, item) => sum + getStatusScore(statusByItem[item.id]),
+      0
+    )
+
+    return Number((total / ITEMS.length).toFixed(2))
+  }, [statusByItem])
+
+  const diagnosedStage = useMemo(
+    () => getStageFromScore(averageScore),
+    [averageScore]
+  )
+
+  const diagnosedStageData = useMemo(
+    () => STAGES.find((stage) => stage.id === diagnosedStage) || STAGES[0],
+    [diagnosedStage]
+  )
+
+  const declaredStageData = useMemo(
+    () => STAGES.find((stage) => stage.id === selectedStage) || null,
+    [selectedStage]
+  )
+
+  const completedItems = useMemo(
+    () =>
+      ITEMS.filter(
+        (item) => getStatusScore(statusByItem[item.id]) >= 2
+      ).length,
+    [statusByItem]
+  )
+
+  const strongItems = useMemo(
+    () =>
+      ITEMS.filter(
+        (item) => getStatusScore(statusByItem[item.id]) === 3
+      ).length,
+    [statusByItem]
+  )
+
+  const stageDifference = useMemo(() => {
+    if (!selectedStage) return 0
+
+    return getStageIndex(diagnosedStage) - getStageIndex(selectedStage)
+  }, [diagnosedStage, selectedStage])
+
+  const readinessLabel = useMemo(() => {
+    if (averageScore < 0.75) return 'Foundation-building'
+    if (averageScore < 1.5) return 'Early readiness'
+    if (averageScore < 2.25) return 'Developing readiness'
+    return 'Strong readiness'
+  }, [averageScore])
+
+  const nextFocusItems = useMemo(() => {
+    return [...ITEMS]
+      .sort(
+        (a, b) =>
+          getStatusScore(statusByItem[a.id]) -
+          getStatusScore(statusByItem[b.id])
+      )
+      .slice(0, 3)
+  }, [statusByItem])
+
+  function updateStatus(itemId, status) {
+    setShowResults(false)
+
+    setStatusByItem((current) => ({
+      ...current,
+      [itemId]: status,
+    }))
   }
 
-  function computeStageFromChecklist() {
-    let totalScore = 0
-    let maxScore = 0
-
-    CHECKLIST_SECTIONS.forEach((section) => {
-      section.items.forEach((item) => {
-        const status = statusByItem[item.id] || 'not_started'
-        totalScore += STATUS_SCORE[status]
-        maxScore += 3
-      })
-    })
-
-    const ratio = maxScore ? totalScore / maxScore : 0
-
-    const hasMvp =
-      statusByItem['solution_mvp'] === 'established' ||
-      statusByItem['solution_mvp'] === 'strong_evidence'
-
-    const hasPayingCustomers =
-      statusByItem['revenue_payments'] === 'established' ||
-      statusByItem['revenue_payments'] === 'strong_evidence'
-
-    const hasRetention =
-      statusByItem['revenue_retention'] === 'established' ||
-      statusByItem['revenue_retention'] === 'strong_evidence'
-
-    const hasStrongPull =
-      statusByItem['traction_user_disappointment'] === 'strong_evidence'
-
-    let stageId = 'idea'
-
-    if (ratio < 0.2) {
-      stageId = 'idea'
-    } else if (ratio < 0.35) {
-      stageId = 'discovery'
-    } else if (ratio < 0.5) {
-      stageId = 'validation'
-    } else if (!hasMvp) {
-      stageId = 'validation'
-    } else if (!hasPayingCustomers) {
-      stageId = 'mvp'
-    } else if (!hasRetention) {
-      stageId = 'early_revenue'
-    } else if (!hasStrongPull) {
-      stageId = 'early_revenue'
-    } else if (ratio < 0.8) {
-      stageId = 'pmf'
-    } else {
-      stageId = 'growth'
-    }
-
-    return { stageId, scoreRatio: ratio }
+  function handleReset() {
+    setSelectedStage('')
+    setStatusByItem(createEmptyStatuses())
+    setNotes('')
+    setSaveError('')
+    setShowResults(false)
   }
 
   async function handleComplete() {
-    setSubmitting(true)
-    setError('')
+    setSaveError('')
+
+    if (!selectedStage) {
+      setSaveError('Choose the stage that best describes your venture today.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+
+    const assessment = {
+      declaredStage: selectedStage,
+      diagnosedStage,
+      statusByItem,
+      notes: notes.trim(),
+      averageScore,
+      completedAt: new Date().toISOString(),
+    }
+
+    setIsSaving(true)
 
     try {
-      const derived = computeStageFromChecklist()
+      setStageAssessment(assessment)
 
-      const result = {
-        declaredStage: selectedStage,
-        diagnosedStage: derived.stageId,
-        scoreRatio: derived.scoreRatio,
-        statusByItem,
-        completedAt: new Date().toISOString(),
-      }
-
-      if (user?.id && selectedStage) {
+      if (user?.id) {
         try {
-          await updateFounderProfile({ venturestage: selectedStage })
+          await updateFounderProfile({
+            ...(founderProfile || {}),
+            venturestage: selectedStage,
+          })
         } catch (profileError) {
-          console.warn('Failed to persist onboarding stage to profile:', profileError)
+          console.warn(
+            'Stage assessment was saved, but the profile update failed.',
+            profileError
+          )
         }
       }
 
-      const summary = buildStageSummary(result)
-      setStageAssessment({ ...result, summary })
-      setStageSummary(summary)
-    } catch (err) {
-      setError('Something went wrong while saving your stage assessment.')
+      setShowResults(true)
+
+      window.setTimeout(() => {
+        document
+          .getElementById('stage-results')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+    } catch (error) {
+      console.error('Failed to save stage assessment', error)
+
+      setSaveError(
+        'We could not save your stage assessment. Please try again.'
+      )
     } finally {
-      setSubmitting(false)
+      setIsSaving(false)
     }
   }
 
-  const canSubmit = selectedStage && !submitting
+  function goToDashboard() {
+    navigate('/app/dashboard')
+  }
 
-  if (stageSummary) {
-    return (
-      <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
-        <div
-          style={{
-            background: '#FFFFFF',
-            border: '1px solid #E2DED6',
-            borderRadius: 18,
-            padding: 20,
-            marginBottom: 18,
-            boxShadow: '0 6px 16px rgba(22,24,27,0.04)',
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              color: '#4D6B57',
-              marginBottom: 6,
-            }}
-          >
-            Stage summary
-          </div>
-          <h1
-            style={{
-              fontSize: 24,
-              lineHeight: 1.2,
-              letterSpacing: '-0.04em',
-              fontWeight: 800,
-              margin: '0 0 8px',
-            }}
-          >
-            {founderName}, here’s where {ventureName} is today.
-          </h1>
-          <p
-            style={{
-              fontSize: 14,
-              lineHeight: 1.75,
-              color: '#5F675F',
-              margin: 0,
-            }}
-          >
-            This is a non-AI diagnostic based on your checklist answers. Path360 will use this stage to tailor your
-            assessment and future guidance.
-          </p>
-        </div>
-
-        <section
-          style={{
-            background: '#FFFFFF',
-            border: '1px solid #E2DED6',
-            borderRadius: 16,
-            padding: 18,
-            marginBottom: 18,
-          }}
-        >
-          <div style={{ marginBottom: 12 }}>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 700,
-                color: '#1C1C1A',
-                marginBottom: 4,
-              }}
-            >
-              {stageSummary.headline}
-            </div>
-            <div
-              style={{
-                fontSize: 12.5,
-                color: '#6B6965',
-              }}
-            >
-              Overall checklist completion: {stageSummary.ratioPct}% of maturity indicators marked as “in progress”
-              or above.
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)',
-              gap: 16,
-            }}
-          >
-            <div
-              style={{
-                borderRadius: 12,
-                background: '#F7F5F0',
-                padding: 12,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: '#1C1C1A',
-                  marginBottom: 6,
-                }}
-              >
-                Why this stage fits
-              </div>
-              <ul
-                style={{
-                  listStyle: 'none',
-                  padding: 0,
-                  margin: 0,
-                  fontSize: 12.5,
-                  color: '#6B6965',
-                  lineHeight: 1.7,
-                }}
-              >
-                {stageSummary.reasons.length > 0 ? (
-                  stageSummary.reasons.map((reason, idx) => (
-                    <li key={idx} style={{ marginBottom: 4 }}>
-                      • {reason}
-                    </li>
-                  ))
-                ) : (
-                  <li>We need more evidence in each area to strengthen this stage diagnosis.</li>
-                )}
-              </ul>
-            </div>
-
-            <div
-              style={{
-                borderRadius: 12,
-                background: '#FCF2E8',
-                padding: 12,
-                border: '1px solid #EEE0CF',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: '#1C1C1A',
-                  marginBottom: 6,
-                }}
-              >
-                What to focus on next
-              </div>
-              <ul
-                style={{
-                  listStyle: 'none',
-                  padding: 0,
-                  margin: 0,
-                  fontSize: 12.5,
-                  color: '#6B6965',
-                  lineHeight: 1.7,
-                }}
-              >
-                {stageSummary.gaps.slice(0, 4).map((gap, idx) => (
-                  <li key={idx} style={{ marginBottom: 4 }}>
-                    • {gap}
-                  </li>
-                ))}
-                {stageSummary.gaps.length === 0 && (
-                  <li>Use the assessment to deepen your investor-readiness view and surface finer-grained gaps.</li>
-                )}
-              </ul>
-            </div>
-          </div>
-        </section>
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 12,
-            flexWrap: 'wrap',
-          }}
-        >
-          <div style={{ fontSize: 12.5, color: '#6B6965' }}>
-            Next, Path360 will run your founder assessment so we can combine stage and readiness into one view.
-          </div>
-
-          <button
-            type="button"
-            onClick={() => navigate('/app/dashboard', { replace: true })}
-            style={{
-              padding: '10px 18px',
-              borderRadius: 12,
-              border: 'none',
-              background: '#163A2C',
-              color: '#FFFFFF',
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            Continue to assessment
-          </button>
-        </div>
-      </div>
-    )
+  function goToAssessment() {
+    navigate('/app/assessment')
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 1080, margin: '0 auto' }}>
-      <div
-        style={{
-          background: '#FFFFFF',
-          border: '1px solid #E2DED6',
-          borderRadius: 18,
-          padding: 20,
-          marginBottom: 18,
-          boxShadow: '0 6px 16px rgba(22,24,27,0.04)',
-        }}
-      >
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: '#4D6B57',
-            marginBottom: 6,
-          }}
-        >
-          PATH360 Onboarding
-        </div>
-        <h1
-          style={{
-            fontSize: 26,
-            lineHeight: 1.2,
-            letterSpacing: '-0.04em',
-            fontWeight: 800,
-            margin: '0 0 8px',
-          }}
-        >
-          {founderName}, let’s locate {ventureName} in the journey.
-        </h1>
-        <p
-          style={{
-            fontSize: 14,
-            lineHeight: 1.75,
-            color: '#5F675F',
-            margin: 0,
-            maxWidth: 640,
-          }}
-        >
-          Before we show you the dashboard, we’ll run a short, guided checklist to understand your current stage.
-        </p>
-      </div>
+    <div className="stage-page">
+      <style>{`
+        .stage-page {
+          min-height: 100%;
+          padding: 34px 20px 64px;
+          background:
+            radial-gradient(circle at 85% 0%, rgba(124, 92, 252, 0.12), transparent 28rem),
+            radial-gradient(circle at 5% 15%, rgba(45, 140, 255, 0.08), transparent 22rem),
+            #f7f8fc;
+          color: #182033;
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
 
-      <section
-        style={{
-          background: '#FFFFFF',
-          border: '1px solid #E2DED6',
-          borderRadius: 16,
-          padding: 18,
-          marginBottom: 18,
-        }}
-      >
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#1C1C1A', marginBottom: 4 }}>
-            1. At what stage is your venture today?
-          </div>
-          <div style={{ fontSize: 12.5, color: '#6B6965' }}>
-            Choose the option that feels closest. The checklist below will refine this into a more precise stage.
+        .stage-shell {
+          width: min(1120px, 100%);
+          margin: 0 auto;
+        }
+
+        .stage-eyebrow {
+          margin: 0 0 10px;
+          color: #7158dc;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }
+
+        .stage-title-row {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 24px;
+          margin-bottom: 10px;
+        }
+
+        .stage-title {
+          margin: 0;
+          font-size: clamp(30px, 4vw, 44px);
+          line-height: 1.08;
+          letter-spacing: -0.045em;
+        }
+
+        .stage-description {
+          max-width: 720px;
+          margin: 0;
+          color: #637087;
+          font-size: 16px;
+          line-height: 1.6;
+        }
+
+        .stage-card {
+          margin-top: 28px;
+          padding: clamp(20px, 4vw, 34px);
+          border: 1px solid rgba(28, 38, 64, 0.08);
+          border-radius: 24px;
+          background: rgba(255, 255, 255, 0.9);
+          box-shadow: 0 18px 45px rgba(38, 52, 84, 0.08);
+          backdrop-filter: blur(10px);
+        }
+
+        .stage-section-heading {
+          margin: 0;
+          font-size: 19px;
+          letter-spacing: -0.02em;
+        }
+
+        .stage-section-copy {
+          margin: 7px 0 20px;
+          color: #69758a;
+          font-size: 14px;
+          line-height: 1.55;
+        }
+
+        .stage-options {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 12px;
+        }
+
+        .stage-option {
+          position: relative;
+          min-height: 138px;
+          padding: 18px 14px;
+          overflow: hidden;
+          border: 1px solid #e6e9f1;
+          border-radius: 17px;
+          background: #fff;
+          color: #202a3c;
+          cursor: pointer;
+          text-align: left;
+          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+        }
+
+        .stage-option:hover {
+          transform: translateY(-2px);
+          border-color: var(--stage-color);
+          box-shadow: 0 12px 24px rgba(24, 32, 51, 0.08);
+        }
+
+        .stage-option.is-selected {
+          border-color: var(--stage-color);
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--stage-color) 14%, transparent);
+        }
+
+        .stage-option-dot {
+          width: 10px;
+          height: 10px;
+          margin-bottom: 17px;
+          border-radius: 999px;
+          background: var(--stage-color);
+        }
+
+        .stage-option-title {
+          display: block;
+          margin-bottom: 7px;
+          font-size: 15px;
+          font-weight: 800;
+        }
+
+        .stage-option-copy {
+          display: block;
+          color: #718097;
+          font-size: 12px;
+          line-height: 1.45;
+        }
+
+        .readiness-grid {
+          display: grid;
+          gap: 15px;
+        }
+
+        .readiness-item {
+          padding: 18px;
+          border: 1px solid #e8ebf2;
+          border-radius: 18px;
+          background: #fff;
+        }
+
+        .readiness-item-top {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 18px;
+          margin-bottom: 14px;
+        }
+
+        .readiness-name {
+          margin: 0 0 4px;
+          font-size: 15px;
+          font-weight: 800;
+        }
+
+        .readiness-description {
+          max-width: 680px;
+          margin: 0;
+          color: #718097;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+
+        .readiness-score {
+          flex: 0 0 auto;
+          padding: 6px 9px;
+          border-radius: 999px;
+          background: #f4f2ff;
+          color: #6a52d8;
+          font-size: 11px;
+          font-weight: 800;
+          white-space: nowrap;
+        }
+
+        .status-options {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .status-option {
+          padding: 9px 11px;
+          border: 1px solid #e4e8f0;
+          border-radius: 10px;
+          background: #fff;
+          color: #657187;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 750;
+          transition: all 150ms ease;
+        }
+
+        .status-option:hover {
+          border-color: var(--status-color);
+          color: var(--status-color);
+        }
+
+        .status-option.is-active {
+          border-color: var(--status-color);
+          background: color-mix(in srgb, var(--status-color) 10%, white);
+          color: var(--status-color);
+          box-shadow: inset 0 0 0 1px var(--status-color);
+        }
+
+        .stage-notes {
+          width: 100%;
+          min-height: 118px;
+          box-sizing: border-box;
+          resize: vertical;
+          padding: 14px;
+          border: 1px solid #e3e7ef;
+          border-radius: 14px;
+          outline: none;
+          color: #263148;
+          font: inherit;
+          font-size: 14px;
+          line-height: 1.55;
+        }
+
+        .stage-notes:focus {
+          border-color: #7c5cfc;
+          box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
+        }
+
+        .stage-actions {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 16px;
+          margin-top: 26px;
+        }
+
+        .stage-actions-right {
+          display: flex;
+          gap: 10px;
+        }
+
+        .stage-button {
+          min-height: 44px;
+          padding: 0 16px;
+          border: 0;
+          border-radius: 12px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 800;
+          transition: transform 150ms ease, opacity 150ms ease, box-shadow 150ms ease;
+        }
+
+        .stage-button:hover:not(:disabled) {
+          transform: translateY(-1px);
+        }
+
+        .stage-button:disabled {
+          cursor: not-allowed;
+          opacity: 0.65;
+        }
+
+        .stage-button-primary {
+          background: linear-gradient(135deg, #7454f7, #5e45d7);
+          color: #fff;
+          box-shadow: 0 10px 18px rgba(99, 70, 224, 0.24);
+        }
+
+        .stage-button-secondary {
+          border: 1px solid #e2e6ef;
+          background: #fff;
+          color: #48556b;
+        }
+
+        .stage-error {
+          margin: 20px 0 0;
+          padding: 12px 14px;
+          border: 1px solid #fecaca;
+          border-radius: 12px;
+          background: #fff1f2;
+          color: #b42318;
+          font-size: 13px;
+          font-weight: 650;
+        }
+                  .results-card {
+          scroll-margin-top: 24px;
+          border: 1px solid rgba(124, 92, 252, 0.18);
+          background:
+            radial-gradient(circle at 100% 0%, rgba(124, 92, 252, 0.12), transparent 23rem),
+            #fff;
+        }
+
+        .results-layout {
+          display: grid;
+          grid-template-columns: 1.1fr 0.9fr;
+          gap: 24px;
+          align-items: stretch;
+        }
+
+        .result-kicker {
+          margin: 0 0 8px;
+          color: #7454e7;
+          font-size: 12px;
+          font-weight: 850;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+        }
+
+        .result-title {
+          margin: 0;
+          font-size: clamp(26px, 3vw, 35px);
+          letter-spacing: -0.04em;
+        }
+
+        .result-copy {
+          margin: 12px 0 0;
+          color: #667289;
+          font-size: 15px;
+          line-height: 1.6;
+        }
+
+        .result-stage-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 20px;
+          padding: 8px 11px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--diagnosed-color) 12%, white);
+          color: var(--diagnosed-color);
+          font-size: 13px;
+          font-weight: 850;
+        }
+
+        .result-stage-pill::before {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: currentColor;
+          content: "";
+        }
+
+        .metrics-panel {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+
+        .metric {
+          min-height: 105px;
+          padding: 17px;
+          border: 1px solid #eaedf4;
+          border-radius: 17px;
+          background: rgba(250, 251, 255, 0.86);
+        }
+
+        .metric-value {
+          display: block;
+          margin-bottom: 7px;
+          color: #263148;
+          font-size: 25px;
+          font-weight: 850;
+          letter-spacing: -0.04em;
+        }
+
+        .metric-label {
+          display: block;
+          color: #738097;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.35;
+        }
+
+        .focus-list {
+          display: grid;
+          gap: 9px;
+          margin-top: 16px;
+        }
+
+        .focus-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 11px 12px;
+          border-radius: 12px;
+          background: #f8f9fd;
+          color: #4e5c72;
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .focus-number {
+          display: grid;
+          width: 23px;
+          height: 23px;
+          flex: 0 0 auto;
+          place-items: center;
+          border-radius: 50%;
+          background: #eae6ff;
+          color: #654bd9;
+          font-size: 11px;
+          font-weight: 850;
+        }
+
+        .stage-match {
+          margin-top: 18px;
+          padding: 13px 14px;
+          border-radius: 13px;
+          background: #f7f8fb;
+          color: #647087;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+
+        @media (max-width: 860px) {
+          .stage-options {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .results-layout {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 600px) {
+          .stage-page {
+            padding: 24px 14px 44px;
+          }
+
+          .stage-title-row,
+          .stage-actions,
+          .readiness-item-top {
+            display: block;
+          }
+
+          .stage-options {
+            grid-template-columns: 1fr;
+          }
+
+          .stage-actions-right {
+            margin-top: 12px;
+          }
+
+          .stage-button {
+            width: 100%;
+          }
+
+          .stage-actions-right {
+            display: grid;
+          }
+        }
+      `}</style>
+
+      <main className="stage-shell">
+        <p className="stage-eyebrow">Founder baseline</p>
+
+        <div className="stage-title-row">
+          <div>
+            <h1 className="stage-title">Where is your venture today?</h1>
+            <p className="stage-description">
+              Choose the stage that feels most accurate, then score the
+              evidence behind it. PATH360 uses this baseline to make guidance
+              more relevant to your next move.
+            </p>
           </div>
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-            gap: 8,
-          }}
-        >
-          {STAGE_OPTIONS.map((opt) => {
-            const active = selectedStage === opt.id
-            return (
+        <section className="stage-card">
+          <h2 className="stage-section-heading">
+            1. Choose your current venture stage
+          </h2>
+
+          <p className="stage-section-copy">
+            There is no wrong answer. Select the stage that best describes your
+            venture right now.
+          </p>
+
+          <div className="stage-options">
+            {STAGES.map((stage) => (
               <button
-                key={opt.id}
+                key={stage.id}
                 type="button"
-                onClick={() => setSelectedStage(opt.id)}
-                style={{
-                  textAlign: 'left',
-                  borderRadius: 12,
-                  border: active ? '1.5px solid #163A2C' : '1px solid #E2DED6',
-                  background: active ? '#163A2C' : '#F7F5F0',
-                  color: active ? '#FFFFFF' : '#1C1C1A',
-                  padding: '10px 11px',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  fontWeight: 600,
+                className={`stage-option ${
+                  selectedStage === stage.id ? 'is-selected' : ''
+                }`}
+                style={{ '--stage-color': stage.color }}
+                onClick={() => {
+                  setSelectedStage(stage.id)
+                  setShowResults(false)
+                  setSaveError('')
                 }}
+                aria-pressed={selectedStage === stage.id}
               >
-                {opt.label}
+                <span className="stage-option-dot" />
+                <span className="stage-option-title">{stage.title}</span>
+                <span className="stage-option-copy">{stage.subtitle}</span>
               </button>
-            )
-          })}
-        </div>
-      </section>
-
-      <section
-        style={{
-          background: '#FFFFFF',
-          border: '1px solid #E2DED6',
-          borderRadius: 16,
-          padding: 18,
-          marginBottom: 18,
-        }}
-      >
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#1C1C1A', marginBottom: 4 }}>
-            2. Stage checklist
+            ))}
           </div>
-          <div style={{ fontSize: 12.5, color: '#6B6965' }}>
-            Mark how far along you are on each item. This is designed to feel like a structured founder diagnostic.
-          </div>
-        </div>
+        </section>
 
-        <div style={{ display: 'grid', gap: 14 }}>
-          {CHECKLIST_SECTIONS.map((section) => (
-            <div
-              key={section.id}
-              style={{
-                borderRadius: 12,
-                border: '1px solid #E2DED6',
-                background: '#F7F5F0',
-                padding: 12,
-              }}
-            >
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1A' }}>{section.title}</div>
-                <div style={{ fontSize: 11.5, color: '#6B6965' }}>{section.subtitle}</div>
-              </div>
+        <section className="stage-card">
+          <h2 className="stage-section-heading">
+            2. Score your current evidence
+          </h2>
 
-              <div style={{ display: 'grid', gap: 10 }}>
-                {section.items.map((item) => {
-                  const currentStatus = statusByItem[item.id] || 'not_started'
-                  return (
-                    <div
-                      key={item.id}
+          <p className="stage-section-copy">
+            This is not a test. It identifies where you have evidence today
+            and where focused support will help most.
+          </p>
+
+          <div className="readiness-grid">
+            {ITEMS.map((item) => {
+              const activeStatus = statusByItem[item.id]
+              const activeOption = STATUS_OPTIONS.find(
+                (option) => option.id === activeStatus
+              )
+
+              return (
+                <div className="readiness-item" key={item.id}>
+                  <div className="readiness-item-top">
+                    <div>
+                      <h3 className="readiness-name">{item.label}</h3>
+                      <p className="readiness-description">
+                        {item.description}
+                      </p>
+                    </div>
+
+                    <span
+                      className="readiness-score"
                       style={{
-                        borderRadius: 10,
-                        background: '#FFFFFF',
-                        padding: 10,
-                        display: 'grid',
-                        gap: 6,
+                        color: activeOption?.color,
+                        background: `${activeOption?.color}18`,
                       }}
                     >
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1C1C1A' }}>
-                        {item.label}
-                      </div>
-                      <div style={{ fontSize: 11.5, color: '#6B6965', lineHeight: 1.6 }}>
-                        {item.description}
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: 6,
-                          marginTop: 4,
-                        }}
+                      {activeOption?.shortLabel || 'Not started'}
+                    </span>
+                  </div>
+
+                  <div className="status-options">
+                    {STATUS_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`status-option ${
+                          activeStatus === option.id ? 'is-active' : ''
+                        }`}
+                        style={{ '--status-color': option.color }}
+                        onClick={() => updateStatus(item.id, option.id)}
+                        aria-pressed={activeStatus === option.id}
                       >
-                        {STATUS_OPTIONS.map((status) => {
-                          const active = currentStatus === status.id
-                          return (
-                            <button
-                              key={status.id}
-                              type="button"
-                              onClick={() => updateStatus(item.id, status.id)}
-                              style={{
-                                padding: '6px 10px',
-                                borderRadius: 999,
-                                border: active ? '1px solid #163A2C' : '1px solid #E2DED6',
-                                background: active ? '#163A2C' : '#F7F5F0',
-                                color: active ? '#FFFFFF' : '#6B6965',
-                                fontSize: 11,
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              {status.label}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })}
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        <section className="stage-card">
+          <h2 className="stage-section-heading">
+            3. Add any context that matters
+          </h2>
+
+          <p className="stage-section-copy">
+            Optional. Share a milestone, constraint, funding plan, launch date,
+            or question you want PATH360 to keep in view.
+          </p>
+
+          <textarea
+            className="stage-notes"
+            value={notes}
+            onChange={(event) => {
+              setNotes(event.target.value)
+              setShowResults(false)
+            }}
+            placeholder="For example: We have a clickable prototype, 14 customer interviews, and plan to launch a paid pilot this quarter."
+          />
+        </section>
+
+        {saveError ? <p className="stage-error">{saveError}</p> : null}
+
+        <div className="stage-actions">
+          <button
+            type="button"
+            className="stage-button stage-button-secondary"
+            onClick={handleReset}
+            disabled={isSaving}
+          >
+            Reset answers
+          </button>
+
+          <div className="stage-actions-right">
+            {showResults ? (
+              <button
+                type="button"
+                className="stage-button stage-button-secondary"
+                onClick={() => setShowResults(false)}
+                disabled={isSaving}
+              >
+                Edit assessment
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              className="stage-button stage-button-primary"
+              onClick={handleComplete}
+              disabled={isSaving}
+            >
+              {isSaving
+                ? 'Saving baseline...'
+                : showResults
+                  ? 'Update baseline'
+                  : 'Complete stage baseline'}
+            </button>
+          </div>
+        </div>
+
+        {showResults ? (
+          <section
+            id="stage-results"
+            className="stage-card results-card"
+            style={{ '--diagnosed-color': diagnosedStageData.color }}
+          >
+            <div className="results-layout">
+              <div>
+                <p className="result-kicker">Your PATH360 baseline</p>
+
+                <h2 className="result-title">
+                  Your evidence currently maps to {diagnosedStageData.title}.
+                </h2>
+
+                <p className="result-copy">
+                  Your self-selected stage is{' '}
+                  <strong>{declaredStageData?.title || 'not selected'}</strong>.
+                  {' '}The result below reflects the evidence you recorded
+                  across customer validation, product, traction, team, and
+                  capital readiness.
+                </p>
+
+                <span className="result-stage-pill">
+                  Diagnosed stage: {diagnosedStageData.title}
+                </span>
+
+                <div className="stage-match">
+                  {stageDifference === 0
+                    ? 'Your selected stage and current evidence are aligned. Focus on strengthening the weakest areas to advance with confidence.'
+                    : stageDifference > 0
+                      ? 'Your evidence suggests you may be further along than the stage you selected. Review your strongest proof points and decide whether your positioning should reflect that progress.'
+                      : 'Your selected stage is ahead of the evidence currently recorded. That is normal—use the focus areas below as the practical bridge to your next milestone.'}
+                </div>
+              </div>
+
+              <div className="metrics-panel">
+                <div className="metric">
+                  <span className="metric-value">
+                    {scoreToPercent(averageScore)}%
+                  </span>
+                  <span className="metric-label">{readinessLabel}</span>
+                </div>
+
+                <div className="metric">
+                  <span className="metric-value">{completedItems}/7</span>
+                  <span className="metric-label">
+                    Areas actively in motion
+                  </span>
+                </div>
+
+                <div className="metric">
+                  <span className="metric-value">{strongItems}</span>
+                  <span className="metric-label">
+                    Areas with strong evidence
+                  </span>
+                </div>
+
+                <div className="metric">
+                  <span className="metric-value">
+                    {declaredStageData?.title || '—'}
+                  </span>
+                  <span className="metric-label">
+                    Your declared stage
+                  </span>
+                </div>
               </div>
             </div>
-          ))}
-        </div>
-      </section>
 
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}
-      >
-        <div style={{ fontSize: 12.5, color: '#6B6965' }}>
-          Once complete, Path360 will show you a stage summary and then unlock your dashboard and assessment.
-        </div>
+            <h3
+              className="stage-section-heading"
+              style={{ marginTop: 28 }}
+            >
+              Suggested next focus areas
+            </h3>
 
-        <button
-          type="button"
-          disabled={!canSubmit}
-          onClick={handleComplete}
-          style={{
-            padding: '10px 18px',
-            borderRadius: 12,
-            border: 'none',
-            background: canSubmit ? '#163A2C' : '#A7ABA7',
-            color: '#FFFFFF',
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: canSubmit ? 'pointer' : 'default',
-          }}
-        >
-          {submitting ? 'Saving…' : 'Confirm stage'}
-        </button>
-      </div>
+            <p className="stage-section-copy">
+              These are the three areas with the least evidence in your current
+              baseline.
+            </p>
 
-      {error && (
-        <div
-          style={{
-            marginTop: 12,
-            background: '#FDEAEA',
-            border: '1px solid rgba(139,32,32,0.18)',
-            color: '#8B2020',
-            borderRadius: 14,
-            padding: '10px 12px',
-            fontSize: 12.5,
-          }}
-        >
-          {error}
-        </div>
-      )}
+            <div className="focus-list">
+              {nextFocusItems.map((item, index) => (
+                <div className="focus-item" key={item.id}>
+                  <span className="focus-number">{index + 1}</span>
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="stage-actions">
+              <button
+                type="button"
+                className="stage-button stage-button-secondary"
+                onClick={() => setShowResults(false)}
+              >
+                Refine answers
+              </button>
+
+              <div className="stage-actions-right">
+                <button
+                  type="button"
+                  className="stage-button stage-button-secondary"
+                  onClick={goToAssessment}
+                >
+                  Take full assessment
+                </button>
+
+                <button
+                  type="button"
+                  className="stage-button stage-button-primary"
+                  onClick={goToDashboard}
+                >
+                  Go to dashboard
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
+      </main>
     </div>
   )
 }

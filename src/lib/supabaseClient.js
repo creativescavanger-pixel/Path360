@@ -22,12 +22,21 @@ function isMissingRelationError(error) {
   return error?.code === 'PGRST205' || error?.code === '42P01'
 }
 
-export async function signUp(email, password) {
-  const response = await supabase.auth.signUp({
-    email,
-    password,
-  })
+function normaliseAssessment(assessment) {
+  if (!assessment) return null
 
+  return {
+    ...assessment,
+    venturestage:
+      assessment.venturestageresult ??
+      assessment.venturestage ??
+      null,
+    rawqa: Array.isArray(assessment.rawqa) ? assessment.rawqa : [],
+  }
+}
+
+export async function signUp(email, password) {
+  const response = await supabase.auth.signUp({ email, password })
   if (response.error) throw response.error
   return response.data
 }
@@ -67,7 +76,9 @@ export async function deleteAccountViaEdgeFunction() {
     throw new Error('No active Supabase session found.')
   }
 
-  const edgeFunctionUrl = import.meta.env.VITE_SUPABASE_DELETE_ACCOUNT_URL?.trim()
+  const edgeFunctionUrl =
+    import.meta.env.VITE_SUPABASE_DELETE_ACCOUNT_URL?.trim()
+
   if (!edgeFunctionUrl) {
     throw new Error('Missing VITE_SUPABASE_DELETE_ACCOUNT_URL env var.')
   }
@@ -83,7 +94,10 @@ export async function deleteAccountViaEdgeFunction() {
   const body = await response.json().catch(() => ({}))
 
   if (!response.ok) {
-    throw new Error(body?.error || `Delete account request failed with status ${response.status}`)
+    throw new Error(
+      body?.error ||
+      `Delete account request failed with status ${response.status}`
+    )
   }
 
   return body
@@ -127,10 +141,24 @@ export async function getFounderProfile(userId) {
 }
 
 export async function saveAssessment(userId, results) {
+  const now = new Date().toISOString()
+
+  const {
+    id,
+    assessmentid,
+    createdat,
+    completedat,
+    ...assessmentData
+  } = results || {}
+
   const payload = {
     userid: userId,
-    ...results,
-    createdat: results?.createdat || new Date().toISOString(),
+    ...assessmentData,
+    assessmenttype: results?.assessmenttype || 'baseline',
+    parentassessmentid: results?.parentassessmentid || null,
+    versionnumber: Number(results?.versionnumber || 1),
+    createdat: createdat || now,
+    completedat: completedat || now,
   }
 
   const { data, error } = await supabase
@@ -140,7 +168,7 @@ export async function saveAssessment(userId, results) {
     .single()
 
   if (error) throw error
-  return data
+  return normaliseAssessment(data)
 }
 
 export async function getLatestAssessment(userId) {
@@ -148,15 +176,36 @@ export async function getLatestAssessment(userId) {
     .from('assessments')
     .select('*')
     .eq('userid', userId)
+    .order('versionnumber', { ascending: false })
     .order('createdat', { ascending: false })
     .limit(1)
     .maybeSingle()
 
   if (error) throw error
-  return data
+  return normaliseAssessment(data)
 }
 
-export async function addMemory(userId, memoryType, content, importanceScore = 3) {
+export async function getAssessmentHistory(userId) {
+  const { data, error } = await supabase
+    .from('assessments')
+    .select('*')
+    .eq('userid', userId)
+    .order('versionnumber', { ascending: false })
+    .order('createdat', { ascending: false })
+
+  if (error) throw error
+
+  return Array.isArray(data)
+    ? data.map(normaliseAssessment)
+    : []
+}
+
+export async function addMemory(
+  userId,
+  memoryType,
+  content,
+  importanceScore = 3
+) {
   const { data, error } = await supabase
     .from('foundermemory')
     .insert({
@@ -187,34 +236,24 @@ export async function getMemories(userId, limit = 20) {
 
 export async function saveDocument(userId, docType, title, content) {
   if (!userId) {
-    console.error('saveDocument: missing userId')
     throw new Error('No user id when saving document')
   }
 
-  const payload = {
-    userid: userId,
-    doctype: docType,
-    title,
-    content,
-    status: 'complete',
-    version: 1,
-    createdat: new Date().toISOString(),
-  }
-
-  console.log('[saveDocument] inserting into generateddocuments', payload)
-
   const { data, error } = await supabase
     .from('generateddocuments')
-    .insert(payload)
+    .insert({
+      userid: userId,
+      doctype: docType,
+      title,
+      content,
+      status: 'complete',
+      version: 1,
+      createdat: new Date().toISOString(),
+    })
     .select('*')
     .single()
 
-  if (error) {
-    console.error('[saveDocument] Supabase error', error)
-    throw error
-  }
-
-  console.log('[saveDocument] inserted generateddocument row', data)
+  if (error) throw error
   return data
 }
 
@@ -271,19 +310,23 @@ export async function getAllConversations(userId) {
   return data ?? []
 }
 
-export async function saveDocumentIntake(userId, docType, title, answers, linkedAssessmentId = null) {
-  const payload = {
-    userid: userId,
-    doctype: docType,
-    title: title || null,
-    answers: Array.isArray(answers) ? answers : [],
-    linkedassessmentid: linkedAssessmentId,
-    updatedat: new Date().toISOString(),
-  }
-
+export async function saveDocumentIntake(
+  userId,
+  docType,
+  title,
+  answers,
+  linkedAssessmentId = null
+) {
   const { data, error } = await supabase
     .from('documentintakes')
-    .insert(payload)
+    .insert({
+      userid: userId,
+      doctype: docType,
+      title: title || null,
+      answers: Array.isArray(answers) ? answers : [],
+      linkedassessmentid: linkedAssessmentId,
+      updatedat: new Date().toISOString(),
+    })
     .select()
     .single()
 
@@ -303,22 +346,27 @@ export async function getDocumentIntakes(userId, docType = null) {
   }
 
   const { data, error } = await query
+
   if (error) throw error
   return data ?? []
 }
 
-export async function addFounderProgress(userId, eventType, title, description = '', metadata = {}) {
-  const payload = {
-    userid: userId,
-    eventtype: eventType,
-    title,
-    description,
-    metadata: metadata || {},
-  }
-
+export async function addFounderProgress(
+  userId,
+  eventType,
+  title,
+  description = '',
+  metadata = {}
+) {
   const { data, error } = await supabase
     .from('founderprogress')
-    .insert(payload)
+    .insert({
+      userid: userId,
+      eventtype: eventType,
+      title,
+      description,
+      metadata: metadata || {},
+    })
     .select()
     .single()
 
@@ -342,10 +390,12 @@ export async function uploadFounderFile(userId, file) {
   const safeName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '-')}`
   const path = `${userId}/${safeName}`
 
-  const { data, error } = await supabase.storage.from(FOUNDER_FILES_BUCKET).upload(path, file, {
-    cacheControl: '3600',
-    upsert: false,
-  })
+  const { data, error } = await supabase.storage
+    .from(FOUNDER_FILES_BUCKET)
+    .upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+    })
 
   if (error) throw error
   return data
@@ -382,9 +432,12 @@ export async function getFounderFiles(userId) {
 
   if (error) {
     if (isMissingRelationError(error)) {
-      console.warn('founderfiles table not found; returning empty founderFiles list.')
+      console.warn(
+        'founderfiles table not found; returning empty founderFiles list.'
+      )
       return []
     }
+
     throw error
   }
 
@@ -392,7 +445,10 @@ export async function getFounderFiles(userId) {
 }
 
 export async function getFounderFileDownloadUrl(path) {
-  const { data, error } = await supabase.storage.from(FOUNDER_FILES_BUCKET).createSignedUrl(path, 60 * 10)
+  const { data, error } = await supabase.storage
+    .from(FOUNDER_FILES_BUCKET)
+    .createSignedUrl(path, 60 * 10)
+
   if (error) throw error
   return data?.signedUrl
 }
@@ -400,9 +456,11 @@ export async function getFounderFileDownloadUrl(path) {
 export async function downloadFounderFile(path, filename = 'download') {
   const signedUrl = await getFounderFileDownloadUrl(path)
   const link = document.createElement('a')
+
   link.href = signedUrl
   link.download = filename
   link.target = '_blank'
+
   document.body.appendChild(link)
   link.click()
   link.remove()
@@ -411,11 +469,19 @@ export async function downloadFounderFile(path, filename = 'download') {
 export function downloadGeneratedDocumentFile(doc) {
   const content = doc?.content || ''
   const title = doc?.title || 'generated-document'
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+  const blob = new Blob([content], {
+    type: 'text/plain;charset=utf-8',
+  })
+
   const objectUrl = URL.createObjectURL(blob)
   const link = document.createElement('a')
+
   link.href = objectUrl
-  link.download = `${title.replace(/[^a-zA-Z0-9-_ ]/g, '').trim() || 'generated-document'}.txt`
+  link.download = `${
+    title.replace(/[^a-zA-Z0-9-_ ]/g, '').trim() ||
+    'generated-document'
+  }.txt`
+
   document.body.appendChild(link)
   link.click()
   link.remove()
@@ -426,6 +492,7 @@ export async function loadFounderWorkspace(userId) {
   const results = await Promise.allSettled([
     getFounderProfile(userId),
     getLatestAssessment(userId),
+    getAssessmentHistory(userId),
     getMemories(userId, 20),
     getDocuments(userId),
     getAllConversations(userId),
@@ -437,6 +504,7 @@ export async function loadFounderWorkspace(userId) {
   const [
     founderProfileResult,
     latestAssessmentResult,
+    assessmentHistoryResult,
     memoriesResult,
     documentsResult,
     conversationsResult,
@@ -445,19 +513,10 @@ export async function loadFounderWorkspace(userId) {
     founderFilesResult,
   ] = results
 
-  const founderProfile = founderProfileResult.status === 'fulfilled' ? founderProfileResult.value : null
-  const latestAssessment = latestAssessmentResult.status === 'fulfilled' ? latestAssessmentResult.value : null
-  const memories = memoriesResult.status === 'fulfilled' ? memoriesResult.value : []
-  const documents = documentsResult.status === 'fulfilled' ? documentsResult.value : []
-  const conversations = conversationsResult.status === 'fulfilled' ? conversationsResult.value : []
-  const documentIntakes = documentIntakesResult.status === 'fulfilled' ? documentIntakesResult.value : []
-  const progressEvents = progressEventsResult.status === 'fulfilled' ? progressEventsResult.value : []
-  const founderFiles = founderFilesResult.status === 'fulfilled' ? founderFilesResult.value : []
-
   const criticalErrors = results
     .filter((result, index) => {
       if (result.status !== 'rejected') return false
-      return index !== 7
+      return index !== 8
     })
     .map((result) => result.reason)
 
@@ -465,28 +524,63 @@ export async function loadFounderWorkspace(userId) {
     throw criticalErrors[0]
   }
 
+  const conversations =
+    conversationsResult.status === 'fulfilled'
+      ? conversationsResult.value
+      : []
+
   const conversationMap = (conversations ?? []).reduce((acc, row) => {
     if (row?.agenttype) {
-      acc[row.agenttype] = Array.isArray(row.messages) ? row.messages : []
+      acc[row.agenttype] = Array.isArray(row.messages)
+        ? row.messages
+        : []
     }
+
     return acc
   }, {})
 
   return {
-    founderProfile: founderProfile ?? null,
-    assessmentResults: latestAssessment
-      ? {
-          ...latestAssessment,
-          venturestage: latestAssessment.venturestageresult ?? latestAssessment.venturestage ?? null,
-          rawqa: Array.isArray(latestAssessment.rawqa) ? latestAssessment.rawqa : [],
-        }
-      : null,
-    memories: memories ?? [],
-    documents: documents ?? [],
-    founderFiles: founderFiles ?? [],
+    founderProfile:
+      founderProfileResult.status === 'fulfilled'
+        ? founderProfileResult.value ?? null
+        : null,
+
+    assessmentResults:
+      latestAssessmentResult.status === 'fulfilled'
+        ? latestAssessmentResult.value ?? null
+        : null,
+
+    assessmentHistory:
+      assessmentHistoryResult.status === 'fulfilled'
+        ? assessmentHistoryResult.value ?? []
+        : [],
+
+    memories:
+      memoriesResult.status === 'fulfilled'
+        ? memoriesResult.value ?? []
+        : [],
+
+    documents:
+      documentsResult.status === 'fulfilled'
+        ? documentsResult.value ?? []
+        : [],
+
+    founderFiles:
+      founderFilesResult.status === 'fulfilled'
+        ? founderFilesResult.value ?? []
+        : [],
+
     conversations: conversationMap,
-    documentIntakes: documentIntakes ?? [],
-    progressEvents: progressEvents ?? [],
+
+    documentIntakes:
+      documentIntakesResult.status === 'fulfilled'
+        ? documentIntakesResult.value ?? []
+        : [],
+
+    progressEvents:
+      progressEventsResult.status === 'fulfilled'
+        ? progressEventsResult.value ?? []
+        : [],
   }
 }
 

@@ -51,7 +51,7 @@ const RADAR_SIGNALS = [
     nextMove:
       'Keep timing, urgency, and founder-market fit tightly connected across your deck, reports, and venture story.',
     destination: '/app/memory',
-    destinationLabel: 'Open Memory',
+    destinationLabel: 'Open Decisions & Insights',
   },
   {
     id: 4,
@@ -85,7 +85,7 @@ const RADAR_SIGNALS = [
     nextMove:
       'Show how founder experience creates a unique advantage in understanding the customer and executing the opportunity.',
     destination: '/app/founder-profile',
-    destinationLabel: 'Review Profile',
+    destinationLabel: 'Review Venture Profile',
   },
   {
     id: 6,
@@ -106,6 +106,28 @@ const RADAR_SIGNALS = [
   },
 ]
 
+const VIEW_OPTIONS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'risks', label: 'Risks' },
+  { id: 'opportunities', label: 'Opportunities' },
+  { id: 'momentum', label: 'Momentum' },
+]
+
+const CATEGORY_OPTIONS = [
+  { id: 'all', label: 'All areas' },
+  { id: 'strategy', label: 'Strategy' },
+  { id: 'market', label: 'Market' },
+  { id: 'execution', label: 'Execution' },
+  { id: 'funding', label: 'Funding' },
+  { id: 'team', label: 'Team' },
+]
+
+const TONE_OPTIONS = [
+  { id: 'all', label: 'All strength' },
+  { id: 'strong', label: 'Strong signals' },
+  { id: 'watch', label: 'Watch areas' },
+]
+
 function SectionCard({ title, subtitle, children, accent = '#1D6B4F' }) {
   return (
     <section
@@ -118,21 +140,41 @@ function SectionCard({ title, subtitle, children, accent = '#1D6B4F' }) {
       }}
     >
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#1C1C1A', marginBottom: 4 }}>{title}</div>
-        {subtitle && (
-          <div style={{ fontSize: 12.5, color: '#6B6965', lineHeight: 1.6 }}>{subtitle}</div>
-        )}
         <div
           style={{
-            width: 52,
+            fontSize: 14,
+            fontWeight: 700,
+            color: '#1C1C1A',
+            marginBottom: 4,
+          }}
+        >
+          {title}
+        </div>
+
+        {subtitle ? (
+          <div
+            style={{
+              fontSize: 12.5,
+              color: '#6B6965',
+              lineHeight: 1.6,
+            }}
+          >
+            {subtitle}
+          </div>
+        ) : null}
+
+        <div
+          style={{
+            width: 44,
             height: 3,
             borderRadius: 999,
             background: accent,
             marginTop: 10,
-            opacity: 0.22,
+            opacity: 0.2,
           }}
         />
       </div>
+
       {children}
     </section>
   )
@@ -205,7 +247,9 @@ function getConfidenceStyles(confidence) {
 
 function averageScore(signals) {
   if (!signals.length) return 0
+
   const total = signals.reduce((sum, item) => sum + item.score, 0)
+
   return (total / signals.length).toFixed(1)
 }
 
@@ -213,13 +257,11 @@ export default function Radar() {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [selectedTone, setSelectedTone] = useState('all')
   const [sortBy, setSortBy] = useState('score_desc')
-  const [selectedSignalId, setSelectedSignalId] = useState(RADAR_SIGNALS[0]?.id ?? null)
+  const [selectedSignalId, setSelectedSignalId] = useState(
+    RADAR_SIGNALS[0]?.id ?? null
+  )
   const [showOnlyUrgent, setShowOnlyUrgent] = useState(false)
   const [activeView, setActiveView] = useState('overview')
-
-  const categories = ['all', 'strategy', 'market', 'execution', 'funding', 'team']
-  const tones = ['all', 'strong', 'watch']
-  const views = ['overview', 'risks', 'opportunities', 'momentum']
 
   const filteredSignals = useMemo(() => {
     let next = [...RADAR_SIGNALS]
@@ -251,29 +293,64 @@ export default function Radar() {
     next.sort((a, b) => {
       if (sortBy === 'score_asc') return a.score - b.score
       if (sortBy === 'score_desc') return b.score - a.score
+
       if (sortBy === 'urgency') {
-        const map = { high: 0, medium: 1, low: 2 }
-        return map[a.urgency] - map[b.urgency]
+        const urgencyOrder = { high: 0, medium: 1, low: 2 }
+        return urgencyOrder[a.urgency] - urgencyOrder[b.urgency]
       }
+
       if (sortBy === 'confidence') {
-        const map = { high: 0, medium: 1 }
-        return map[a.confidence] - map[b.confidence]
+        const confidenceOrder = { high: 0, medium: 1 }
+        return confidenceOrder[a.confidence] - confidenceOrder[b.confidence]
       }
+
       return 0
     })
 
     return next
-  }, [selectedCategory, selectedTone, sortBy, showOnlyUrgent, activeView])
+  }, [
+    activeView,
+    selectedCategory,
+    selectedTone,
+    showOnlyUrgent,
+    sortBy,
+  ])
 
   const selectedSignal =
     filteredSignals.find((signal) => signal.id === selectedSignalId) ||
     filteredSignals[0] ||
     null
 
-  const strongCount = filteredSignals.filter((signal) => signal.tone === 'strong').length
-  const watchCount = filteredSignals.filter((signal) => signal.tone === 'watch').length
-  const urgentCount = filteredSignals.filter((signal) => signal.urgency === 'high').length
-  const readinessPct = `${Math.round((Number(averageScore(filteredSignals)) / 10) * 100)}%`
+  const strongCount = filteredSignals.filter(
+    (signal) => signal.tone === 'strong'
+  ).length
+
+  const watchCount = filteredSignals.filter(
+    (signal) => signal.tone === 'watch'
+  ).length
+
+  const urgentCount = filteredSignals.filter(
+    (signal) => signal.urgency === 'high'
+  ).length
+
+  const readinessPct = `${Math.round(
+    (Number(averageScore(filteredSignals)) / 10) * 100
+  )}%`
+
+  const hasActiveFilters =
+    selectedCategory !== 'all' ||
+    selectedTone !== 'all' ||
+    showOnlyUrgent ||
+    activeView !== 'overview' ||
+    sortBy !== 'score_desc'
+
+  function clearFilters() {
+    setSelectedCategory('all')
+    setSelectedTone('all')
+    setShowOnlyUrgent(false)
+    setActiveView('overview')
+    setSortBy('score_desc')
+  }
 
   return (
     <div style={{ padding: 24 }}>
@@ -323,8 +400,8 @@ export default function Radar() {
               maxWidth: 820,
             }}
           >
-            Filter the signal landscape, inspect areas that need reinforcement, and connect each pattern to a concrete next move.
-            This version turns Radar into a working decision surface instead of a static summary.
+            Inspect areas that need reinforcement, identify momentum, and
+            connect each signal to a concrete next move.
           </p>
         </div>
 
@@ -337,10 +414,22 @@ export default function Radar() {
           }}
         >
           {[
-            { label: 'Average signal', value: averageScore(filteredSignals) || '0.0' },
-            { label: 'Strong signals', value: String(strongCount).padStart(2, '0') },
-            { label: 'Watch areas', value: String(watchCount).padStart(2, '0') },
-            { label: 'Readiness score', value: readinessPct },
+            {
+              label: 'Average signal',
+              value: averageScore(filteredSignals) || '0.0',
+            },
+            {
+              label: 'Strong signals',
+              value: String(strongCount).padStart(2, '0'),
+            },
+            {
+              label: 'Watch areas',
+              value: String(watchCount).padStart(2, '0'),
+            },
+            {
+              label: 'Readiness score',
+              value: readinessPct,
+            },
           ].map((stat) => (
             <div
               key={stat.label}
@@ -352,147 +441,276 @@ export default function Radar() {
                 boxShadow: '0 6px 16px rgba(22,24,27,0.04)',
               }}
             >
-              <div style={{ fontSize: 11, color: '#8C8A84', marginBottom: 6 }}>{stat.label}</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: '#1C1C1A' }}>{stat.value}</div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: '#8C8A84',
+                  marginBottom: 6,
+                }}
+              >
+                {stat.label}
+              </div>
+
+              <div
+                style={{
+                  fontSize: 24,
+                  fontWeight: 700,
+                  color: '#1C1C1A',
+                }}
+              >
+                {stat.value}
+              </div>
             </div>
           ))}
         </div>
 
         <SectionCard
-          title="Interactive controls"
-          subtitle="Filter the radar, switch the lens, and sort signals by what matters most right now."
-          accent="#1D6B4F"
+          title="Radar controls"
+          subtitle="Choose the view first, then narrow the signals only when you need to."
+          accent="#7158DC"
         >
           <div style={{ display: 'grid', gap: 14 }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {views.map((view) => {
-                const active = activeView === view
-                return (
-                  <button
-                    key={view}
-                    type="button"
-                    onClick={() => setActiveView(view)}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 999,
-                      border: active ? '1px solid #1D6B4F' : '1px solid #E2DED6',
-                      background: active ? '#163A2C' : '#F7F5F0',
-                      color: active ? '#FFFFFF' : '#1C1C1A',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      textTransform: 'capitalize',
-                    }}
-                  >
-                    {view}
-                  </button>
-                )
-              })}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                flexWrap: 'wrap',
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    color: '#625B70',
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    marginBottom: 7,
+                  }}
+                >
+                  Radar view
+                </div>
+
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    gap: 4,
+                    padding: 4,
+                    borderRadius: 12,
+                    background: '#F7F5F0',
+                    border: '1px solid #E7E1D8',
+                  }}
+                >
+                  {VIEW_OPTIONS.map((view) => {
+                    const active = activeView === view.id
+
+                    return (
+                      <button
+                        key={view.id}
+                        type="button"
+                        onClick={() => setActiveView(view.id)}
+                        style={{
+                          minHeight: 32,
+                          padding: '0 11px',
+                          borderRadius: 9,
+                          border: active
+                            ? '1px solid #7158DC'
+                            : '1px solid transparent',
+                          background: active
+                            ? '#7158DC'
+                            : 'transparent',
+                          color: active ? '#FFFFFF' : '#5F5A54',
+                          fontSize: 11.5,
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {view.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {hasActiveFilters ? (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  style={{
+                    padding: '7px 9px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#7158DC',
+                    fontSize: 11.5,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Clear filters
+                </button>
+              ) : null}
             </div>
 
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 220px auto',
+                gridTemplateColumns:
+                  'minmax(170px, 1fr) minmax(170px, 1fr) minmax(195px, 1fr) auto',
                 gap: 10,
-                alignItems: 'center',
+                alignItems: 'end',
+                paddingTop: 13,
+                borderTop: '1px solid #ECE7DF',
               }}
             >
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {categories.map((category) => {
-                  const active = selectedCategory === category
-                  return (
-                    <button
-                      key={category}
-                      type="button"
-                      onClick={() => setSelectedCategory(category)}
-                      style={{
-                        padding: '7px 10px',
-                        borderRadius: 999,
-                        border: active ? '1px solid #1D6B4F' : '1px solid #E2DED6',
-                        background: active ? '#EDF4EE' : '#FFFFFF',
-                        color: active ? '#1D6B4F' : '#6B6965',
-                        fontSize: 11.5,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        textTransform: 'capitalize',
-                      }}
-                    >
-                      {category}
-                    </button>
-                  )
-                })}
-              </div>
+              <label>
+                <div
+                  style={{
+                    color: '#746D65',
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    letterSpacing: '0.07em',
+                    textTransform: 'uppercase',
+                    marginBottom: 6,
+                  }}
+                >
+                  Area
+                </div>
 
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {tones.map((tone) => {
-                  const active = selectedTone === tone
-                  return (
-                    <button
-                      key={tone}
-                      type="button"
-                      onClick={() => setSelectedTone(tone)}
-                      style={{
-                        padding: '7px 10px',
-                        borderRadius: 999,
-                        border: active ? '1px solid #1D6B4F' : '1px solid #E2DED6',
-                        background: active ? '#EDF4EE' : '#FFFFFF',
-                        color: active ? '#1D6B4F' : '#6B6965',
-                        fontSize: 11.5,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        textTransform: 'capitalize',
-                      }}
-                    >
-                      {tone}
-                    </button>
-                  )
-                })}
-              </div>
+                <select
+                  value={selectedCategory}
+                  onChange={(event) =>
+                    setSelectedCategory(event.target.value)
+                  }
+                  style={{
+                    width: '100%',
+                    height: 38,
+                    borderRadius: 10,
+                    border: '1px solid #E2DED6',
+                    background: '#FFFFFF',
+                    color: '#302D29',
+                    padding: '0 11px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    outline: 'none',
+                  }}
+                >
+                  {CATEGORY_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                style={{
-                  height: 38,
-                  borderRadius: 10,
-                  border: '1px solid #E2DED6',
-                  background: '#FFFFFF',
-                  color: '#1C1C1A',
-                  padding: '0 12px',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  outline: 'none',
-                }}
-              >
-                <option value="score_desc">Sort: highest score</option>
-                <option value="score_asc">Sort: lowest score</option>
-                <option value="urgency">Sort: urgency</option>
-                <option value="confidence">Sort: confidence</option>
-              </select>
+              <label>
+                <div
+                  style={{
+                    color: '#746D65',
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    letterSpacing: '0.07em',
+                    textTransform: 'uppercase',
+                    marginBottom: 6,
+                  }}
+                >
+                  Signal strength
+                </div>
+
+                <select
+                  value={selectedTone}
+                  onChange={(event) =>
+                    setSelectedTone(event.target.value)
+                  }
+                  style={{
+                    width: '100%',
+                    height: 38,
+                    borderRadius: 10,
+                    border: '1px solid #E2DED6',
+                    background: '#FFFFFF',
+                    color: '#302D29',
+                    padding: '0 11px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    outline: 'none',
+                  }}
+                >
+                  {TONE_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <div
+                  style={{
+                    color: '#746D65',
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    letterSpacing: '0.07em',
+                    textTransform: 'uppercase',
+                    marginBottom: 6,
+                  }}
+                >
+                  Sort
+                </div>
+
+                <select
+                  value={sortBy}
+                  onChange={(event) => setSortBy(event.target.value)}
+                  style={{
+                    width: '100%',
+                    height: 38,
+                    borderRadius: 10,
+                    border: '1px solid #E2DED6',
+                    background: '#FFFFFF',
+                    color: '#302D29',
+                    padding: '0 11px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    outline: 'none',
+                  }}
+                >
+                  <option value="score_desc">Highest score</option>
+                  <option value="score_asc">Lowest score</option>
+                  <option value="urgency">Highest urgency</option>
+                  <option value="confidence">Highest confidence</option>
+                </select>
+              </label>
 
               <button
                 type="button"
-                onClick={() => setShowOnlyUrgent((prev) => !prev)}
+                onClick={() => setShowOnlyUrgent((current) => !current)}
                 style={{
                   height: 38,
                   padding: '0 12px',
                   borderRadius: 10,
-                  border: showOnlyUrgent ? '1px solid #1D6B4F' : '1px solid #E2DED6',
-                  background: showOnlyUrgent ? '#163A2C' : '#FFFFFF',
-                  color: showOnlyUrgent ? '#FFFFFF' : '#1C1C1A',
-                  fontSize: 12.5,
-                  fontWeight: 700,
+                  border: showOnlyUrgent
+                    ? '1px solid #7158DC'
+                    : '1px solid #E2DED6',
+                  background: showOnlyUrgent
+                    ? '#F5F0FF'
+                    : '#FFFFFF',
+                  color: showOnlyUrgent
+                    ? '#7158DC'
+                    : '#5F5A54',
+                  fontSize: 11.5,
+                  fontWeight: 800,
                   cursor: 'pointer',
+                  whiteSpace: 'nowrap',
                 }}
               >
-                {showOnlyUrgent ? 'Showing urgent only' : `Urgent only (${urgentCount})`}
+                {showOnlyUrgent
+                  ? 'Urgent only'
+                  : `Urgent (${urgentCount})`}
               </button>
             </div>
           </div>
         </SectionCard>
-
-        <div
+                <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 1.35fr) minmax(330px, 0.9fr)',
@@ -504,11 +722,11 @@ export default function Radar() {
           <div style={{ display: 'grid', gap: 16 }}>
             <SectionCard
               title="Signal map"
-              subtitle="Click any signal to inspect the logic behind it and move directly to the right workspace."
+              subtitle="Select a signal to understand what it means and move directly to the right workspace."
               accent="#1D6B4F"
             >
               <div style={{ display: 'grid', gap: 12 }}>
-                {filteredSignals.length === 0 && (
+                {filteredSignals.length === 0 ? (
                   <div
                     style={{
                       borderRadius: 14,
@@ -520,134 +738,173 @@ export default function Radar() {
                       lineHeight: 1.7,
                     }}
                   >
-                    No signals match the current filters. Reset one or two controls to widen the radar view.
+                    No signals match the current filters. Clear one or two
+                    filters to widen the radar view.
                   </div>
-                )}
+                ) : (
+                  filteredSignals.map((signal) => {
+                    const tone = getToneStyles(signal.tone)
+                    const urgency = getUrgencyStyles(signal.urgency)
+                    const confidence = getConfidenceStyles(signal.confidence)
+                    const active = selectedSignal?.id === signal.id
 
-                {filteredSignals.map((signal) => {
-                  const tone = getToneStyles(signal.tone)
-                  const urgency = getUrgencyStyles(signal.urgency)
-                  const confidence = getConfidenceStyles(signal.confidence)
-                  const active = selectedSignal?.id === signal.id
-
-                  return (
-                    <button
-                      key={signal.id}
-                      type="button"
-                      onClick={() => setSelectedSignalId(signal.id)}
-                      style={{
-                        background: active ? '#FCFBF8' : '#F7F5F0',
-                        border: active ? '1px solid #1D6B4F' : '1px solid #ECE6DB',
-                        borderRadius: 14,
-                        padding: 16,
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        boxShadow: active ? '0 10px 22px rgba(22,24,27,0.06)' : 'none',
-                        transition: 'all 180ms ease',
-                      }}
-                    >
-                      <div
+                    return (
+                      <button
+                        key={signal.id}
+                        type="button"
+                        onClick={() => setSelectedSignalId(signal.id)}
                         style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          gap: 12,
-                          marginBottom: 12,
-                          flexWrap: 'wrap',
+                          background: active ? '#FCFBF8' : '#F7F5F0',
+                          border: active
+                            ? '1px solid #7158DC'
+                            : '1px solid #ECE6DB',
+                          borderRadius: 14,
+                          padding: 16,
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          boxShadow: active
+                            ? '0 10px 22px rgba(80,61,150,0.08)'
+                            : 'none',
+                          transition: 'all 180ms ease',
                         }}
                       >
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: '#1C1C1A', marginBottom: 4 }}>
-                            {signal.area}
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            gap: 12,
+                            marginBottom: 12,
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <div>
+                            <div
+                              style={{
+                                fontSize: 14,
+                                fontWeight: 700,
+                                color: '#1C1C1A',
+                                marginBottom: 4,
+                              }}
+                            >
+                              {signal.area}
+                            </div>
+
+                            <div
+                              style={{
+                                fontSize: 11.5,
+                                color: '#8C8A84',
+                                textTransform: 'capitalize',
+                              }}
+                            >
+                              {signal.category} signal
+                            </div>
                           </div>
-                          <div style={{ fontSize: 11.5, color: '#8C8A84', textTransform: 'capitalize' }}>
-                            {signal.category} signal
+
+                          <div
+                            style={{
+                              minWidth: 62,
+                              padding: '8px 12px',
+                              borderRadius: 999,
+                              background: tone.fill,
+                              color: tone.text,
+                              border: `1px solid ${tone.border}`,
+                              fontSize: 16,
+                              fontWeight: 700,
+                              textAlign: 'center',
+                              boxShadow: `inset 0 0 0 1px ${tone.ring}`,
+                            }}
+                          >
+                            {signal.score.toFixed(1)}
                           </div>
                         </div>
 
                         <div
                           style={{
-                            minWidth: 62,
-                            padding: '8px 12px',
-                            borderRadius: 999,
-                            background: tone.fill,
-                            color: tone.text,
-                            border: `1px solid ${tone.border}`,
-                            fontSize: 16,
-                            fontWeight: 700,
-                            textAlign: 'center',
-                            boxShadow: `inset 0 0 0 1px ${tone.ring}`,
+                            fontSize: 12.5,
+                            color: '#6B6965',
+                            lineHeight: 1.7,
+                            marginBottom: 12,
                           }}
                         >
-                          {signal.score.toFixed(1)}
+                          {signal.summary}
                         </div>
-                      </div>
 
-                      <div style={{ fontSize: 12.5, color: '#6B6965', lineHeight: 1.7, marginBottom: 12 }}>
-                        {signal.summary}
-                      </div>
-
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <span
+                        <div
                           style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            padding: '6px 9px',
-                            borderRadius: 999,
-                            background: tone.fill,
-                            color: tone.text,
-                            border: `1px solid ${tone.border}`,
-                            fontSize: 11,
-                            fontWeight: 700,
+                            display: 'flex',
+                            gap: 8,
+                            flexWrap: 'wrap',
                           }}
                         >
-                          {tone.pill}
-                        </span>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '6px 9px',
+                              borderRadius: 999,
+                              background: tone.fill,
+                              color: tone.text,
+                              border: `1px solid ${tone.border}`,
+                              fontSize: 11,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {tone.pill}
+                          </span>
 
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            padding: '6px 9px',
-                            borderRadius: 999,
-                            background: urgency.bg,
-                            color: urgency.text,
-                            border: `1px solid ${urgency.border}`,
-                            fontSize: 11,
-                            fontWeight: 700,
-                          }}
-                        >
-                          {urgency.label}
-                        </span>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '6px 9px',
+                              borderRadius: 999,
+                              background: urgency.bg,
+                              color: urgency.text,
+                              border: `1px solid ${urgency.border}`,
+                              fontSize: 11,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {urgency.label}
+                          </span>
 
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            padding: '6px 9px',
-                            borderRadius: 999,
-                            background: confidence.bg,
-                            color: confidence.text,
-                            border: `1px solid ${confidence.border}`,
-                            fontSize: 11,
-                            fontWeight: 700,
-                          }}
-                        >
-                          {confidence.label}
-                        </span>
-                      </div>
-                    </button>
-                  )
-                })}
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '6px 9px',
+                              borderRadius: 999,
+                              background: confidence.bg,
+                              color: confidence.text,
+                              border: `1px solid ${confidence.border}`,
+                              fontSize: 11,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {confidence.label}
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })
+                )}
               </div>
             </SectionCard>
           </div>
 
-          <div style={{ display: 'grid', gap: 16, position: 'sticky', top: 24 }}>
+          <div
+            style={{
+              display: 'grid',
+              gap: 16,
+              position: 'sticky',
+              top: 24,
+            }}
+          >
             <SectionCard
               title="Selected signal"
-              subtitle="This is the working detail layer for the currently selected radar signal."
-              accent="#1D6B4F"
+              subtitle="Inspect the signal logic, then take one useful next action."
+              accent="#7158DC"
             >
               {selectedSignal ? (
                 <div style={{ display: 'grid', gap: 14 }}>
@@ -659,11 +916,34 @@ export default function Radar() {
                       padding: 14,
                     }}
                   >
-                    <div style={{ fontSize: 12, color: '#8C8A84', marginBottom: 6 }}>Focus area</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: '#1C1C1A', marginBottom: 8 }}>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: '#8C8A84',
+                        marginBottom: 6,
+                      }}
+                    >
+                      Focus area
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: 18,
+                        fontWeight: 700,
+                        color: '#1C1C1A',
+                        marginBottom: 8,
+                      }}
+                    >
                       {selectedSignal.area}
                     </div>
-                    <div style={{ fontSize: 12.5, color: '#6B6965', lineHeight: 1.7 }}>
+
+                    <div
+                      style={{
+                        fontSize: 12.5,
+                        color: '#6B6965',
+                        lineHeight: 1.7,
+                      }}
+                    >
                       {selectedSignal.summary}
                     </div>
                   </div>
@@ -676,26 +956,55 @@ export default function Radar() {
                       padding: 14,
                     }}
                   >
-                    <div style={{ fontSize: 11.5, fontWeight: 800, color: '#1C1C1A', marginBottom: 8 }}>
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        fontWeight: 800,
+                        color: '#1C1C1A',
+                        marginBottom: 8,
+                      }}
+                    >
                       Why this matters
                     </div>
-                    <div style={{ fontSize: 12.5, color: '#6B6965', lineHeight: 1.7 }}>
+
+                    <div
+                      style={{
+                        fontSize: 12.5,
+                        color: '#6B6965',
+                        lineHeight: 1.7,
+                      }}
+                    >
                       {selectedSignal.whyItMatters}
                     </div>
                   </div>
 
                   <div
                     style={{
-                      background: '#EDF4EE',
-                      border: '1px solid #D6E4D7',
+                      background: '#F5F0FF',
+                      border: '1px solid #E2D8FF',
                       borderRadius: 14,
                       padding: 14,
                     }}
                   >
-                    <div style={{ fontSize: 11.5, fontWeight: 800, color: '#1D6B4F', marginBottom: 8 }}>
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        fontWeight: 800,
+                        color: '#7158DC',
+                        marginBottom: 8,
+                      }}
+                    >
                       Recommended next move
                     </div>
-                    <div style={{ fontSize: 12.5, color: '#1C1C1A', lineHeight: 1.7, marginBottom: 12 }}>
+
+                    <div
+                      style={{
+                        fontSize: 12.5,
+                        color: '#3E3850',
+                        lineHeight: 1.7,
+                        marginBottom: 12,
+                      }}
+                    >
                       {selectedSignal.nextMove}
                     </div>
 
@@ -707,11 +1016,12 @@ export default function Radar() {
                         justifyContent: 'center',
                         padding: '9px 12px',
                         borderRadius: 10,
-                        background: '#163A2C',
+                        background: '#7158DC',
                         color: '#FFFFFF',
                         textDecoration: 'none',
                         fontSize: 12.5,
                         fontWeight: 700,
+                        boxShadow: '0 7px 14px rgba(113,88,220,0.18)',
                       }}
                     >
                       {selectedSignal.destinationLabel}
@@ -719,15 +1029,22 @@ export default function Radar() {
                   </div>
                 </div>
               ) : (
-                <div style={{ fontSize: 12.5, color: '#6B6965', lineHeight: 1.7 }}>
-                  Select a signal from the left to inspect its logic and next action.
+                <div
+                  style={{
+                    fontSize: 12.5,
+                    color: '#6B6965',
+                    lineHeight: 1.7,
+                  }}
+                >
+                  Select a signal from the left to inspect its logic and next
+                  action.
                 </div>
               )}
             </SectionCard>
 
             <SectionCard
               title="Radar summary"
-              subtitle="This summary adapts to the current signal mix and filter state."
+              subtitle="A simple read of the current filtered signal mix."
               accent="#8A6E2A"
             >
               <div
@@ -738,17 +1055,23 @@ export default function Radar() {
                   padding: 16,
                 }}
               >
-                <div style={{ fontSize: 13, color: '#1C1C1A', lineHeight: 1.75 }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: '#1C1C1A',
+                    lineHeight: 1.75,
+                  }}
+                >
                   {watchCount > strongCount
-                    ? 'The current radar view shows more watch areas than strengths, which suggests this slice of the venture needs reinforcement before the story feels fully credible.'
-                    : 'The current radar view shows more strengths than risks, which suggests the venture narrative is becoming more coherent, though selected weak signals still need tighter execution.'}
+                    ? 'This view contains more watch areas than strengths. Focus on the highest-urgency signal first, then return to the broader radar.'
+                    : 'This view contains more strengths than watch areas. Use the strongest signals to reinforce your narrative while tightening the remaining gaps.'}
                 </div>
               </div>
             </SectionCard>
 
             <SectionCard
               title="Priority queue"
-              subtitle="These are the most actionable items in the current filtered view."
+              subtitle="The most useful actions from the current Radar view."
               accent="#1D6B4F"
             >
               <div style={{ display: 'grid', gap: 10 }}>
@@ -760,8 +1083,14 @@ export default function Radar() {
                     style={{
                       padding: '12px 14px',
                       borderRadius: 12,
-                      border: '1px solid #ECE6DB',
-                      background: selectedSignal?.id === signal.id ? '#EDF4EE' : '#FFFFFF',
+                      border:
+                        selectedSignal?.id === signal.id
+                          ? '1px solid #DDD1FF'
+                          : '1px solid #ECE6DB',
+                      background:
+                        selectedSignal?.id === signal.id
+                          ? '#F5F0FF'
+                          : '#FFFFFF',
                       color: '#1C1C1A',
                       fontSize: 12.5,
                       lineHeight: 1.6,
@@ -769,10 +1098,32 @@ export default function Radar() {
                       cursor: 'pointer',
                     }}
                   >
-                    <div style={{ fontWeight: 700, marginBottom: 4 }}>{signal.area}</div>
-                    <div style={{ color: '#6B6965' }}>{signal.nextMove}</div>
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        marginBottom: 4,
+                      }}
+                    >
+                      {signal.area}
+                    </div>
+
+                    <div style={{ color: '#6B6965' }}>
+                      {signal.nextMove}
+                    </div>
                   </button>
                 ))}
+
+                {!filteredSignals.length ? (
+                  <div
+                    style={{
+                      color: '#6B6965',
+                      fontSize: 12.5,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Reset the current filters to restore a priority queue.
+                  </div>
+                ) : null}
               </div>
             </SectionCard>
           </div>

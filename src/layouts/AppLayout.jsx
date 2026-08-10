@@ -1,7 +1,4 @@
-// src/layouts/AppLayout.jsx
-
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
-import { useEffect } from 'react'
 import Sidebar from '../components/Sidebar.jsx'
 import Topbar from '../components/Topbar.jsx'
 import AIStrategistRail from '../components/AIStrategistRail.jsx'
@@ -14,13 +11,8 @@ export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const assessmentResults = useDiagnosticStore((s) => s.assessmentResults)
   const founderProfile = useDiagnosticStore((s) => s.founderProfile)
   const clearSessionOnly = useDiagnosticStore((s) => s.clearSessionOnly)
-
-  // NEW: read stageAssessment and derive hasCompletedStageOnboarding from it
-  const stageAssessment = useDiagnosticStore((s) => s.stageAssessment)
-  const hasCompletedStageOnboarding = !!stageAssessment
 
   const founderName =
     founderProfile?.foundername ||
@@ -37,14 +29,6 @@ export default function AppLayout() {
 
   const pageIdentity = getPageIdentity(location.pathname)
   const isOnStageOnboarding = location.pathname === '/app/stage-onboarding'
-
-  // IMPORTANT: we no longer redirect from here.
-  // The router-level Protected component in App.jsx handles onboarding gating
-  // based on stageAssessment. AppLayout simply renders the layout and content.
-  useEffect(() => {
-    // If you ever need to enforce something layout-specific, you can do it here,
-    // but the main onboarding redirect is now in App.jsx.
-  }, [])
 
   async function handleLogout(e) {
     e.preventDefault()
@@ -65,7 +49,7 @@ export default function AppLayout() {
       style={{
         minHeight: '100vh',
         display: 'grid',
-        gridTemplateColumns: '268px minmax(0, 1fr) 320px',
+        gridTemplateColumns: '268px minmax(0, 1fr) 286px',
         background: 'var(--app-bg, #F3EFE7)',
       }}
     >
@@ -82,7 +66,13 @@ export default function AppLayout() {
           background: '#F8F4EC',
         }}
       >
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+          }}
+        >
           <Sidebar />
         </div>
 
@@ -103,13 +93,44 @@ export default function AppLayout() {
               boxShadow: '0 6px 16px rgba(22,24,27,0.04)',
             }}
           >
-            <div style={{ fontSize: 11, color: '#8C8A84', marginBottom: 4 }}>Founder</div>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1C1C1A', marginBottom: 2 }}>
+            <div
+              style={{
+                fontSize: 11,
+                color: '#8C8A84',
+                marginBottom: 4,
+              }}
+            >
+              Founder
+            </div>
+
+            <div
+              style={{
+                fontSize: 13.5,
+                fontWeight: 700,
+                color: '#1C1C1A',
+                marginBottom: 2,
+              }}
+            >
               {founderName}
             </div>
-            <div style={{ fontSize: 12, color: '#6B6965', marginBottom: 10 }}>{ventureName}</div>
 
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: '#6B6965',
+                marginBottom: 10,
+              }}
+            >
+              {ventureName}
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                flexWrap: 'wrap',
+              }}
+            >
               <Link
                 to="/app/founder-profile"
                 style={{
@@ -143,7 +164,6 @@ export default function AppLayout() {
                   color: '#6B6965',
                   fontSize: 12,
                   fontWeight: 600,
-                  textDecoration: 'none',
                   cursor: 'pointer',
                 }}
               >
@@ -169,6 +189,12 @@ export default function AppLayout() {
             position: 'sticky',
             top: 0,
             zIndex: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 18,
+            minHeight: 80,
+            padding: '0 26px',
             background: 'rgba(243,239,231,0.92)',
             backdropFilter: 'blur(10px)',
             borderBottom: '1px solid rgba(217,212,202,0.75)',
@@ -182,129 +208,107 @@ export default function AppLayout() {
           style={{
             minHeight: 0,
             overflowY: 'auto',
-            padding: 22,
+            padding: '20px 22px 40px',
           }}
         >
           {!isOnStageOnboarding && <StageBanner />}
 
           {!isOnStageOnboarding && (
-            <div
+            <section
+              aria-labelledby="page-title"
               style={{
-                marginBottom: 18,
+                marginBottom: 16,
+                padding: '15px 18px',
                 background: pageIdentity.softBg,
                 border: `1px solid ${pageIdentity.border}`,
                 borderRadius: 16,
-                padding: 18,
-                boxShadow: '0 6px 16px rgba(22,24,27,0.04)',
+                boxShadow: '0 6px 16px rgba(22,24,27,0.035)',
               }}
             >
               <div
                 style={{
-                  fontSize: 11,
-                  fontWeight: 800,
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                  color: pageIdentity.accent,
-                  marginBottom: 6,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 16,
                 }}
               >
-                {pageIdentity.eyebrow}
-              </div>
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      letterSpacing: '0.13em',
+                      textTransform: 'uppercase',
+                      color: pageIdentity.accent,
+                      marginBottom: 5,
+                    }}
+                  >
+                    {pageIdentity.eyebrow}
+                  </div>
 
-              <div
-                style={{
-                  fontSize: 24,
-                  fontWeight: 800,
-                  letterSpacing: '-0.03em',
-                  color: '#1C1C1A',
-                  marginBottom: 6,
-                  lineHeight: 1.15,
-                }}
-              >
-                {pageIdentity.title}
-              </div>
+                  <h1
+                    id="page-title"
+                    style={{
+                      margin: 0,
+                      fontSize: 23,
+                      fontWeight: 800,
+                      letterSpacing: '-0.035em',
+                      lineHeight: 1.15,
+                      color: '#1C1C1A',
+                    }}
+                  >
+                    {pageIdentity.title}
+                  </h1>
 
-              <div
-                style={{
-                  fontSize: 13,
-                  color: '#5F675F',
-                  lineHeight: 1.75,
-                  maxWidth: 760,
-                }}
-              >
-                {pageIdentity.description}
-              </div>
-            </div>
-          )}
-
-          {!assessmentResults && hasCompletedStageOnboarding && !isOnStageOnboarding && (
-            <div
-              className="fade-up"
-              style={{
-                marginBottom: 20,
-                background: 'var(--info-bg, #EDF4EE)',
-                border: '1px solid rgba(33,95,70,0.14)',
-                borderRadius: 14,
-                padding: '14px 16px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 12,
-                boxShadow: 'var(--shadow-sm, 0 6px 16px rgba(22,24,27,0.04))',
-              }}
-            >
-              <div
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 999,
-                  background: 'rgba(33,95,70,0.10)',
-                  color: 'var(--info, #1D6B4F)',
-                  display: 'grid',
-                  placeItems: 'center',
-                  fontSize: 13,
-                  fontWeight: 800,
-                  flexShrink: 0,
-                  marginTop: 1,
-                }}
-              >
-                i
-              </div>
-
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: 13,
-                    lineHeight: 1.6,
-                    color: 'var(--info, #1D6B4F)',
-                    fontWeight: 600,
-                  }}
-                >
-                  Complete your founder assessment to unlock your full intelligence dashboard.
+                  <p
+                    style={{
+                      margin: '6px 0 0',
+                      maxWidth: 760,
+                      fontSize: 12.5,
+                      color: '#5F675F',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {pageIdentity.description}
+                  </p>
                 </div>
 
-                <Link
-                  to="/app/assessment"
-                  style={{
-                    display: 'inline-block',
-                    marginTop: 6,
-                    fontSize: 13,
-                    color: 'var(--info, #1D6B4F)',
-                    fontWeight: 700,
-                    textDecoration: 'underline',
-                    textUnderlineOffset: 3,
-                  }}
-                >
-                  Start now →
-                </Link>
+                {pageIdentity.status ? (
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 7,
+                      flexShrink: 0,
+                      padding: '7px 10px',
+                      borderRadius: 999,
+                      border: `1px solid ${pageIdentity.border}`,
+                      background: '#FFFFFF',
+                      color: pageIdentity.accent,
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: 999,
+                        background: pageIdentity.accent,
+                      }}
+                    />
+                    {pageIdentity.status}
+                  </div>
+                ) : null}
               </div>
-            </div>
+            </section>
           )}
 
           <div
             className="p360-shell-content-inner fade-up"
-            style={{
-              minWidth: 0,
-            }}
+            style={{ minWidth: 0 }}
           >
             <Outlet />
           </div>

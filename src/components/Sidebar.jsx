@@ -1,206 +1,161 @@
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import supabase from '../lib/supabaseClient.js'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
-import { signOut } from '../lib/supabaseClient.js'
 import AppLogo from './AppLogo.jsx'
 
-const NAV_ITEMS = [
-  { to: '/app/dashboard', label: 'Command Center', icon: '•' },
-  { to: '/app/founder-profile', label: 'Founder Profile', icon: '•' },
-  { to: '/app/studio', label: 'Creation Studio', icon: '•' },
-  { to: '/app/memory', label: 'Memory', icon: '•' },
-  { to: '/app/radar', label: 'Venture Radar', icon: '•' },
-  { to: '/app/academy', label: 'Academy', icon: '•' },
-  { to: '/app/reports', label: 'Reports', icon: '•' },
+const NAV_GROUPS = [
+  {
+    label: 'Command Center',
+    items: [{ to: '/app/dashboard', label: 'Command Center', icon: '•' }],
+  },
+  {
+    label: 'My Venture',
+    items: [
+      { to: '/app/founder-profile', label: 'Venture Profile', icon: '•' },
+      { to: '/app/radar', label: 'Venture Radar', icon: '•' },
+      { to: '/app/memory', label: 'Decisions & Insights', icon: '•' },
+    ],
+  },
+  {
+    label: 'Build',
+    items: [
+      { to: '/app/studio', label: 'Creation Studio', icon: '•' },
+      { to: '/app/reports', label: 'Reports', icon: '•' },
+    ],
+  },
+  {
+    label: 'Grow',
+    items: [
+      {
+        to: '/app/academy',
+        label: 'Academy',
+        icon: '•',
+        requiresAssessment: true,
+      },
+    ],
+  },
 ]
 
-const styles = {
-  aside: {
-    width: 268,
-    minHeight: '100vh',
-    background: '#F6F4EF',
-    display: 'flex',
-    flexDirection: 'column',
-    borderRight: '1px solid #D9D4CA',
-    flexShrink: 0,
-    fontFamily: "'Inter', 'DM Sans', sans-serif",
+const FEEDBACK_PAGES = [
+  {
+    path: '/app/dashboard',
+    label: 'Command Center',
+    prompt: 'What would make the Command Center more useful or easier to understand?',
   },
-  brandWrap: {
-    padding: '12px 14px 10px',
-    borderBottom: '1px solid #D9D4CA',
-    minHeight: 72,
-    display: 'flex',
-    alignItems: 'center',
+  {
+    path: '/app/founder-profile',
+    label: 'Venture Profile',
+    prompt: 'What was unclear or difficult while completing your venture profile?',
   },
-  nav: {
-    padding: '18px 10px 14px',
-    flex: 1,
+  {
+    path: '/app/radar',
+    label: 'Venture Radar',
+    prompt: 'What would make your Radar signals easier to understand or act on?',
   },
-  navLabel: {
-    fontSize: 10,
-    color: '#9A9388',
-    letterSpacing: '0.18em',
-    textTransform: 'uppercase',
-    padding: '0 10px 14px',
-    margin: 0,
-    fontWeight: 700,
+  {
+    path: '/app/memory',
+    label: 'Decisions & Insights',
+    prompt: 'What would make it easier to capture or use your decisions and insights?',
   },
-  divider: {
-    height: 1,
-    background: '#DDD7CC',
-    margin: '18px 8px',
+  {
+    path: '/app/studio',
+    label: 'Creation Studio',
+    prompt: 'What made creating an output easy or difficult?',
   },
-  assessmentLink: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    padding: '16px 14px',
-    borderRadius: 18,
-    textDecoration: 'none',
-    background: '#1D6B4F',
-    border: '1px solid #1D6B4F',
-    color: '#FFFFFF',
-    cursor: 'pointer',
-    boxShadow: '0 10px 20px rgba(29,107,79,0.14)',
-    transition: 'all 0.18s ease',
-    width: '100%',
+  {
+    path: '/app/reports',
+    label: 'Reports',
+    prompt: 'What would make reviewing or exporting reports easier?',
   },
-  assessmentIcon: {
-    width: 18,
-    height: 18,
-    borderRadius: 999,
-    border: '1.5px solid rgba(255,255,255,0.75)',
-    display: 'grid',
-    placeItems: 'center',
-    flexShrink: 0,
-    fontSize: 10,
-    fontWeight: 700,
-    color: '#FFFFFF',
+  {
+    path: '/app/academy',
+    label: 'Academy',
+    prompt: 'What would improve this learning experience?',
   },
-  assessmentText: {
-    fontSize: 13.5,
-    fontWeight: 600,
-    letterSpacing: '-0.01em',
+  {
+    path: '/app/assessment',
+    label: 'Assessment Results',
+    prompt: 'What was unclear or difficult about your assessment results?',
   },
-  feedbackButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    padding: '13px 14px',
-    borderRadius: 16,
-    textDecoration: 'none',
-    background: '#FFFFFF',
-    border: '1px solid #D9D4CA',
-    color: '#1C1C1A',
-    cursor: 'pointer',
-    transition: 'all 0.18s ease',
-    width: '100%',
-    marginTop: 10,
+  {
+    path: '/app/stage-onboarding',
+    label: 'Stage Onboarding',
+    prompt: 'What would make selecting your venture stage easier?',
   },
-  feedbackIcon: {
-    width: 18,
-    height: 18,
-    borderRadius: 999,
-    background: '#EEF4EF',
-    border: '1px solid #D6E4D7',
-    display: 'grid',
-    placeItems: 'center',
-    flexShrink: 0,
-    fontSize: 11,
-    fontWeight: 700,
-    color: '#1D6B4F',
+  {
+    path: 'other',
+    label: 'Something else',
+    prompt: 'Tell us what you were trying to do and where you experienced the issue.',
   },
-  feedbackTextWrap: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: 1,
-  },
-  feedbackText: {
-    fontSize: 13,
-    fontWeight: 600,
-    letterSpacing: '-0.01em',
-  },
-  feedbackSubtext: {
-    fontSize: 11,
-    color: '#6E6B65',
-    lineHeight: 1.4,
-  },
-  footer: {
-    padding: '14px 14px 18px',
-    borderTop: '1px solid #D9D4CA',
-  },
-  accountCard: {
-    background: '#EEF4EF',
-    border: '1px solid #D6E4D7',
-    borderRadius: 14,
-    padding: '12px 12px',
-  },
-  tier: {
-    fontSize: 10,
-    color: '#2A6A51',
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase',
-    marginBottom: 5,
-    fontWeight: 600,
-  },
-  founderName: {
-    fontSize: 12.5,
-    color: '#1A1A18',
-    fontWeight: 600,
-  },
-  founderMeta: {
-    fontSize: 11,
-    color: '#6E6B65',
-    marginTop: 3,
-  },
-}
-
-function getNavItemStyle(isActive) {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    padding: '14px 14px',
-    borderRadius: 18,
-    textDecoration: 'none',
-    marginBottom: 6,
-    background: isActive ? '#EAF1EB' : 'transparent',
-    border: isActive ? '1px solid #CFE0D0' : '1px solid transparent',
-    color: isActive ? '#1D6B4F' : '#6E6B65',
-    cursor: 'pointer',
-    transition: 'all 0.18s ease',
-    fontWeight: isActive ? 600 : 500,
-  }
-}
-
-const navIconStyle = {
-  fontSize: 17,
-  width: 18,
-  textAlign: 'center',
-  lineHeight: 1,
-  flexShrink: 0,
-  color: 'currentColor',
-}
-
-const navLabelStyle = {
-  fontSize: 13.5,
-  flex: 1,
-  letterSpacing: '-0.01em',
-}
+]
 
 const OVERLAY_Z_INDEX = 2147483646
 const MODAL_Z_INDEX = 2147483647
 
-function FeedbackModal({ open, onClose, pagePath, ventureName }) {
+function getNavItemStyle(isActive, isLocked) {
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 11,
+    width: '100%',
+    padding: '10px 12px',
+    borderRadius: 12,
+    textDecoration: 'none',
+    marginBottom: 3,
+    background: isActive
+      ? '#EEF4EF'
+      : isLocked
+        ? 'rgba(245,240,255,0.5)'
+        : 'transparent',
+    border: isActive
+      ? '1px solid #CFE0D0'
+      : isLocked
+        ? '1px solid rgba(226,216,255,0.72)'
+        : '1px solid transparent',
+    color: isActive
+      ? '#1D6B4F'
+      : isLocked
+        ? '#76628D'
+        : '#6E6B65',
+    cursor: 'pointer',
+    transition: 'all 0.18s ease',
+    fontWeight: isActive ? 700 : 600,
+    boxSizing: 'border-box',
+  }
+}
+
+function getFeedbackPage(pagePath) {
+  return (
+    FEEDBACK_PAGES.find((page) => page.path === pagePath) ||
+    FEEDBACK_PAGES[FEEDBACK_PAGES.length - 1]
+  )
+}
+
+function FeedbackModal({
+  open,
+  onClose,
+  pagePath,
+  ventureName,
+  founderId,
+}) {
+  const initialPage = useMemo(() => getFeedbackPage(pagePath), [pagePath])
+  const [selectedPagePath, setSelectedPagePath] = useState(initialPage.path)
   const [feedbackType, setFeedbackType] = useState('suggestion')
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
+
+  const selectedPage =
+    FEEDBACK_PAGES.find((page) => page.path === selectedPagePath) ||
+    initialPage
 
   useEffect(() => {
     if (!open) return
+
+    setSelectedPagePath(initialPage.path)
 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -215,43 +170,65 @@ function FeedbackModal({ open, onClose, pagePath, ventureName }) {
       document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [open, onClose])
+  }, [open, onClose, initialPage.path])
 
   useEffect(() => {
-    if (!open) {
-      setFeedbackType('suggestion')
-      setMessage('')
-      setSubmitting(false)
-      setSubmitted(false)
-    }
+    if (open) return
+
+    setFeedbackType('suggestion')
+    setMessage('')
+    setSubmitting(false)
+    setSubmitted(false)
+    setError('')
   }, [open])
 
   if (!open) return null
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (!message.trim()) return
+  async function handleSubmit(event) {
+    event.preventDefault()
+
+    if (!message.trim() || submitting) return
 
     setSubmitting(true)
+    setError('')
+
+    const payload = {
+      founder_id: founderId || null,
+      feedback_type: feedbackType,
+      message: message.trim(),
+      page: selectedPage.path === 'other' ? null : selectedPage.path,
+      page_label: selectedPage.label,
+      venture_name: ventureName || null,
+      created_at: new Date().toISOString(),
+    }
 
     try {
-      const payload = {
-        feedback_type: feedbackType,
-        message: message.trim(),
-        page: pagePath,
-        venture_name: ventureName,
-        created_at: new Date().toISOString(),
-      }
+      const { error: insertError } = await supabase
+        .from('founder_feedback')
+        .insert(payload)
 
-      console.log('Founder feedback payload:', payload)
+      if (insertError) throw insertError
 
       setSubmitted(true)
       setMessage('')
-    } catch (err) {
-      console.error('Feedback submission failed:', err)
+    } catch (submitError) {
+      console.error('Feedback submission failed:', submitError)
+      setError('We could not send your feedback right now. Please try again.')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const fieldStyle = {
+    width: '100%',
+    boxSizing: 'border-box',
+    borderRadius: 12,
+    border: '1px solid #D9D4CA',
+    background: '#FFFFFF',
+    padding: '0 12px',
+    fontSize: 13,
+    color: '#1C1C1A',
+    outline: 'none',
   }
 
   return createPortal(
@@ -262,7 +239,7 @@ function FeedbackModal({ open, onClose, pagePath, ventureName }) {
         style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(20, 24, 22, 0.42)',
+          background: 'rgba(20,24,22,0.42)',
           backdropFilter: 'blur(3px)',
           WebkitBackdropFilter: 'blur(3px)',
           zIndex: OVERLAY_Z_INDEX,
@@ -272,7 +249,7 @@ function FeedbackModal({ open, onClose, pagePath, ventureName }) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Share feedback"
+        aria-labelledby="feedback-modal-title"
         style={{
           position: 'fixed',
           inset: 0,
@@ -294,7 +271,6 @@ function FeedbackModal({ open, onClose, pagePath, ventureName }) {
             borderRadius: 18,
             border: '1px solid #E2DED6',
             boxShadow: '0 24px 64px rgba(22,24,27,0.18)',
-            overflow: 'hidden',
             pointerEvents: 'auto',
           }}
         >
@@ -308,8 +284,8 @@ function FeedbackModal({ open, onClose, pagePath, ventureName }) {
             <div
               style={{
                 fontSize: 11,
-                color: '#1D6B4F',
-                fontWeight: 700,
+                color: '#7158DC',
+                fontWeight: 800,
                 letterSpacing: '0.12em',
                 textTransform: 'uppercase',
                 marginBottom: 6,
@@ -318,12 +294,26 @@ function FeedbackModal({ open, onClose, pagePath, ventureName }) {
               Founder feedback
             </div>
 
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#1C1C1A', marginBottom: 6 }}>
-              Help improve Path360
+            <div
+              id="feedback-modal-title"
+              style={{
+                fontSize: 18,
+                fontWeight: 800,
+                color: '#1C1C1A',
+                marginBottom: 6,
+              }}
+            >
+              Help improve PATH360
             </div>
 
-            <div style={{ fontSize: 12.5, color: '#6B6965', lineHeight: 1.65 }}>
-              Tell us what felt confusing, missing, helpful, or broken. Your current page context is attached automatically.
+            <div
+              style={{
+                fontSize: 12.5,
+                color: '#6B6965',
+                lineHeight: 1.65,
+              }}
+            >
+              Tell us what felt confusing, missing, helpful, or broken.
             </div>
           </div>
 
@@ -337,12 +327,27 @@ function FeedbackModal({ open, onClose, pagePath, ventureName }) {
                   padding: 16,
                 }}
               >
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#1D6B4F', marginBottom: 6 }}>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    color: '#1D6B4F',
+                    marginBottom: 6,
+                  }}
+                >
                   Thanks — feedback received
                 </div>
 
-                <div style={{ fontSize: 12.5, color: '#4D6357', lineHeight: 1.7, marginBottom: 14 }}>
-                  Your note has been captured with the page context so the team can review it properly.
+                <div
+                  style={{
+                    fontSize: 12.5,
+                    color: '#4D6357',
+                    lineHeight: 1.7,
+                    marginBottom: 14,
+                  }}
+                >
+                  Your note has been saved with the page you selected, so the
+                  team can review it in the right context.
                 </div>
 
                 <button
@@ -355,7 +360,7 @@ function FeedbackModal({ open, onClose, pagePath, ventureName }) {
                     background: '#FFFFFF',
                     color: '#1D6B4F',
                     fontSize: 12.5,
-                    fontWeight: 700,
+                    fontWeight: 800,
                     cursor: 'pointer',
                   }}
                 >
@@ -363,8 +368,71 @@ function FeedbackModal({ open, onClose, pagePath, ventureName }) {
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
-                <div>
+              <form
+                onSubmit={handleSubmit}
+                style={{ display: 'grid', gap: 14 }}
+              >
+                <div
+                  style={{
+                    background: '#F5F0FF',
+                    border: '1px solid #DDD1FF',
+                    borderRadius: 14,
+                    padding: 14,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10.5,
+                      color: '#7158DC',
+                      fontWeight: 800,
+                      letterSpacing: '0.09em',
+                      textTransform: 'uppercase',
+                      marginBottom: 5,
+                    }}
+                  >
+                    You are sharing feedback about
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: 17,
+                      color: '#3E3850',
+                      fontWeight: 800,
+                      marginBottom: 11,
+                    }}
+                  >
+                    {selectedPage.label}
+                  </div>
+
+                  <label
+                    htmlFor="feedback-page"
+                    style={{
+                      display: 'block',
+                      color: '#51486A',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      marginBottom: 6,
+                    }}
+                  >
+                    Change feedback page
+                  </label>
+
+                  <select
+                    id="feedback-page"
+                    value={selectedPagePath}
+                    onChange={(event) =>
+                      setSelectedPagePath(event.target.value)
+                    }
+                    style={{ ...fieldStyle, height: 42 }}
+                  >
+                    {FEEDBACK_PAGES.map((page) => (
+                      <option key={page.path} value={page.path}>
+                        {page.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                                <div>
                   <label
                     htmlFor="feedback-type"
                     style={{
@@ -381,18 +449,8 @@ function FeedbackModal({ open, onClose, pagePath, ventureName }) {
                   <select
                     id="feedback-type"
                     value={feedbackType}
-                    onChange={(e) => setFeedbackType(e.target.value)}
-                    style={{
-                      width: '100%',
-                      height: 42,
-                      borderRadius: 12,
-                      border: '1px solid #D9D4CA',
-                      background: '#FFFFFF',
-                      padding: '0 12px',
-                      fontSize: 13,
-                      color: '#1C1C1A',
-                      outline: 'none',
-                    }}
+                    onChange={(event) => setFeedbackType(event.target.value)}
+                    style={{ ...fieldStyle, height: 42 }}
                   >
                     <option value="suggestion">Suggestion</option>
                     <option value="bug">Bug</option>
@@ -419,45 +477,63 @@ function FeedbackModal({ open, onClose, pagePath, ventureName }) {
                   <textarea
                     id="feedback-message"
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="What happened, what felt missing, or what should be improved?"
+                    onChange={(event) => setMessage(event.target.value)}
+                    placeholder={selectedPage.prompt}
                     rows={6}
                     style={{
-                      width: '100%',
-                      borderRadius: 12,
-                      border: '1px solid #D9D4CA',
-                      background: '#FFFFFF',
+                      ...fieldStyle,
+                      minHeight: 150,
                       padding: 12,
-                      fontSize: 13,
-                      color: '#1C1C1A',
                       resize: 'vertical',
-                      outline: 'none',
                       fontFamily: 'inherit',
                       lineHeight: 1.6,
                     }}
                   />
                 </div>
 
+                {ventureName ? (
+                  <div
+                    style={{
+                      background: '#F8F6F1',
+                      border: '1px solid #ECE6DB',
+                      borderRadius: 12,
+                      padding: 12,
+                      fontSize: 12,
+                      color: '#6B6965',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Venture:{' '}
+                    <strong style={{ color: '#1C1C1A' }}>
+                      {ventureName}
+                    </strong>
+                  </div>
+                ) : null}
+
+                {error ? (
+                  <div
+                    style={{
+                      background: '#FBECEC',
+                      border: '1px solid #E8CACA',
+                      color: '#8A2F2F',
+                      borderRadius: 12,
+                      padding: 12,
+                      fontSize: 12.5,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {error}
+                  </div>
+                ) : null}
+
                 <div
                   style={{
-                    background: '#F8F6F1',
-                    border: '1px solid #ECE6DB',
-                    borderRadius: 12,
-                    padding: 12,
-                    fontSize: 12,
-                    color: '#6B6965',
-                    lineHeight: 1.6,
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    gap: 10,
+                    flexWrap: 'wrap',
                   }}
                 >
-                  <div>
-                    Attached page: <strong style={{ color: '#1C1C1A' }}>{pagePath || 'Unknown page'}</strong>
-                  </div>
-                  <div>
-                    Venture: <strong style={{ color: '#1C1C1A' }}>{ventureName || 'Not available'}</strong>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                   <button
                     type="button"
                     onClick={onClose}
@@ -481,12 +557,18 @@ function FeedbackModal({ open, onClose, pagePath, ventureName }) {
                     style={{
                       padding: '10px 14px',
                       borderRadius: 10,
-                      border: '1px solid #1D6B4F',
-                      background: submitting || !message.trim() ? '#A7B5AC' : '#1D6B4F',
+                      border: '1px solid #7158DC',
+                      background:
+                        submitting || !message.trim()
+                          ? '#B9ADC9'
+                          : '#7158DC',
                       color: '#FFFFFF',
                       fontSize: 12.5,
-                      fontWeight: 700,
-                      cursor: submitting || !message.trim() ? 'default' : 'pointer',
+                      fontWeight: 800,
+                      cursor:
+                        submitting || !message.trim()
+                          ? 'default'
+                          : 'pointer',
                     }}
                   >
                     {submitting ? 'Sending…' : 'Submit feedback'}
@@ -507,26 +589,13 @@ export default function Sidebar() {
   const location = useLocation()
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
 
+  const user = useDiagnosticStore((s) => s.user)
   const founderProfile = useDiagnosticStore((s) => s.founderProfile)
   const subscriptionTier = useDiagnosticStore((s) => s.subscriptionTier)
   const assessmentResults = useDiagnosticStore((s) => s.assessmentResults)
-  const setAssessmentResults = useDiagnosticStore((s) => s.setAssessmentResults)
-  const setQAPairs = useDiagnosticStore((s) => s.setQAPairs)
+  const startProgressReview = useDiagnosticStore((s) => s.startProgressReview)
 
-  async function handleSignOut() {
-    try {
-      await signOut()
-      navigate('/')
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  function handleAssessmentRestart() {
-    setAssessmentResults(null)
-    setQAPairs([])
-    navigate('/app/assessment?restart=1')
-  }
+  const assessmentComplete = Boolean(assessmentResults?.id)
 
   const tierLabel =
     {
@@ -538,6 +607,7 @@ export default function Sidebar() {
 
   const displayName =
     founderProfile?.venturename ||
+    founderProfile?.venture_name ||
     founderProfile?.foundername ||
     founderProfile?.fullname ||
     'Your Venture'
@@ -553,67 +623,298 @@ export default function Sidebar() {
     founderProfile?.venture_name ||
     displayName
 
+  function handleAssessmentAction() {
+    if (!assessmentComplete) {
+      navigate('/app/assessment')
+      return
+    }
+
+    try {
+      startProgressReview()
+      navigate('/app/assessment?review=1')
+    } catch (error) {
+      console.error('Could not start progress review:', error)
+      navigate('/app/assessment')
+    }
+  }
+
+  function handleAcademyClick(event) {
+    if (assessmentComplete) return
+    event.preventDefault()
+    navigate('/app/assessment')
+  }
+
   return (
     <>
-      <aside style={styles.aside}>
-        <div style={styles.brandWrap}>
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          background: '#F6F4EF',
+          fontFamily: "'Inter', 'DM Sans', sans-serif",
+        }}
+      >
+        <div
+          style={{
+            padding: '12px 14px 10px',
+            borderBottom: '1px solid #D9D4CA',
+            minHeight: 72,
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
           <AppLogo width={188} />
         </div>
 
-        <nav aria-label="Workspace" style={styles.nav}>
-          <p style={styles.navLabel}>Workspace</p>
-
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              style={({ isActive }) => getNavItemStyle(isActive)}
+        <nav
+          aria-label="Workspace"
+          style={{
+            padding: '18px 10px 14px',
+            flex: 1,
+            overflowY: 'auto',
+          }}
+        >
+          {NAV_GROUPS.map((group, groupIndex) => (
+            <div
+              key={group.label}
+              style={{ marginTop: groupIndex === 0 ? 0 : 18 }}
             >
-              <span style={navIconStyle}>{item.icon}</span>
-              <span style={navLabelStyle}>{item.label}</span>
-            </NavLink>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: '#9A9388',
+                  letterSpacing: '0.16em',
+                  textTransform: 'uppercase',
+                  padding: '0 10px 8px',
+                  fontWeight: 800,
+                }}
+              >
+                {group.label}
+              </div>
+
+              {group.items.map((item) => {
+                const isLocked =
+                  Boolean(item.requiresAssessment) && !assessmentComplete
+
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={
+                      item.requiresAssessment
+                        ? handleAcademyClick
+                        : undefined
+                    }
+                    style={({ isActive }) =>
+                      getNavItemStyle(isActive, isLocked)
+                    }
+                  >
+                    <span
+                      style={{
+                        fontSize: 17,
+                        width: 18,
+                        textAlign: 'center',
+                        lineHeight: 1,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {item.icon}
+                    </span>
+
+                    <span
+                      style={{
+                        fontSize: 13,
+                        flex: 1,
+                        letterSpacing: '-0.01em',
+                      }}
+                    >
+                      {item.label}
+                    </span>
+
+                    {isLocked ? (
+                      <span
+                        style={{
+                          padding: '3px 6px',
+                          borderRadius: 999,
+                          background: '#E9E1FF',
+                          color: '#7158DC',
+                          fontSize: 9.5,
+                          fontWeight: 800,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Unlock
+                      </span>
+                    ) : null}
+                  </NavLink>
+                )
+              })}
+            </div>
           ))}
 
-          <div style={styles.divider} />
+          <div
+            style={{
+              height: 1,
+              background: '#DDD7CC',
+              margin: '18px 8px',
+            }}
+          />
 
           <button
             type="button"
-            onClick={handleAssessmentRestart}
-            style={styles.assessmentLink}
+            onClick={handleAssessmentAction}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 11,
+              width: '100%',
+              padding: '13px',
+              borderRadius: 14,
+              border: '1px solid #7158DC',
+              background: assessmentComplete ? '#F5F0FF' : '#7158DC',
+              color: assessmentComplete ? '#7158DC' : '#FFFFFF',
+              cursor: 'pointer',
+              boxShadow: assessmentComplete
+                ? 'none'
+                : '0 10px 20px rgba(113,88,220,0.18)',
+            }}
           >
-            <span style={styles.assessmentIcon}>↺</span>
-            <span style={styles.assessmentText}>
-              {assessmentResults ? 'Re-run Assessment' : 'Begin Assessment'}
+            <span style={{ fontSize: 12, fontWeight: 800 }}>
+              {assessmentComplete ? '↺' : '✦'}
+            </span>
+
+            <span
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: 2,
+              }}
+            >
+              <span style={{ fontSize: 12.5, fontWeight: 800 }}>
+                {assessmentComplete ? 'Review progress' : 'Your next move'}
+              </span>
+
+              <span style={{ fontSize: 10.5, opacity: 0.8, fontWeight: 600 }}>
+                {assessmentComplete
+                  ? 'Create a new version — prior work stays saved'
+                  : 'Complete founder assessment'}
+              </span>
             </span>
           </button>
 
           <button
             type="button"
             onClick={() => setIsFeedbackOpen(true)}
-            style={styles.feedbackButton}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 11,
+              width: '100%',
+              marginTop: 10,
+              padding: '11px 12px',
+              borderRadius: 13,
+              border: '1px solid #DDD7CC',
+              background: '#FFFFFF',
+              color: '#5F5B56',
+              cursor: 'pointer',
+            }}
           >
-            <span style={styles.feedbackIcon}>✶</span>
-            <div style={styles.feedbackTextWrap}>
-              <span style={styles.feedbackText}>Share feedback</span>
-              <span style={styles.feedbackSubtext}>Tell us what to improve</span>
-            </div>
+            <span
+              style={{
+                width: 19,
+                height: 19,
+                display: 'grid',
+                placeItems: 'center',
+                borderRadius: 999,
+                background: '#F5F0FF',
+                border: '1px solid #E2D8FF',
+                color: '#7158DC',
+                fontSize: 11,
+                fontWeight: 800,
+              }}
+            >
+              ✦
+            </span>
+
+            <span
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: 1,
+              }}
+            >
+              <span style={{ fontSize: 12.5, fontWeight: 700 }}>
+                Share feedback
+              </span>
+
+              <span style={{ fontSize: 10.5, color: '#817B73' }}>
+                Help improve PATH360
+              </span>
+            </span>
           </button>
         </nav>
 
-        <div style={styles.footer}>
-          <div style={styles.accountCard}>
-            <div style={styles.tier}>{tierLabel}</div>
-            <div style={styles.founderName}>{displayName}</div>
-            <div style={styles.founderMeta}>{displayMeta}</div>
+        <div
+          style={{
+            padding: '14px 14px 18px',
+            borderTop: '1px solid #D9D4CA',
+            background: 'rgba(255,255,255,0.32)',
+          }}
+        >
+          <div
+            style={{
+              border: '1px solid #D6E4D7',
+              borderRadius: 14,
+              background: '#EEF4EF',
+              padding: 12,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                color: '#2A6A51',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                marginBottom: 5,
+                fontWeight: 700,
+              }}
+            >
+              {tierLabel}
+            </div>
+
+            <div
+              style={{
+                fontSize: 12.5,
+                color: '#1A1A18',
+                fontWeight: 700,
+              }}
+            >
+              {displayName}
+            </div>
+
+            <div
+              style={{
+                fontSize: 11,
+                color: '#6E6B65',
+                marginTop: 3,
+              }}
+            >
+              {displayMeta}
+            </div>
           </div>
         </div>
-      </aside>
+      </div>
 
       <FeedbackModal
         open={isFeedbackOpen}
         onClose={() => setIsFeedbackOpen(false)}
         pagePath={location.pathname}
         ventureName={ventureName}
+        founderId={user?.id}
       />
     </>
   )

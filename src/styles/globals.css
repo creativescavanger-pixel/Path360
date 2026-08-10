@@ -775,3 +775,556 @@ svg {
     grid-template-columns: 1fr;
   }
 }
+/* =========================================================
+   Compact AI strategist rail
+   Append this block at the end of index.css
+   ========================================================= */
+
+:root {
+  --rail-w: 286px;
+}
+
+.p360-shell-rail {
+  width: var(--rail-w);
+  min-width: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 250, 247, 0.9) 100%);
+  border-left: 1px solid rgba(207, 220, 207, 0.9);
+  box-shadow: -12px 0 32px rgba(16, 48, 31, 0.035);
+}
+
+.p360-rail {
+  height: 100vh;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 0;
+  padding: 14px 12px 12px;
+  color: var(--text);
+}
+
+.p360-rail-head {
+  padding: 4px 2px 12px;
+  border-bottom: 1px solid rgba(217, 223, 215, 0.86);
+}
+
+.p360-rail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.p360-rail-live-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--green-600);
+  box-shadow: 0 0 0 4px rgba(45, 143, 93, 0.1);
+}
+
+.p360-rail-title-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.p360-rail-kicker {
+  color: var(--text-faint);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.p360-rail-title {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.p360-rail-model {
+  max-width: 72px;
+  overflow: hidden;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-faint);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.p360-rail-agent-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.p360-rail-agent-tab {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: left;
+}
+
+.p360-rail-agent-tab:hover {
+  background: var(--surface-soft);
+  border-color: var(--border);
+  color: var(--text-soft);
+}
+
+.p360-rail-agent-tab.active {
+  background: var(--green-050);
+  border-color: rgba(45, 143, 93, 0.22);
+  color: var(--green-800);
+}
+
+.p360-rail-agent-short {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--surface-muted);
+  color: var(--text-faint);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.p360-rail-agent-tab.active .p360-rail-agent-short {
+  background: var(--green-700);
+  color: var(--white);
+}
+
+.p360-rail-chat {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding: 14px 3px 14px 0;
+  scrollbar-gutter: stable;
+}
+
+.p360-rail-message {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.p360-rail-message.is-user {
+  align-items: flex-end;
+}
+
+.p360-rail-message.is-assistant {
+  align-items: flex-start;
+}
+
+.p360-rail-message-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 5px 2px;
+  color: var(--green-700);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.p360-rail-author-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.p360-chat-bubble {
+  max-width: 96%;
+  border-radius: 13px;
+  padding: 9px 10px;
+  font-size: 11.5px;
+  line-height: 1.58;
+  overflow-wrap: anywhere;
+}
+
+.p360-chat-bubble.user {
+  border: 1px solid rgba(20, 82, 57, 0.1);
+  border-bottom-right-radius: 4px;
+  background: linear-gradient(145deg, var(--green-700), var(--green-800));
+  box-shadow: 0 6px 16px rgba(26, 122, 74, 0.14);
+  color: var(--white);
+}
+
+.p360-chat-bubble.assistant {
+  border: 1px solid rgba(217, 223, 215, 0.92);
+  border-bottom-left-radius: 4px;
+  background: rgba(255, 255, 255, 0.93);
+  box-shadow: 0 4px 12px rgba(17, 17, 17, 0.025);
+  color: var(--text-soft);
+}
+
+.p360-streaming-caret {
+  width: 2px;
+  height: 11px;
+  display: inline-block;
+  margin-left: 3px;
+  vertical-align: -1px;
+  background: var(--green-700);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.p360-rail-typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  border-bottom-left-radius: 4px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.p360-rail-typing span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--green-600);
+  animation: p360-rail-dot 1s ease-in-out infinite;
+}
+
+.p360-rail-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.p360-rail-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes p360-rail-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.p360-rail-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid rgba(207, 220, 207, 0.85);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(244, 250, 246, 0.96), rgba(255, 255, 255, 0.9));
+}
+
+.p360-rail-suggestions-label {
+  margin: 0 0 3px;
+  color: var(--text-faint);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.p360-rail-suggestion {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 2px;
+  border: 0;
+  border-bottom: 1px solid rgba(217, 223, 215, 0.75);
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.p360-rail-suggestion:last-child {
+  border-bottom: 0;
+}
+
+.p360-rail-suggestion:hover {
+  color: var(--green-800);
+}
+
+.p360-rail-suggestion span:last-child {
+  flex: 0 0 auto;
+  color: var(--green-700);
+  font-size: 13px;
+}
+
+.p360-rail-compose {
+  padding-top: 10px;
+  border-top: 1px solid rgba(217, 223, 215, 0.9);
+}
+
+.p360-rail-compose-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 5px 14px rgba(17, 17, 17, 0.035);
+}
+
+.p360-rail-textarea {
+  min-height: 48px;
+  max-height: 96px;
+  flex: 1;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.45;
+  resize: none;
+}
+
+.p360-rail-textarea:focus {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.p360-rail-textarea::placeholder {
+  color: var(--text-faint);
+}
+
+.p360-rail-send {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: var(--green-700);
+  color: var(--white);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 5px 12px rgba(26, 122, 74, 0.18);
+}
+
+.p360-rail-send:hover:not(:disabled) {
+  background: var(--green-800);
+  transform: translateY(-1px);
+}
+
+.p360-rail-send:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.p360-rail-compose-help {
+  margin: 7px 0 0;
+  color: var(--text-faint);
+  font-size: 8.5px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.p360-rail-compose-help span {
+  padding: 0 3px;
+  color: var(--border-dark);
+}
+
+.p360-rail-compose-help kbd {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 700;
+}
+
+/* Shell refinements for the smaller 286px rail */
+
+.p360-shell-content-inner {
+  max-width: 1320px;
+}
+
+/* Inline grid styles in AppLayout need !important for breakpoints. */
+
+@media (max-width: 1280px) {
+  .p360-shell {
+    grid-template-columns: 244px minmax(0, 1fr) 272px !important;
+  }
+
+  .p360-shell-rail {
+    width: 272px;
+  }
+
+  .p360-rail {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .p360-rail-agent-tab {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+}
+
+@media (max-width: 1080px) {
+  .p360-shell {
+    grid-template-columns: 244px minmax(0, 1fr) !important;
+  }
+
+  .p360-shell-rail {
+    display: none;
+  }
+}
+
+@media (max-width: 840px) {
+  .p360-shell {
+    grid-template-columns: 1fr !important;
+  }
+
+  .p360-shell-sidebar {
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    position: relative !important;
+  }
+}
+/* =========================================================
+   Fixed workspace: independent navigation/content scrolling
+   ========================================================= */
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+.p360-shell {
+  height: 100dvh;
+  min-height: 0 !important;
+  overflow: hidden;
+}
+
+/* The centre column must stay within the viewport. */
+.p360-shell-main {
+  height: 100dvh;
+  min-height: 0 !important;
+  overflow: hidden;
+}
+
+/* Keep the topbar visible; scroll only the page body beneath it. */
+.p360-shell-content {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/*
+  Sidebar navigation scrolls independently.
+  This overrides the earlier .p360-sidebar { min-height: 100vh }
+  rule, which otherwise makes the left navigation taller than
+  its allotted scroll region.
+*/
+.p360-sidebar-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.p360-sidebar {
+  min-height: 0;
+  height: 100%;
+}
+
+/* Keep founder controls pinned at the bottom of the left column. */
+.p360-shell-sidebar {
+  height: 100dvh;
+  min-height: 0 !important;
+  overflow: hidden;
+}
+
+/* The strategist chat already has its own scrollable message region. */
+.p360-shell-rail,
+.p360-rail {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.p360-rail-chat {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Mobile must return to normal document scrolling. */
+@media (max-width: 840px) {
+  html,
+  body,
+  #root {
+    height: auto;
+    overflow: auto;
+  }
+
+  .p360-shell,
+  .p360-shell-main {
+    height: auto;
+    overflow: visible;
+  }
+
+  .p360-shell-content,
+  .p360-sidebar-scroll {
+    overflow: visible;
+  }
+
+  .p360-shell-sidebar {
+    height: auto;
+    overflow: visible;
+  }
+}

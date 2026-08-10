@@ -23,10 +23,19 @@ function normalizeResults(results) {
     productclarity: safeNumber(results.productclarity),
     growthpotential: safeNumber(results.growthpotential),
     riskawareness: safeNumber(results.riskawareness),
-    venturestage: results.venturestageresult || results.venturestage || 'unknown',
-    strategicpriorities: Array.isArray(results.strategicpriorities) ? results.strategicpriorities : [],
-    founderstrengths: Array.isArray(results.founderstrengths) ? results.founderstrengths : [],
-    criticalgaps: Array.isArray(results.criticalgaps) ? results.criticalgaps : [],
+    venturestage:
+      results.venturestageresult ||
+      results.venturestage ||
+      'unknown',
+    strategicpriorities: Array.isArray(results.strategicpriorities)
+      ? results.strategicpriorities
+      : [],
+    founderstrengths: Array.isArray(results.founderstrengths)
+      ? results.founderstrengths
+      : [],
+    criticalgaps: Array.isArray(results.criticalgaps)
+      ? results.criticalgaps
+      : [],
     vcverdict: results.vcverdict || '',
     investornarrative: results.investornarrative || '',
     riskanalysis: results.riskanalysis || {},
@@ -42,10 +51,24 @@ function ScoreRing({ score = 0, label, tone = '#1A7A4A', size = 86 }) {
   const dash = (normalized / 100) * circumference
 
   return (
-    <div className="score-reveal" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+    <div
+      className="score-reveal"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+      }}
+    >
       <div style={{ position: 'relative', width: size, height: size }}>
         <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#D9DFD7" strokeWidth={stroke} />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#D9DFD7"
+            strokeWidth={stroke}
+          />
           <circle
             cx={size / 2}
             cy={size / 2}
@@ -57,6 +80,7 @@ function ScoreRing({ score = 0, label, tone = '#1A7A4A', size = 86 }) {
             strokeDasharray={`${dash} ${circumference - dash}`}
           />
         </svg>
+
         <div
           style={{
             position: 'absolute',
@@ -67,10 +91,29 @@ function ScoreRing({ score = 0, label, tone = '#1A7A4A', size = 86 }) {
             flexDirection: 'column',
           }}
         >
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#111111', lineHeight: 1 }}>{normalized}</div>
-          <div style={{ fontSize: 9.5, color: '#8B938B', marginTop: 4 }}>/100</div>
+          <div
+            style={{
+              fontSize: 16,
+              fontWeight: 700,
+              color: '#111111',
+              lineHeight: 1,
+            }}
+          >
+            {normalized}
+          </div>
+
+          <div
+            style={{
+              fontSize: 9.5,
+              color: '#8B938B',
+              marginTop: 4,
+            }}
+          >
+            /100
+          </div>
         </div>
       </div>
+
       <div
         style={{
           marginTop: 12,
@@ -103,6 +146,7 @@ function RadarChart({ data, size = 220 }) {
         const a = angle(i)
         const x = cx + Math.cos(a) * r * level
         const y = cy + Math.sin(a) * r * level
+
         return `${i === 0 ? 'M' : 'L'}${x} ${y}`
       })
       .join(' ') + ' Z'
@@ -111,9 +155,11 @@ function RadarChart({ data, size = 220 }) {
     data
       .map((d, i) => {
         const a = angle(i)
-        const value = Math.max(0, Math.min(100, safeNumber(d.value))) / 100
+        const value =
+          Math.max(0, Math.min(100, safeNumber(d.value))) / 100
         const x = cx + Math.cos(a) * r * value
         const y = cy + Math.sin(a) * r * value
+
         return `${i === 0 ? 'M' : 'L'}${x} ${y}`
       })
       .join(' ') + ' Z'
@@ -121,21 +167,44 @@ function RadarChart({ data, size = 220 }) {
   return (
     <svg width={size} height={size} style={{ overflow: 'visible' }}>
       {[0.25, 0.5, 0.75, 1].map((level, i) => (
-        <path key={i} d={polygonPath(level)} fill="none" stroke="#D9DFD7" strokeWidth={i === 3 ? 1 : 0.8} />
+        <path
+          key={i}
+          d={polygonPath(level)}
+          fill="none"
+          stroke="#D9DFD7"
+          strokeWidth={i === 3 ? 1 : 0.8}
+        />
       ))}
 
       {data.map((_, i) => {
         const a = angle(i)
         const x = cx + Math.cos(a) * r
         const y = cy + Math.sin(a) * r
-        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#E2E7E1" strokeWidth="1" />
+
+        return (
+          <line
+            key={i}
+            x1={cx}
+            y1={cy}
+            x2={x}
+            y2={y}
+            stroke="#E2E7E1"
+            strokeWidth="1"
+          />
+        )
       })}
 
-      <path d={dataPath} fill="rgba(26,122,74,0.14)" stroke="#1A7A4A" strokeWidth="2" />
+      <path
+        d={dataPath}
+        fill="rgba(26,122,74,0.14)"
+        stroke="#1A7A4A"
+        strokeWidth="2"
+      />
 
       {data.map((d, i) => {
         const a = angle(i)
-        const value = Math.max(0, Math.min(100, safeNumber(d.value))) / 100
+        const value =
+          Math.max(0, Math.min(100, safeNumber(d.value))) / 100
         const px = cx + Math.cos(a) * r * value
         const py = cy + Math.sin(a) * r * value
         const lx = cx + Math.cos(a) * (r + 22)
@@ -173,17 +242,43 @@ function buildQuestionThemes(rawqa = []) {
 
   rawqa.forEach((qa) => {
     const q = (qa?.question || '').toLowerCase()
+
     if (!q) return
 
-    if (q.includes('vision') || q.includes('strategy') || q.includes('positioning') || q.includes('north star')) {
+    if (
+      q.includes('vision') ||
+      q.includes('strategy') ||
+      q.includes('positioning') ||
+      q.includes('north star')
+    ) {
       themes.strategy.push(qa)
-    } else if (q.includes('execution') || q.includes('roadmap') || q.includes('milestone') || q.includes('delivery')) {
+    } else if (
+      q.includes('execution') ||
+      q.includes('roadmap') ||
+      q.includes('milestone') ||
+      q.includes('delivery')
+    ) {
       themes.execution.push(qa)
-    } else if (q.includes('investor') || q.includes('funding') || q.includes('round') || q.includes('runway')) {
+    } else if (
+      q.includes('investor') ||
+      q.includes('funding') ||
+      q.includes('round') ||
+      q.includes('runway')
+    ) {
       themes.investor.push(qa)
-    } else if (q.includes('market') || q.includes('customer') || q.includes('product') || q.includes('traction')) {
+    } else if (
+      q.includes('market') ||
+      q.includes('customer') ||
+      q.includes('product') ||
+      q.includes('traction')
+    ) {
       themes.marketProduct.push(qa)
-    } else if (q.includes('team') || q.includes('hiring') || q.includes('talent') || q.includes('growth')) {
+    } else if (
+      q.includes('team') ||
+      q.includes('hiring') ||
+      q.includes('talent') ||
+      q.includes('growth')
+    ) {
       themes.teamGrowth.push(qa)
     } else {
       themes.strategy.push(qa)
@@ -210,8 +305,11 @@ function EmptyInline({ text = 'No data available yet.' }) {
 
 function getField(record, ...keys) {
   for (const key of keys) {
-    if (record?.[key] !== undefined && record?.[key] !== null) return record[key]
+    if (record?.[key] !== undefined && record?.[key] !== null) {
+      return record[key]
+    }
   }
+
   return null
 }
 
@@ -223,15 +321,20 @@ function prettifyDocType(docType = '') {
     .join(' ')
 }
 
+function prettifyStage(stage = '') {
+  return String(stage || '')
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
+
   const rawResults = useDiagnosticStore((s) => s.assessmentResults)
   const profile = useDiagnosticStore((s) => s.founderProfile)
   const documents = useDiagnosticStore((s) => s.documents)
   const setDocuments = useDiagnosticStore((s) => s.setDocuments)
   const user = useDiagnosticStore((s) => s.user)
-
-  // NEW: read stageAssessment so we can prefer onboarding stage in the hero
   const stageAssessment = useDiagnosticStore((s) => s.stageAssessment)
 
   const [activeTab, setActiveTab] = useState('overview')
@@ -245,6 +348,7 @@ export default function Dashboard() {
 
       try {
         const rows = await getDocuments(user.id)
+
         if (!cancelled) {
           setDocuments(rows)
         }
@@ -270,6 +374,7 @@ export default function Dashboard() {
 
       try {
         const rows = await getStudioDocuments(user.id)
+
         if (!cancelled) {
           setStudioDocs(rows || [])
         }
@@ -291,6 +396,7 @@ export default function Dashboard() {
 
   const radarData = useMemo(() => {
     if (!results) return []
+
     return [
       { label: 'Strategy', value: results.strategicclarity },
       { label: 'Investor', value: results.investorreadiness },
@@ -303,7 +409,10 @@ export default function Dashboard() {
     ]
   }, [results])
 
-  const questionThemes = useMemo(() => buildQuestionThemes(results?.rawqa || []), [results])
+  const questionThemes = useMemo(
+    () => buildQuestionThemes(results?.rawqa || []),
+    [results]
+  )
 
   const recentItems = useMemo(() => {
     const generated = (documents || []).map((doc) => ({
@@ -319,27 +428,48 @@ export default function Dashboard() {
       id: `studio-${getField(doc, 'id')}`,
       source: 'studio',
       title: getField(doc, 'title') || 'Untitled Studio draft',
-      type: prettifyDocType(getField(doc, 'docType', 'doc_type', 'doctype') || 'studio_document'),
+      type: prettifyDocType(
+        getField(doc, 'docType', 'doc_type', 'doctype') ||
+          'studio_document'
+      ),
       updated: getField(doc, 'updatedAt', 'updated_at', 'updatedat'),
       raw: doc,
     }))
 
     return [...drafts, ...generated]
-      .sort((a, b) => new Date(b.updated || 0) - new Date(a.updated || 0))
+      .sort(
+        (a, b) =>
+          new Date(b.updated || 0) - new Date(a.updated || 0)
+      )
       .slice(0, 4)
   }, [documents, studioDocs])
 
   if (!results) {
-    const founderName = profile?.fullname || profile?.foundername || 'Founder'
-    const ventureName = profile?.venturename || profile?.venture_name || 'your venture'
+    const founderName =
+      profile?.fullname ||
+      profile?.foundername ||
+      'Founder'
+
+    const ventureName =
+      profile?.venturename ||
+      profile?.venture_name ||
+      'your venture'
 
     return (
-      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div
+        style={{
+          padding: 24,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 18,
+        }}
+      >
         <div
           className="p360-card"
           style={{
             padding: '26px 24px 22px',
-            background: 'linear-gradient(180deg, #FCFBF8 0%, #F9F7F2 100%)',
+            background:
+              'linear-gradient(180deg, #FCFBF8 0%, #F9F7F2 100%)',
             borderRadius: 24,
           }}
         >
@@ -355,6 +485,7 @@ export default function Dashboard() {
           >
             Welcome back
           </div>
+
           <h1
             style={{
               margin: '0 0 8px',
@@ -367,12 +498,28 @@ export default function Dashboard() {
           >
             {founderName}, let’s baseline {ventureName}.
           </h1>
-          <p style={{ fontSize: 14.5, color: '#5F675F', lineHeight: 1.8, maxWidth: 620, margin: '0 0 18px' }}>
-            PATH360 will run a short, adaptive assessment to understand your venture, then give you an investor-style
-            readout and priorities.
+
+          <p
+            style={{
+              fontSize: 14.5,
+              color: '#5F675F',
+              lineHeight: 1.8,
+              maxWidth: 620,
+              margin: '0 0 18px',
+            }}
+          >
+            PATH360 will run a short, adaptive assessment to understand your
+            venture, then give you an investor-style readout and priorities.
           </p>
 
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: 12,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
+          >
             <button
               className="p360-btn-primary"
               onClick={() => navigate('/app/assessment')}
@@ -380,15 +527,56 @@ export default function Dashboard() {
             >
               Start Assessment
             </button>
-            <div style={{ fontSize: 12.5, color: '#8B938B' }}>Takes about 12–15 minutes. You can pause and resume.</div>
+
+            <button
+              type="button"
+              onClick={() => navigate('/app/stage-onboarding')}
+              style={{
+                minWidth: 170,
+                padding: '11px 16px',
+                borderRadius: 12,
+                border: '1px solid #D9DFD7',
+                background: '#FFFFFF',
+                color: '#1A7A4A',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Re-baseline my stage
+            </button>
+
+            <div
+              style={{
+                fontSize: 12.5,
+                color: '#8B938B',
+              }}
+            >
+              Takes about 12–15 minutes. You can pause and resume.
+            </div>
           </div>
         </div>
 
         <div className="p360-card" style={{ padding: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 6 }}>Command Center</div>
-          <div style={{ fontSize: 12.5, color: '#8B938B' }}>
-            Once the assessment is complete, this space will show your scores, explanations, and evidence from your own
-            answers.
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: '#111111',
+              marginBottom: 6,
+            }}
+          >
+            Command Center
+          </div>
+
+          <div
+            style={{
+              fontSize: 12.5,
+              color: '#8B938B',
+            }}
+          >
+            Once the assessment is complete, this space will show your scores,
+            explanations, and evidence from your own answers.
           </div>
         </div>
       </div>
@@ -396,10 +584,26 @@ export default function Dashboard() {
   }
 
   const scoreCards = [
-    { score: results.investorreadiness, label: 'Investor Ready', color: '#1A7A4A' },
-    { score: results.founderscore, label: 'Founder Score', color: '#111111' },
-    { score: results.executionreadiness, label: 'Execution', color: '#215F46' },
-    { score: results.financialmaturity, label: 'Financial', color: '#3A4A3F' },
+    {
+      score: results.investorreadiness,
+      label: 'Investor Ready',
+      color: '#1A7A4A',
+    },
+    {
+      score: results.founderscore,
+      label: 'Founder Score',
+      color: '#111111',
+    },
+    {
+      score: results.executionreadiness,
+      label: 'Execution',
+      color: '#215F46',
+    },
+    {
+      score: results.financialmaturity,
+      label: 'Financial',
+      color: '#3A4A3F',
+    },
   ]
 
   const tabs = [
@@ -414,7 +618,11 @@ export default function Dashboard() {
     <>
       <div
         className="fade-up-2"
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          gap: 12,
+        }}
       >
         {scoreCards.map((card) => (
           <div
@@ -428,40 +636,85 @@ export default function Dashboard() {
               justifyContent: 'center',
             }}
           >
-            <ScoreRing score={card.score} label={card.label} tone={card.color} />
+            <ScoreRing
+              score={card.score}
+              label={card.label}
+              tone={card.color}
+            />
           </div>
         ))}
       </div>
 
       <div
         className="fade-up-3"
-        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 14,
+        }}
       >
         <div className="p360-card" style={{ padding: 16, minHeight: 280 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 16 }}>Venture Radar</div>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: '#111111',
+              marginBottom: 16,
+            }}
+          >
+            Venture Radar
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+            }}
+          >
             <RadarChart data={radarData} size={230} />
           </div>
         </div>
 
         <div className="p360-card" style={{ padding: 16, minHeight: 280 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 4 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: '#111111',
+              marginBottom: 4,
+            }}
+          >
             Strategic priorities
           </div>
-          <div style={{ fontSize: 11.5, color: '#8B938B', marginBottom: 14 }}>
+
+          <div
+            style={{
+              fontSize: 11.5,
+              color: '#8B938B',
+              marginBottom: 14,
+            }}
+          >
             Personalized from your answers and ranked by investor impact.
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
             {results.strategicpriorities.length ? (
-              results.strategicpriorities.slice(0, 4).map((p, i) => (
+              results.strategicpriorities.slice(0, 4).map((priority, index) => (
                 <div
-                  key={`${p?.priority || 'priority'}-${i}`}
+                  key={`${priority?.priority || 'priority'}-${index}`}
                   style={{
                     display: 'flex',
                     alignItems: 'flex-start',
                     gap: 10,
                     padding: '10px 0',
-                    borderTop: i === 0 ? 'none' : '1px solid #EEF2EE',
+                    borderTop:
+                      index === 0 ? 'none' : '1px solid #EEF2EE',
                   }}
                 >
                   <div
@@ -479,8 +732,9 @@ export default function Dashboard() {
                       flexShrink: 0,
                     }}
                   >
-                    {i + 1}
+                    {index + 1}
                   </div>
+
                   <div style={{ flex: 1 }}>
                     <div
                       style={{
@@ -490,10 +744,17 @@ export default function Dashboard() {
                         marginBottom: 4,
                       }}
                     >
-                      {p?.priority || 'Priority'}
+                      {priority?.priority || 'Priority'}
                     </div>
-                    <div style={{ fontSize: 12, color: '#5F675F', lineHeight: 1.6 }}>
-                      {p?.rationale || 'No rationale available.'}
+
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: '#5F675F',
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {priority?.rationale || 'No rationale available.'}
                     </div>
                   </div>
                 </div>
@@ -507,16 +768,41 @@ export default function Dashboard() {
 
       <div
         className="fade-up-4"
-        style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 14 }}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1.1fr 0.9fr',
+          gap: 14,
+        }}
       >
         <div className="p360-card" style={{ padding: 16, minHeight: 220 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 10 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: '#111111',
+              marginBottom: 10,
+            }}
+          >
             Founder strengths
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
             {results.founderstrengths.length ? (
-              results.founderstrengths.slice(0, 4).map((item, i) => (
-                <div key={`${item}-${i}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              results.founderstrengths.slice(0, 4).map((item, index) => (
+                <div
+                  key={`${item}-${index}`}
+                  style={{
+                    display: 'flex',
+                    gap: 10,
+                    alignItems: 'flex-start',
+                  }}
+                >
                   <div
                     style={{
                       width: 7,
@@ -527,7 +813,16 @@ export default function Dashboard() {
                       flexShrink: 0,
                     }}
                   />
-                  <div style={{ fontSize: 13, color: '#2A2F2A', lineHeight: 1.6 }}>{item}</div>
+
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: '#2A2F2A',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {item}
+                  </div>
                 </div>
               ))
             ) : (
@@ -537,9 +832,17 @@ export default function Dashboard() {
         </div>
 
         <div className="p360-card" style={{ padding: 16, minHeight: 220 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 10 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: '#111111',
+              marginBottom: 10,
+            }}
+          >
             VC verdict
           </div>
+
           <div
             style={{
               background: '#F4F8F5',
@@ -557,12 +860,12 @@ export default function Dashboard() {
       </div>
     </>
   )
-
-  const renderStrategy = () => (
+    const renderStrategy = () => (
     <div className="p360-card" style={{ padding: 18 }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 10 }}>
         Strategic diagnosis
       </div>
+
       <div
         style={{
           fontSize: 14,
@@ -584,12 +887,18 @@ export default function Dashboard() {
       >
         Questions that shaped your strategy score
       </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
         {questionThemes.strategy.length ? (
-          questionThemes.strategy.slice(0, 4).map((qa, i) => (
+          questionThemes.strategy.slice(0, 4).map((qa, index) => (
             <div
-              key={i}
-              style={{ background: '#F7F8F5', border: '1px solid #E4E8E3', borderRadius: 12, padding: 12 }}
+              key={index}
+              style={{
+                background: '#F7F8F5',
+                border: '1px solid #E4E8E3',
+                borderRadius: 12,
+                padding: 12,
+              }}
             >
               <div
                 style={{
@@ -603,6 +912,7 @@ export default function Dashboard() {
               >
                 Question
               </div>
+
               <div
                 style={{
                   fontSize: 13,
@@ -614,13 +924,8 @@ export default function Dashboard() {
               >
                 {qa?.question}
               </div>
-              <div
-                style={{
-                  fontSize: 12.5,
-                  color: '#5F675F',
-                  lineHeight: 1.65,
-                }}
-              >
+
+              <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>
                 {qa?.answer}
               </div>
             </div>
@@ -640,11 +945,12 @@ export default function Dashboard() {
       >
         Top strategic gaps
       </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {results.criticalgaps.length ? (
-          results.criticalgaps.map((gap, i) => (
+          results.criticalgaps.map((gap, index) => (
             <div
-              key={i}
+              key={index}
               style={{
                 background: '#F7F8F5',
                 border: '1px solid #E4E8E3',
@@ -665,7 +971,9 @@ export default function Dashboard() {
   )
 
   const renderExecution = () => {
-    const executionItems = questionThemes.execution.length ? questionThemes.execution : results.rawqa
+    const executionItems = questionThemes.execution.length
+      ? questionThemes.execution
+      : results.rawqa
 
     return (
       <div className="p360-card" style={{ padding: 18 }}>
@@ -679,11 +987,12 @@ export default function Dashboard() {
         >
           Execution evidence from your assessment
         </div>
+
         <div style={{ display: 'grid', gap: 10 }}>
           {executionItems.length ? (
-            executionItems.slice(0, 5).map((qa, i) => (
+            executionItems.slice(0, 5).map((qa, index) => (
               <div
-                key={i}
+                key={index}
                 style={{
                   background: '#F7F8F5',
                   border: '1px solid #E4E8E3',
@@ -703,6 +1012,7 @@ export default function Dashboard() {
                 >
                   Question
                 </div>
+
                 <div
                   style={{
                     fontSize: 13,
@@ -714,7 +1024,10 @@ export default function Dashboard() {
                 >
                   {qa?.question}
                 </div>
-                <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>{qa?.answer}</div>
+
+                <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>
+                  {qa?.answer}
+                </div>
               </div>
             ))
           ) : (
@@ -730,6 +1043,7 @@ export default function Dashboard() {
       <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 10 }}>
         Investor readiness
       </div>
+
       <div
         style={{
           fontSize: 34,
@@ -741,6 +1055,7 @@ export default function Dashboard() {
       >
         {results.investorreadiness}%
       </div>
+
       <div
         style={{
           background: '#F4F8F5',
@@ -774,8 +1089,10 @@ export default function Dashboard() {
           <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 4 }}>
             Guided investor memo prep
           </div>
+
           <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.6, maxWidth: 520 }}>
-            Answer a short set of investor-facing questions before generating your one-pager.
+            Answer a short set of investor-facing questions before generating
+            your one-pager.
           </div>
         </div>
 
@@ -807,11 +1124,12 @@ export default function Dashboard() {
       >
         Questions that shaped investor readiness
       </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
         {questionThemes.investor.length ? (
-          questionThemes.investor.slice(0, 3).map((qa, i) => (
+          questionThemes.investor.slice(0, 3).map((qa, index) => (
             <div
-              key={i}
+              key={index}
               style={{
                 background: '#F7F8F5',
                 border: '1px solid #E4E8E3',
@@ -829,7 +1147,10 @@ export default function Dashboard() {
               >
                 {qa?.question}
               </div>
-              <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>{qa?.answer}</div>
+
+              <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>
+                {qa?.answer}
+              </div>
             </div>
           ))
         ) : (
@@ -853,8 +1174,13 @@ export default function Dashboard() {
               padding: 12,
             }}
           >
-            <div style={{ fontSize: 11, color: '#8B938B', marginBottom: 6 }}>{label}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#111111' }}>{value}/100</div>
+            <div style={{ fontSize: 11, color: '#8B938B', marginBottom: 6 }}>
+              {label}
+            </div>
+
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#111111' }}>
+              {value}/100
+            </div>
           </div>
         ))}
       </div>
@@ -866,6 +1192,7 @@ export default function Dashboard() {
       <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 10 }}>
         Founder intelligence baseline
       </div>
+
       <div
         style={{
           fontSize: 14,
@@ -874,14 +1201,16 @@ export default function Dashboard() {
           marginBottom: 14,
         }}
       >
-        This baseline has now been stored so PATH360 can compare future assessments against this point in time and show
-        how the founder has progressed.
+        This baseline has now been stored so PATH360 can compare future
+        assessments against this point in time and show how the founder has
+        progressed.
       </div>
+
       <div style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
         {results.founderstrengths.length ? (
-          results.founderstrengths.map((item, i) => (
+          results.founderstrengths.map((item, index) => (
             <div
-              key={i}
+              key={index}
               style={{
                 background: '#F7F8F5',
                 border: '1px solid #E4E8E3',
@@ -909,11 +1238,12 @@ export default function Dashboard() {
       >
         Questions related to team & growth
       </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {questionThemes.teamGrowth.length ? (
-          questionThemes.teamGrowth.slice(0, 4).map((qa, i) => (
+          questionThemes.teamGrowth.slice(0, 4).map((qa, index) => (
             <div
-              key={i}
+              key={index}
               style={{
                 background: '#F7F8F5',
                 border: '1px solid #E4E8E3',
@@ -931,7 +1261,10 @@ export default function Dashboard() {
               >
                 {qa?.question}
               </div>
-              <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>{qa?.answer}</div>
+
+              <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>
+                {qa?.answer}
+              </div>
             </div>
           ))
         ) : (
@@ -941,15 +1274,40 @@ export default function Dashboard() {
     </div>
   )
 
-  const founderName = profile?.fullname || profile?.foundername || 'Founder'
-  const ventureName = profile?.venturename || profile?.venture_name || 'your venture'
+  const founderName =
+    profile?.fullname ||
+    profile?.foundername ||
+    'Founder'
 
-  // Prefer onboarding stage label from stageAssessment.summary if present
-  const stageLabelFromAssessment = stageAssessment?.summary?.stageLabel
-  const stageToDisplay = String(stageLabelFromAssessment || results.venturestage || 'unknown').replaceAll('_', ' ')
+  const ventureName =
+    profile?.venturename ||
+    profile?.venture_name ||
+    'your venture'
+
+  const onboardingStage =
+    stageAssessment?.diagnosedStage ||
+    stageAssessment?.declaredStage ||
+    null
+
+  const stageToDisplay = prettifyStage(
+    onboardingStage ||
+      results.venturestage ||
+      'unknown'
+  )
+
+  const stageUpdatedLabel = stageAssessment?.completedAt
+    ? stageAssessment.completedAt.slice(0, 10)
+    : 'Not completed yet'
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div
+      style={{
+        padding: 24,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 18,
+      }}
+    >
       <div
         className="fade-up"
         style={{
@@ -963,12 +1321,13 @@ export default function Dashboard() {
           flexWrap: 'wrap',
         }}
       >
-        {tabs.map((t) => {
-          const active = activeTab === t.key
+        {tabs.map((tab) => {
+          const active = activeTab === tab.key
+
           return (
             <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
               style={{
                 padding: '8px 14px',
                 borderRadius: 9,
@@ -980,7 +1339,7 @@ export default function Dashboard() {
                 cursor: 'pointer',
               }}
             >
-              {t.label}
+              {tab.label}
             </button>
           )
         })}
@@ -997,9 +1356,10 @@ export default function Dashboard() {
           gap: 20,
           justifyContent: 'space-between',
           color: '#FFFFFF',
+          flexWrap: 'wrap',
         }}
       >
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
               fontSize: 10.5,
@@ -1012,6 +1372,7 @@ export default function Dashboard() {
           >
             {ventureName}
           </div>
+
           <div
             style={{
               fontSize: 24,
@@ -1022,8 +1383,47 @@ export default function Dashboard() {
           >
             Welcome, {founderName}. Your venture is {results.investorreadiness}% investor ready.
           </div>
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>
+
+          <div
+            style={{
+              fontSize: 13,
+              color: 'rgba(255,255,255,0.7)',
+              marginBottom: 8,
+            }}
+          >
             Stage: {stageToDisplay} · {results.strategicpriorities.length} priorities identified
+          </div>
+
+          <div
+            style={{
+              marginTop: 10,
+              display: 'flex',
+              gap: 10,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
+              Stage baseline: <span style={{ fontWeight: 600 }}>{stageUpdatedLabel}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate('/app/stage-onboarding')}
+              style={{
+                padding: '7px 12px',
+                borderRadius: 9,
+                border: '1px solid rgba(255,255,255,0.5)',
+                background: 'rgba(255,255,255,0.06)',
+                color: '#FFFFFF',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Re-baseline my stage
+            </button>
           </div>
         </div>
 
@@ -1061,7 +1461,10 @@ export default function Dashboard() {
           }}
         >
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#111111' }}>Recent Documents</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111111' }}>
+              Recent Documents
+            </div>
+
             <div style={{ fontSize: 11.5, color: '#8B938B', marginTop: 3 }}>
               Generated documents and Studio drafts
             </div>
@@ -1081,6 +1484,7 @@ export default function Dashboard() {
             >
               View library
             </button>
+
             <button
               onClick={() => navigate('/app/studio')}
               style={{
@@ -1099,12 +1503,12 @@ export default function Dashboard() {
 
         {recentItems?.length ? (
           <div style={{ display: 'grid', gap: 10 }}>
-            {recentItems.map((item, i) => (
+            {recentItems.map((item, index) => (
               <div
-                key={item.id || i}
+                key={item.id || index}
                 style={{
-                  borderTop: i === 0 ? 'none' : '1px solid #EEF2EE',
-                  paddingTop: i === 0 ? 0 : 10,
+                  borderTop: index === 0 ? 'none' : '1px solid #EEF2EE',
+                  paddingTop: index === 0 ? 0 : 10,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -1123,13 +1527,18 @@ export default function Dashboard() {
                   >
                     {item.title}
                   </div>
-                  <div style={{ fontSize: 11.5, color: '#8B938B' }}>{item.type}</div>
+
+                  <div style={{ fontSize: 11.5, color: '#8B938B' }}>
+                    {item.type}
+                  </div>
                 </div>
 
                 {item.source === 'studio' ? (
                   <button
                     onClick={() =>
-                      navigate(`/app/reports?studioDraft=${getField(item.raw, 'id')}`)
+                      navigate(
+                        `/app/reports?studioDraft=${getField(item.raw, 'id')}`
+                      )
                     }
                     style={{
                       border: 'none',
@@ -1170,6 +1579,7 @@ export default function Dashboard() {
             }}
           >
             No documents yet.{' '}
+
             <button
               onClick={() => navigate('/app/studio')}
               style={{
@@ -1197,11 +1607,15 @@ export default function Dashboard() {
           }}
         >
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#111111' }}>Assessment Q&A history</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111111' }}>
+              Assessment Q&A history
+            </div>
+
             <div style={{ fontSize: 11.5, color: '#8B938B', marginTop: 3 }}>
               Every question and answer used in this assessment run.
             </div>
           </div>
+
           <button
             onClick={() => navigate('/app/assessment?restart=1')}
             style={{
@@ -1239,6 +1653,7 @@ export default function Dashboard() {
                 >
                   Question {index + 1}
                 </div>
+
                 <div
                   style={{
                     fontSize: 13.5,
@@ -1250,6 +1665,7 @@ export default function Dashboard() {
                 >
                   {qa?.question}
                 </div>
+
                 <div
                   style={{
                     fontSize: 13,

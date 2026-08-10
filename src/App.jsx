@@ -1,7 +1,11 @@
-// src/App.jsx
-
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
 import supabase from './lib/supabaseClient.js'
 import useDiagnosticStore from './stores/useDiagnosticStore.js'
 
@@ -47,62 +51,98 @@ function Protected({ children }) {
   const [session, setSession] = useState(undefined)
   const [bootstrapping, setBootstrapping] = useState(true)
 
+  const hasFinishedInitialLoad = useRef(false)
+  const location = useLocation()
+
   const hydrateWorkspace = useDiagnosticStore((s) => s.hydrateWorkspace)
   const setUser = useDiagnosticStore((s) => s.setUser)
   const clearSessionOnly = useDiagnosticStore((s) => s.clearSessionOnly)
-
-  // NEW: read stageAssessment so we can gate onboarding
   const stageAssessment = useDiagnosticStore((s) => s.stageAssessment)
 
   useEffect(() => {
     let mounted = true
 
-    async function bootstrap(sessionValue) {
+    async function bootstrap(sessionValue, shouldShowLoader = false) {
       if (!mounted) return
 
       if (!sessionValue?.user) {
         clearSessionOnly()
+
+        if (!mounted) return
+
         setSession(null)
         setBootstrapping(false)
+        hasFinishedInitialLoad.current = true
         return
       }
 
       try {
+        if (shouldShowLoader && !hasFinishedInitialLoad.current) {
+          setBootstrapping(true)
+        }
+
         setUser(sessionValue.user)
+
         await hydrateWorkspace(sessionValue.user.id)
 
         if (!mounted) return
+
         setSession(sessionValue)
       } catch (error) {
         console.error('Failed to bootstrap founder workspace:', error)
 
         if (!mounted) return
-        // Even if hydrateWorkspace fails, keep the user so they can at least log in
+
         setUser(sessionValue.user)
         setSession(sessionValue)
       } finally {
-        if (mounted) setBootstrapping(false)
+        if (mounted) {
+          setBootstrapping(false)
+          hasFinishedInitialLoad.current = true
+        }
       }
     }
 
     async function loadInitialSession() {
       try {
         const { data } = await supabase.auth.getSession()
-        await bootstrap(data?.session ?? null)
+        await bootstrap(data?.session ?? null, true)
       } catch (error) {
         console.error('Failed to restore session:', error)
+
         if (!mounted) return
+
         clearSessionOnly()
         setSession(null)
         setBootstrapping(false)
+        hasFinishedInitialLoad.current = true
       }
     }
 
     loadInitialSession()
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      bootstrap(nextSession)
-    })
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, nextSession) => {
+        if (!mounted) return
+
+        if (event === 'INITIAL_SESSION') {
+          return
+        }
+
+        if (event === 'TOKEN_REFRESHED') {
+          setSession(nextSession)
+          return
+        }
+
+        if (event === 'SIGNED_OUT') {
+          clearSessionOnly()
+          setSession(null)
+          return
+        }
+
+        bootstrap(nextSession, false)
+      }
+    )
 
     return () => {
       mounted = false
@@ -115,15 +155,13 @@ function Protected({ children }) {
   }
 
   if (!session) {
-    return <Navigate to="/auth" replace />
+    return <Navigate to="/auth?mode=login" replace />
   }
 
-  // NEW: if the user is authenticated but has not completed stage onboarding,
-  // send them to the stage onboarding route.
-  //
-  // We only gate here for routes under /app; StageOnboarding itself is inside AppLayout.
-  if (!stageAssessment) {
-    // Note: we use a relative path under /app since Protected wraps AppLayout for /app routes.
+  const isOnStageOnboardingRoute =
+    location.pathname === '/app/stage-onboarding'
+
+  if (!stageAssessment && !isOnStageOnboardingRoute) {
     return <Navigate to="/app/stage-onboarding" replace />
   }
 
@@ -145,18 +183,24 @@ export default function App() {
             </Protected>
           }
         >
-          {/* When stageAssessment exists, index goes to dashboard */}
-          <Route index element={<Navigate to="/app/dashboard" replace />} />
+          <Route
+            index
+            element={<Navigate to="/app/dashboard" replace />}
+          />
 
-          {/* Stage onboarding lives inside the app layout; Protected will redirect
-              here until stageAssessment is set by StageOnboarding */}
-          <Route path="stage-onboarding" element={<StageOnboarding />} />
+          <Route
+            path="stage-onboarding"
+            element={<StageOnboarding />}
+          />
 
           <Route path="assessment" element={<Assessment />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="founder-profile" element={<FounderProfile />} />
           <Route path="studio" element={<Studio />} />
-          <Route path="studio/prep/:docType" element={<GuidedDocumentPrep />} />
+          <Route
+            path="studio/prep/:docType"
+            element={<GuidedDocumentPrep />}
+          />
           <Route path="memory" element={<Memory />} />
           <Route path="radar" element={<Radar />} />
           <Route path="reports" element={<Reports />} />

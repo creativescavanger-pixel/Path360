@@ -1,5 +1,3 @@
-// src/stores/useDiagnosticStore.js
-
 import { create } from 'zustand'
 import {
   loadFounderWorkspace,
@@ -16,61 +14,152 @@ import {
 
 const DEFAULT_AGENT = 'venture_strategist'
 
-// Simple keys for local persistence (local app first)
-const LOCAL_STAGE_KEY = 'path360_stage_assessment'
-const LOCAL_STAGE_COMPLETED_KEY = 'path360_stage_completed'
+const STAGE_KEY_PREFIX = 'path360_stage_assessment:'
+const STAGE_COMPLETED_KEY_PREFIX = 'path360_stage_completed:'
+const PENDING_STAGE_KEY = 'path360_pending_stage_assessment'
 
-// Helpers
-function loadLocalStage() {
-  try {
-    const raw = window.localStorage?.getItem(LOCAL_STAGE_KEY)
-    const completedRaw = window.localStorage?.getItem(LOCAL_STAGE_COMPLETED_KEY)
-    const assessment = raw ? JSON.parse(raw) : null
-    const completed = completedRaw === 'true'
-    return { assessment, completed }
-  } catch {
-    return { assessment: null, completed: false }
-  }
-}
-
-function saveLocalStage(assessment, completed) {
-  try {
-    if (assessment) {
-      window.localStorage?.setItem(LOCAL_STAGE_KEY, JSON.stringify(assessment))
-      window.localStorage?.setItem(LOCAL_STAGE_COMPLETED_KEY, completed ? 'true' : 'false')
-    } else {
-      window.localStorage?.removeItem(LOCAL_STAGE_KEY)
-      window.localStorage?.removeItem(LOCAL_STAGE_COMPLETED_KEY)
-    }
-  } catch {
-    // Ignore localStorage errors in local app
-  }
-}
-
-function deriveStageAssessmentFromProfile(profile) {
-  const stageId = profile?.venturestage || profile?.venture_stage || null
-  if (!stageId) return null
+function getStageKeys(userId) {
+  const safeUserId = String(userId || '')
 
   return {
-    declaredStage: stageId,
-    diagnosedStage: stageId,
-    scoreRatio: 0,
-    statusByItem: {},
-    completedAt: null,
-    summary: null,
+    assessment: `${STAGE_KEY_PREFIX}${safeUserId}`,
+    completed: `${STAGE_COMPLETED_KEY_PREFIX}${safeUserId}`,
   }
 }
 
-// Bootstrap local stage on initial store creation
-let initialStage = { assessment: null, completed: false }
-if (typeof window !== 'undefined') {
-  initialStage = loadLocalStage()
+function emptyLocalStage() {
+  return {
+    assessment: null,
+    completed: false,
+  }
+}
+
+function isCompletedStageAssessment(assessment) {
+  return Boolean(
+    assessment &&
+      assessment.completedAt &&
+      assessment.declaredStage &&
+      assessment.diagnosedStage &&
+      assessment.statusByItem &&
+      Object.keys(assessment.statusByItem).length > 0
+  )
+}
+
+function loadLocalStage(userId) {
+  if (typeof window === 'undefined' || !userId) {
+    return emptyLocalStage()
+  }
+
+  try {
+    const keys = getStageKeys(userId)
+    const rawAssessment = window.localStorage?.getItem(keys.assessment)
+    const completedRaw = window.localStorage?.getItem(keys.completed)
+
+    const assessment = rawAssessment ? JSON.parse(rawAssessment) : null
+    const completed = completedRaw === 'true'
+
+    if (completed && isCompletedStageAssessment(assessment)) {
+      return {
+        assessment,
+        completed: true,
+      }
+    }
+
+    const pendingRaw = window.localStorage?.getItem(PENDING_STAGE_KEY)
+    const pendingAssessment = pendingRaw ? JSON.parse(pendingRaw) : null
+
+    if (isCompletedStageAssessment(pendingAssessment)) {
+      saveLocalStage(userId, pendingAssessment)
+
+      return {
+        assessment: pendingAssessment,
+        completed: true,
+      }
+    }
+
+    return emptyLocalStage()
+  } catch {
+    return emptyLocalStage()
+  }
+}
+
+function saveLocalStage(userId, assessment) {
+  if (typeof window === 'undefined') return
+
+  try {
+    const isComplete = isCompletedStageAssessment(assessment)
+
+    if (!userId) {
+      if (isComplete) {
+        window.localStorage?.setItem(
+          PENDING_STAGE_KEY,
+          JSON.stringify(assessment)
+        )
+      } else {
+        window.localStorage?.removeItem(PENDING_STAGE_KEY)
+      }
+
+      return
+    }
+
+    const keys = getStageKeys(userId)
+
+    if (isComplete) {
+      window.localStorage?.setItem(
+        keys.assessment,
+        JSON.stringify(assessment)
+      )
+      window.localStorage?.setItem(keys.completed, 'true')
+      window.localStorage?.removeItem(PENDING_STAGE_KEY)
+      return
+    }
+
+    window.localStorage?.removeItem(keys.assessment)
+    window.localStorage?.removeItem(keys.completed)
+    window.localStorage?.removeItem(PENDING_STAGE_KEY)
+  } catch {
+    // Local storage is a convenience layer only.
+  }
+}
+
+function normaliseAssessmentHistory(history) {
+  if (!Array.isArray(history)) return []
+
+  return history
+    .filter(Boolean)
+    .sort((a, b) => {
+      const versionA = Number(a?.versionnumber ?? 0)
+      const versionB = Number(b?.versionnumber ?? 0)
+
+      if (versionA !== versionB) {
+        return versionB - versionA
+      }
+
+      return new Date(b?.createdat || 0) - new Date(a?.createdat || 0)
+    })
+}
+
+function getAssessmentVersion(assessment) {
+  return Number(
+    assessment?.versionnumber ??
+      assessment?.version_number ??
+      0
+  )
 }
 
 const useDiagnosticStore = create((set, get) => ({
   user: null,
   founderProfile: null,
+
+  // Current, active completed assessment used throughout the workspace.
   assessmentResults: null,
+
+  // Every completed assessment remains available here, newest first.
+  assessmentHistory: [],
+
+  // A safe local working copy created before a founder starts a review.
+  progressReviewDraft: null,
+
   memories: [],
   documents: [],
   founderFiles: [],
@@ -80,46 +169,102 @@ const useDiagnosticStore = create((set, get) => ({
   documentIntakes: [],
   progressEvents: [],
 
-  // Stage-first onboarding state (loaded from localStorage if present)
-  stageAssessment: initialStage.assessment,
-  hasCompletedStageOnboarding: initialStage.completed,
+  stageAssessment: null,
+  hasCompletedStageOnboarding: false,
 
   setUser: (user) => set({ user }),
 
-  setFounderProfile: (profile) => set({ founderProfile: profile }),
-  setAssessmentResults: (results) => set({ assessmentResults: results }),
-  setMemories: (memories) => set({ memories: Array.isArray(memories) ? memories : [] }),
-  setDocuments: (documents) => set({ documents: Array.isArray(documents) ? documents : [] }),
-  setFounderFiles: (files) => set({ founderFiles: Array.isArray(files) ? files : [] }),
-  setConversations: (conversations) => set({ conversations: conversations || {} }),
-  setActiveAgent: (agent) => set({ activeAgent: agent || DEFAULT_AGENT }),
-  setQAPairs: (qaPairs) => set({ qaPairs: Array.isArray(qaPairs) ? qaPairs : [] }),
-  setDocumentIntakes: (intakes) => set({ documentIntakes: Array.isArray(intakes) ? intakes : [] }),
-  setProgressEvents: (events) => set({ progressEvents: Array.isArray(events) ? events : [] }),
+  setFounderProfile: (profile) =>
+    set({
+      founderProfile: profile,
+    }),
 
-  // Stage assessment setters (persist locally)
+  setAssessmentResults: (results) =>
+    set({
+      assessmentResults: results || null,
+      qaPairs: Array.isArray(results?.rawqa) ? results.rawqa : [],
+    }),
+
+  setAssessmentHistory: (history) =>
+    set({
+      assessmentHistory: normaliseAssessmentHistory(history),
+    }),
+
+  setProgressReviewDraft: (draft) =>
+    set({
+      progressReviewDraft: draft || null,
+    }),
+
+  setMemories: (memories) =>
+    set({
+      memories: Array.isArray(memories) ? memories : [],
+    }),
+
+  setDocuments: (documents) =>
+    set({
+      documents: Array.isArray(documents) ? documents : [],
+    }),
+
+  setFounderFiles: (files) =>
+    set({
+      founderFiles: Array.isArray(files) ? files : [],
+    }),
+
+  setConversations: (conversations) =>
+    set({
+      conversations: conversations || {},
+    }),
+
+  setActiveAgent: (agent) =>
+    set({
+      activeAgent: agent || DEFAULT_AGENT,
+    }),
+
+  setQAPairs: (qaPairs) =>
+    set({
+      qaPairs: Array.isArray(qaPairs) ? qaPairs : [],
+    }),
+
+  setDocumentIntakes: (intakes) =>
+    set({
+      documentIntakes: Array.isArray(intakes) ? intakes : [],
+    }),
+
+  setProgressEvents: (events) =>
+    set({
+      progressEvents: Array.isArray(events) ? events : [],
+    }),
+
   setStageAssessment: (assessment) => {
-    const next = {
-      ...assessment,
-    }
-    set(() => ({
-      stageAssessment: next,
-      hasCompletedStageOnboarding: !!next,
-    }))
-    saveLocalStage(next, !!next)
+    const userId = get().user?.id
+
+    const nextAssessment = isCompletedStageAssessment(assessment)
+      ? { ...assessment }
+      : null
+
+    set({
+      stageAssessment: nextAssessment,
+      hasCompletedStageOnboarding: Boolean(nextAssessment),
+    })
+
+    saveLocalStage(userId, nextAssessment)
   },
 
   clearStageAssessment: () => {
-    set(() => ({
+    const userId = get().user?.id
+
+    saveLocalStage(userId, null)
+
+    set({
       stageAssessment: null,
       hasCompletedStageOnboarding: false,
-    }))
-    saveLocalStage(null, false)
+    })
   },
 
   getConversation: (agentType) => {
     const key = agentType || get().activeAgent || DEFAULT_AGENT
     const conversations = get().conversations || {}
+
     return Array.isArray(conversations[key]) ? conversations[key] : []
   },
 
@@ -130,7 +275,9 @@ const useDiagnosticStore = create((set, get) => ({
       conversations: {
         ...(state.conversations || {}),
         [key]: [
-          ...(Array.isArray(state.conversations?.[key]) ? state.conversations[key] : []),
+          ...(Array.isArray(state.conversations?.[key])
+            ? state.conversations[key]
+            : []),
           message,
         ],
       },
@@ -150,13 +297,22 @@ const useDiagnosticStore = create((set, get) => ({
 
   updateFounderProfile: async (profilePatch) => {
     const user = get().user
-    if (!user?.id) throw new Error('No authenticated user found.')
+
+    if (!user?.id) {
+      throw new Error('No authenticated user found.')
+    }
 
     try {
-      const current = get().founderProfile || {}
-      const nextProfile = { ...current, ...profilePatch }
-      const saved = await saveFounderProfile(user.id, nextProfile)
-      set({ founderProfile: saved })
+      const currentProfile = get().founderProfile || {}
+
+      const saved = await saveFounderProfile(user.id, {
+        ...currentProfile,
+        ...profilePatch,
+      })
+
+      set({
+        founderProfile: saved,
+      })
 
       try {
         await addFounderProgressRecord(
@@ -168,95 +324,247 @@ const useDiagnosticStore = create((set, get) => ({
             ventureName: saved?.venturename || saved?.venture_name || null,
           }
         )
-      } catch (e) {
-        console.warn('Failed to record founder profile milestone', e)
+      } catch (error) {
+        console.warn('Failed to record founder profile milestone', error)
       }
 
       return saved
-    } catch (err) {
-      console.error('updateFounderProfile failed', err)
-      throw err
+    } catch (error) {
+      console.error('updateFounderProfile failed', error)
+      throw error
     }
   },
 
+  /*
+   * Creates the first baseline assessment if no assessment exists.
+   * If a completed assessment already exists, it safely saves the submitted
+   * work as a progress-review version instead of replacing past work.
+   */
   addAssessment: async (results) => {
     const user = get().user
-    if (!user?.id) throw new Error('No authenticated user found.')
+
+    if (!user?.id) {
+      throw new Error('No authenticated user found.')
+    }
 
     try {
-      const saved = await saveAssessment(user.id, results)
-      set({
+      const currentAssessment = get().assessmentResults
+      const history = normaliseAssessmentHistory(get().assessmentHistory)
+
+      const isBaseline = !currentAssessment?.id
+      const currentVersion = getAssessmentVersion(currentAssessment)
+      const historyVersion = history.reduce(
+        (highest, assessment) =>
+          Math.max(highest, getAssessmentVersion(assessment)),
+        0
+      )
+
+      const nextVersion = isBaseline
+        ? 1
+        : Math.max(currentVersion, historyVersion, 1) + 1
+
+      const payload = {
+        ...(results || {}),
+        id: undefined,
+        assessmentid: undefined,
+        assessmenttype: isBaseline ? 'baseline' : 'progress_review',
+        parentassessmentid: isBaseline ? null : currentAssessment.id,
+        versionnumber: nextVersion,
+        createdat: new Date().toISOString(),
+        completedat: new Date().toISOString(),
+      }
+
+      const saved = await saveAssessment(user.id, payload)
+
+      set((state) => ({
         assessmentResults: saved,
+        assessmentHistory: normaliseAssessmentHistory([
+          saved,
+          ...(Array.isArray(state.assessmentHistory)
+            ? state.assessmentHistory.filter(
+                (assessment) => assessment?.id !== saved?.id
+              )
+            : []),
+        ]),
         qaPairs: Array.isArray(saved?.rawqa) ? saved.rawqa : [],
-      })
+        progressReviewDraft: null,
+      }))
 
       try {
         await addFounderProgressRecord(
           user.id,
-          'assessment_completed',
-          'Assessment completed',
-          'Your founder baseline has been updated with a new assessment.',
+          isBaseline
+            ? 'assessment_completed'
+            : 'progress_review_completed',
+          isBaseline
+            ? 'Baseline assessment completed'
+            : 'Progress review completed',
+          isBaseline
+            ? 'Your baseline assessment has been saved.'
+            : `Your progress review was saved as version ${nextVersion}. Your previous assessment remains available in history.`,
           {
+            assessmentid: saved?.id ?? null,
+            assessmenttype: saved?.assessmenttype ?? null,
+            versionnumber: saved?.versionnumber ?? nextVersion,
             founderscore: saved?.founderscore ?? null,
             investorreadiness: saved?.investorreadiness ?? null,
           }
         )
-      } catch (e) {
-        console.warn('Failed to record assessment milestone', e)
+      } catch (error) {
+        console.warn('Failed to record assessment milestone', error)
       }
 
       return saved
-    } catch (err) {
-      console.error('addAssessment failed', err)
-      throw err
+    } catch (error) {
+      console.error('addAssessment failed', error)
+      throw error
     }
+  },
+
+  /*
+   * Use this when the founder selects “Review progress”.
+   * It does not update Supabase or modify the existing baseline.
+   */
+  startProgressReview: () => {
+    const currentAssessment = get().assessmentResults
+    const history = normaliseAssessmentHistory(get().assessmentHistory)
+
+    if (!currentAssessment?.id) {
+      throw new Error(
+        'Complete your baseline assessment before starting a progress review.'
+      )
+    }
+
+    const highestVersion = history.reduce(
+      (highest, assessment) =>
+        Math.max(highest, getAssessmentVersion(assessment)),
+      getAssessmentVersion(currentAssessment)
+    )
+
+    const now = new Date().toISOString()
+
+    const draft = {
+      ...currentAssessment,
+      id: null,
+      assessmentid: null,
+      assessmenttype: 'progress_review',
+      parentassessmentid: currentAssessment.id,
+      versionnumber: highestVersion + 1,
+      createdat: now,
+      completedat: null,
+      rawqa: Array.isArray(currentAssessment.rawqa)
+        ? currentAssessment.rawqa.map((pair) => ({ ...pair }))
+        : [],
+    }
+
+    set({
+      progressReviewDraft: draft,
+    })
+
+    return draft
+  },
+
+  cancelProgressReview: () =>
+    set({
+      progressReviewDraft: null,
+    }),
+
+  setActiveAssessmentFromHistory: (assessmentId) => {
+    const history = normaliseAssessmentHistory(get().assessmentHistory)
+
+    const selectedAssessment = history.find(
+      (assessment) => assessment?.id === assessmentId
+    )
+
+    if (!selectedAssessment) {
+      throw new Error('Assessment version not found.')
+    }
+
+    set({
+      assessmentResults: selectedAssessment,
+      qaPairs: Array.isArray(selectedAssessment.rawqa)
+        ? selectedAssessment.rawqa
+        : [],
+    })
+
+    return selectedAssessment
   },
 
   addMemory: async (memoryType, content, importanceScore = 3) => {
     const user = get().user
-    if (!user?.id) throw new Error('No authenticated user found.')
+
+    if (!user?.id) {
+      throw new Error('No authenticated user found.')
+    }
 
     try {
-      const saved = await addMemoryRecord(user.id, memoryType, content, importanceScore)
+      const saved = await addMemoryRecord(
+        user.id,
+        memoryType,
+        content,
+        importanceScore
+      )
+
       set((state) => ({
-        memories: [saved, ...(Array.isArray(state.memories) ? state.memories : [])],
+        memories: [
+          saved,
+          ...(Array.isArray(state.memories) ? state.memories : []),
+        ],
       }))
+
       return saved
-    } catch (err) {
-      console.error('addMemory failed', err)
-      throw err
+    } catch (error) {
+      console.error('addMemory failed', error)
+      throw error
     }
   },
 
   addDocument: (document) =>
     set((state) => ({
-      documents: [document, ...(Array.isArray(state.documents) ? state.documents : [])],
+      documents: [
+        document,
+        ...(Array.isArray(state.documents) ? state.documents : []),
+      ],
     })),
 
   createAndStoreDocument: async (docType, title, content) => {
     const user = get().user
-    if (!user?.id) throw new Error('No authenticated user found.')
+
+    if (!user?.id) {
+      throw new Error('No authenticated user found.')
+    }
 
     try {
       const saved = await saveDocument(user.id, docType, title, content)
+
       set((state) => ({
-        documents: [saved, ...(Array.isArray(state.documents) ? state.documents : [])],
+        documents: [
+          saved,
+          ...(Array.isArray(state.documents) ? state.documents : []),
+        ],
       }))
+
       return saved
-    } catch (err) {
-      console.error('createAndStoreDocument failed', err)
-      throw err
+    } catch (error) {
+      console.error('createAndStoreDocument failed', error)
+      throw error
     }
   },
 
   addFounderFile: (file) =>
     set((state) => ({
-      founderFiles: [file, ...(Array.isArray(state.founderFiles) ? state.founderFiles : [])],
+      founderFiles: [
+        file,
+        ...(Array.isArray(state.founderFiles) ? state.founderFiles : []),
+      ],
     })),
 
   saveConversationForAgent: async (agentType, messages) => {
     const user = get().user
-    if (!user?.id) throw new Error('No authenticated user found.')
+
+    if (!user?.id) {
+      throw new Error('No authenticated user found.')
+    }
 
     const key = agentType || get().activeAgent || DEFAULT_AGENT
 
@@ -275,35 +583,61 @@ const useDiagnosticStore = create((set, get) => ({
       }))
 
       return saved
-    } catch (err) {
-      console.error('saveConversationForAgent failed', err)
-      throw err
+    } catch (error) {
+      console.error('saveConversationForAgent failed', error)
+      throw error
     }
   },
 
   loadDocumentIntakes: async (docType = null) => {
     const user = get().user
-    if (!user?.id) throw new Error('No authenticated user found.')
+
+    if (!user?.id) {
+      throw new Error('No authenticated user found.')
+    }
 
     try {
       const intakes = await getDocumentIntakes(user.id, docType)
-      set({ documentIntakes: Array.isArray(intakes) ? intakes : [] })
+
+      set({
+        documentIntakes: Array.isArray(intakes) ? intakes : [],
+      })
+
       return intakes
-    } catch (err) {
-      console.error('loadDocumentIntakes failed', err)
-      throw err
+    } catch (error) {
+      console.error('loadDocumentIntakes failed', error)
+      throw error
     }
   },
 
-  createDocumentIntake: async (docType, title, answers, linkedAssessmentId = null) => {
+  createDocumentIntake: async (
+    docType,
+    title,
+    answers,
+    linkedAssessmentId = null
+  ) => {
     const user = get().user
-    if (!user?.id) throw new Error('No authenticated user found.')
+
+    if (!user?.id) {
+      throw new Error('No authenticated user found.')
+    }
 
     try {
-      const saved = await saveDocumentIntake(user.id, docType, title, answers, linkedAssessmentId)
+      const saved = await saveDocumentIntake(
+        user.id,
+        docType,
+        title,
+        answers,
+        linkedAssessmentId
+      )
 
       set((state) => ({
-        documentIntakes: [saved, ...(Array.isArray(state.documentIntakes) ? state.documentIntakes : [])],
+        documentIntakes: [
+          saved,
+          ...(Array.isArray(state.documentIntakes)
+            ? state.documentIntakes
+            : []),
+        ],
       }))
 
       try {
@@ -319,36 +653,56 @@ const useDiagnosticStore = create((set, get) => ({
         )
 
         set((state) => ({
-          progressEvents: [event, ...(Array.isArray(state.progressEvents) ? state.progressEvents : [])],
+          progressEvents: [
+            event,
+            ...(Array.isArray(state.progressEvents)
+              ? state.progressEvents
+              : []),
+          ],
         }))
-      } catch (e) {
-        console.warn('Failed to record document prep milestone', e)
+      } catch (error) {
+        console.warn('Failed to record document prep milestone', error)
       }
 
       return saved
-    } catch (err) {
-      console.error('createDocumentIntake failed', err)
-      throw err
+    } catch (error) {
+      console.error('createDocumentIntake failed', error)
+      throw error
     }
   },
 
   loadProgress: async () => {
     const user = get().user
-    if (!user?.id) throw new Error('No authenticated user found.')
+
+    if (!user?.id) {
+      throw new Error('No authenticated user found.')
+    }
 
     try {
       const events = await getFounderProgress(user.id, 20)
-      set({ progressEvents: Array.isArray(events) ? events : [] })
+
+      set({
+        progressEvents: Array.isArray(events) ? events : [],
+      })
+
       return events
-    } catch (err) {
-      console.error('loadProgress failed', err)
-      throw err
+    } catch (error) {
+      console.error('loadProgress failed', error)
+      throw error
     }
   },
 
-  addFounderProgress: async (eventType, title, description = '', metadata = {}) => {
+  addFounderProgress: async (
+    eventType,
+    title,
+    description = '',
+    metadata = {}
+  ) => {
     const user = get().user
-    if (!user?.id) throw new Error('No authenticated user found.')
+
+    if (!user?.id) {
+      throw new Error('No authenticated user found.')
+    }
 
     try {
       const saved = await addFounderProgressRecord(
@@ -358,13 +712,20 @@ const useDiagnosticStore = create((set, get) => ({
         description,
         metadata
       )
+
       set((state) => ({
-        progressEvents: [saved, ...(Array.isArray(state.progressEvents) ? state.progressEvents : [])],
+        progressEvents: [
+          saved,
+          ...(Array.isArray(state.progressEvents)
+            ? state.progressEvents
+            : []),
+        ],
       }))
+
       return saved
-    } catch (err) {
-      console.error('addFounderProgress failed', err)
-      throw err
+    } catch (error) {
+      console.error('addFounderProgress failed', error)
+      throw error
     }
   },
 
@@ -373,53 +734,105 @@ const useDiagnosticStore = create((set, get) => ({
     const profile = state.founderProfile
     const assessment = state.assessmentResults
     const memories = Array.isArray(state.memories) ? state.memories : []
-    const progress = Array.isArray(state.progressEvents) ? state.progressEvents : []
-    const documentIntakes = Array.isArray(state.documentIntakes) ? state.documentIntakes : []
+    const progress = Array.isArray(state.progressEvents)
+      ? state.progressEvents
+      : []
+    const documentIntakes = Array.isArray(state.documentIntakes)
+      ? state.documentIntakes
+      : []
 
     return {
       profile: profile
         ? {
             venture_name:
-              profile.venturename || profile.venture_name || profile.businessname || profile.companyname || null,
-            founder_name: profile.foundername || profile.fullname || profile.name || null,
+              profile.venturename ||
+              profile.venture_name ||
+              profile.businessname ||
+              profile.companyname ||
+              null,
+            founder_name:
+              profile.foundername ||
+              profile.fullname ||
+              profile.name ||
+              null,
             industry: profile.industry || null,
-            venture_stage: profile.venturestage || profile.venture_stage || null,
-            business_model: profile.businessmodel || profile.business_model || null,
+            venture_stage:
+              profile.venturestage ||
+              profile.venture_stage ||
+              null,
+            business_model:
+              profile.businessmodel ||
+              profile.business_model ||
+              null,
             geography: profile.geography || null,
-            funding_goal: profile.fundinggoal || profile.funding_goal || null,
+            funding_goal:
+              profile.fundinggoal ||
+              profile.funding_goal ||
+              null,
             website: profile.website || null,
             email: profile.email || null,
             role: profile.role || null,
             linkedin: profile.linkedin || null,
-            venture_summary: profile.venturesummary || profile.venture_summary || null,
+            venture_summary:
+              profile.venturesummary ||
+              profile.venture_summary ||
+              null,
           }
         : null,
+
       assessment: assessment
         ? {
-            founder_score: assessment.founderscore ?? assessment.founder_score ?? null,
-            investor_readiness: assessment.investorreadiness ?? assessment.investor_readiness ?? null,
-            financial_maturity: assessment.financialmaturity ?? assessment.financial_maturity ?? null,
-            venture_stage_result: assessment.venturestageresult ?? assessment.venturestage ?? null,
-            strategic_priorities: assessment.strategicpriorities ?? assessment.strategic_priorities ?? [],
-            vc_verdict: assessment.vcverdict ?? assessment.vc_verdict ?? null,
+            id: assessment.id ?? null,
+            assessment_type: assessment.assessmenttype ?? 'baseline',
+            version_number: assessment.versionnumber ?? 1,
+            founder_score:
+              assessment.founderscore ??
+              assessment.founder_score ??
+              null,
+            investor_readiness:
+              assessment.investorreadiness ??
+              assessment.investor_readiness ??
+              null,
+            financial_maturity:
+              assessment.financialmaturity ??
+              assessment.financial_maturity ??
+              null,
+            venture_stage_result:
+              assessment.venturestageresult ??
+              assessment.venturestage ??
+              null,
+            strategic_priorities:
+              assessment.strategicpriorities ??
+              assessment.strategic_priorities ??
+              [],
+            vc_verdict:
+              assessment.vcverdict ??
+              assessment.vc_verdict ??
+              null,
             rawqa: assessment.rawqa ?? [],
           }
         : null,
-      memories: memories.map((m) => ({
-        memory_type: m.memorytype ?? m.memory_type ?? null,
-        content: m.content ?? '',
+
+      memories: memories.map((memory) => ({
+        memory_type:
+          memory.memorytype ??
+          memory.memory_type ??
+          null,
+        content: memory.content ?? '',
       })),
-      progress: progress.map((e) => ({
-        eventtype: e.eventtype,
-        title: e.title,
-        description: e.description,
-        createdat: e.createdat,
+
+      progress: progress.map((event) => ({
+        eventtype: event.eventtype,
+        title: event.title,
+        description: event.description,
+        createdat: event.createdat,
       })),
-      document_intakes: documentIntakes.map((d) => ({
-        doctype: d.doctype,
-        title: d.title,
-        answers: d.answers,
-        createdat: d.createdat,
+
+      document_intakes: documentIntakes.map((intake) => ({
+        doctype: intake.doctype,
+        title: intake.title,
+        answers: intake.answers,
+        createdat: intake.createdat,
       })),
     }
   },
@@ -427,52 +840,64 @@ const useDiagnosticStore = create((set, get) => ({
   isGrowthOrAbove: () => {
     const profile = get().founderProfile
     const tier = profile?.plantier || profile?.plan || 'starter'
-    return ['growth', 'pro', 'scale', 'enterprise'].includes(String(tier).toLowerCase())
+
+    return ['growth', 'pro', 'scale', 'enterprise'].includes(
+      String(tier).toLowerCase()
+    )
   },
 
   hydrateWorkspace: async (userId) => {
     try {
       const workspace = await loadFounderWorkspace(userId)
-
-      // Load any locally persisted stage onboarding state
-      const localStage =
-        typeof window !== 'undefined' ? loadLocalStage() : { assessment: null, completed: false }
-
-      // Backend may have a stageAssessment; profile may have venturestage.
-      // We can use these as fallbacks for stageAssessment, but we do NOT
-      // consider them proof that onboarding has been completed.
-      const profileStageAssessment = deriveStageAssessmentFromProfile(workspace?.founderProfile)
-      const workspaceStageAssessment = workspace?.stageAssessment ?? profileStageAssessment
-
-      const stageAssessment = localStage.assessment ?? workspaceStageAssessment ?? null
-      const hasCompletedStageOnboarding = localStage.completed || !!localStage.assessment
+      const localStage = loadLocalStage(userId)
 
       set({
         founderProfile: workspace?.founderProfile ?? null,
         assessmentResults: workspace?.assessmentResults ?? null,
-        memories: Array.isArray(workspace?.memories) ? workspace.memories : [],
-        documents: Array.isArray(workspace?.documents) ? workspace.documents : [],
-        founderFiles: Array.isArray(workspace?.founderFiles) ? workspace.founderFiles : [],
+        assessmentHistory: normaliseAssessmentHistory(
+          workspace?.assessmentHistory
+        ),
+        progressReviewDraft: null,
+        memories: Array.isArray(workspace?.memories)
+          ? workspace.memories
+          : [],
+        documents: Array.isArray(workspace?.documents)
+          ? workspace.documents
+          : [],
+        founderFiles: Array.isArray(workspace?.founderFiles)
+          ? workspace.founderFiles
+          : [],
         conversations: workspace?.conversations || {},
-        qaPairs: Array.isArray(workspace?.assessmentResults?.rawqa) ? workspace.assessmentResults.rawqa : [],
-        documentIntakes: Array.isArray(workspace?.documentIntakes) ? workspace.documentIntakes : [],
-        progressEvents: Array.isArray(workspace?.progressEvents) ? workspace.progressEvents : [],
-
-        stageAssessment,
-        hasCompletedStageOnboarding,
+        qaPairs: Array.isArray(workspace?.assessmentResults?.rawqa)
+          ? workspace.assessmentResults.rawqa
+          : [],
+        documentIntakes: Array.isArray(workspace?.documentIntakes)
+          ? workspace.documentIntakes
+          : [],
+        progressEvents: Array.isArray(workspace?.progressEvents)
+          ? workspace.progressEvents
+          : [],
+        stageAssessment: localStage.assessment,
+        hasCompletedStageOnboarding: localStage.completed,
       })
+
       return workspace
-    } catch (err) {
-      console.error('hydrateWorkspace failed', err)
-      throw err
+    } catch (error) {
+      console.error('hydrateWorkspace failed', error)
+      throw error
     }
   },
 
   clearWorkspace: () => {
-    saveLocalStage(null, false)
+    const userId = get().user?.id
+
+    saveLocalStage(userId, null)
+
     set({
       founderProfile: null,
       assessmentResults: null,
+      assessmentHistory: [],
+      progressReviewDraft: null,
       memories: [],
       documents: [],
       founderFiles: [],
@@ -487,11 +912,12 @@ const useDiagnosticStore = create((set, get) => ({
   },
 
   clearSessionOnly: () => {
-    saveLocalStage(null, false)
     set({
       user: null,
       founderProfile: null,
       assessmentResults: null,
+      assessmentHistory: [],
+      progressReviewDraft: null,
       memories: [],
       documents: [],
       founderFiles: [],

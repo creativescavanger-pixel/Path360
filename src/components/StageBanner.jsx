@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
+import { useState } from 'react'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 
 const STAGE_META = {
@@ -46,6 +47,17 @@ const STAGE_META = {
       'Turn interest into initial revenue.',
     ],
   },
+  traction: {
+    label: 'Traction',
+    color: '#7D4C8E',
+    bg: '#F5F0F9',
+    border: '#E2D4EC',
+    nextSteps: [
+      'Strengthen retention and repeat engagement.',
+      'Clarify your best-fit customer.',
+      'Turn traction into repeatable growth.',
+    ],
+  },
   early_revenue: {
     label: 'Early Revenue',
     color: '#7D4C8E',
@@ -84,212 +96,357 @@ const STAGE_META = {
 function defaultSummaryForStage(stageId) {
   switch (stageId) {
     case 'idea':
-      return 'You are still shaping the problem, customer, and early opportunity.'
+      return 'You are shaping the problem, customer, and early opportunity.'
     case 'discovery':
-      return 'You have early customer evidence, but the opportunity still needs deeper validation.'
+      return 'You have early customer evidence and are refining the opportunity.'
     case 'validation':
-      return 'You have a real problem and an emerging solution, but market proof is still forming.'
+      return 'You have a real problem and emerging solution, but market proof is still forming.'
     case 'mvp':
       return 'You have something in market and now need stronger usage and repeatable proof.'
+    case 'traction':
+      return 'You have early demand signals and now need stronger evidence of repeatability.'
     case 'early_revenue':
       return 'Customers are beginning to pay, but repeatability and retention still need to strengthen.'
     case 'pmf':
-      return 'You are showing strong signs of pull and should now build more disciplined growth.'
+      return 'You are showing signs of pull and should now build more disciplined growth.'
     case 'growth':
-      return 'You have moved beyond early validation and should now focus on scale and execution.'
+      return 'You have moved beyond early validation and should focus on scale and execution.'
     default:
-      return 'Path360 is using your onboarding answers to guide your next logical moves.'
+      return 'PATH360 is using your stage baseline to guide your next practical moves.'
+  }
+}
+
+function formatDate(dateValue) {
+  if (!dateValue) return null
+
+  try {
+    return new Intl.DateTimeFormat('en', {
+      day: 'numeric',
+      month: 'short',
+    }).format(new Date(dateValue))
+  } catch {
+    return null
   }
 }
 
 export default function StageBanner() {
   const location = useLocation()
+  const [isExpanded, setIsExpanded] = useState(false)
+
   const stageAssessment = useDiagnosticStore((s) => s.stageAssessment)
   const assessmentResults = useDiagnosticStore((s) => s.assessmentResults)
 
-  if (!stageAssessment || location.pathname === '/app/stage-onboarding') {
+  if (
+    !stageAssessment ||
+    location.pathname === '/app/stage-onboarding'
+  ) {
     return null
   }
 
-  const stageId = stageAssessment?.diagnosedStage || 'validation'
+  const stageId =
+    stageAssessment?.diagnosedStage ||
+    stageAssessment?.declaredStage ||
+    'validation'
+
   const meta = STAGE_META[stageId] || STAGE_META.validation
+
   const summaryText =
     stageAssessment?.summary?.headline ||
     defaultSummaryForStage(stageId)
 
   const reasonText =
     stageAssessment?.summary?.reasons?.[0] ||
-    'This stage is based on your onboarding checklist answers and current founder signals.'
+    'Based on your stage baseline and the evidence you recorded.'
 
   const nextSteps =
-    Array.isArray(stageAssessment?.summary?.gaps) && stageAssessment.summary.gaps.length > 0
+    Array.isArray(stageAssessment?.summary?.gaps) &&
+    stageAssessment.summary.gaps.length > 0
       ? stageAssessment.summary.gaps.slice(0, 3)
       : meta.nextSteps
 
-  const primaryCta =
-    assessmentResults
-      ? { to: '/app/studio', label: 'Open Studio' }
-      : { to: '/app/assessment', label: 'Continue assessment' }
+  const primaryCta = assessmentResults
+    ? {
+        to: '/app/studio',
+        label: 'Create from priorities',
+      }
+    : {
+        to: '/app/assessment',
+        label: 'Complete assessment',
+      }
+
+  const updatedDate = formatDate(stageAssessment?.completedAt)
 
   return (
-    <div
+    <section
+      aria-label="Venture Pulse"
       style={{
-        marginBottom: 18,
-        background: meta.bg,
+        marginBottom: 14,
         border: `1px solid ${meta.border}`,
         borderRadius: 16,
-        padding: 16,
-        boxShadow: '0 6px 16px rgba(22,24,27,0.04)',
+        background:
+          'linear-gradient(100deg, #FFFFFF 0%, #FCFBFF 55%, #F5F0FF 100%)',
+        boxShadow: '0 6px 16px rgba(22,24,27,0.035)',
+        overflow: 'hidden',
       }}
     >
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1.2fr) minmax(280px, 0.9fr)',
-          gap: 16,
-          alignItems: 'start',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 14,
+          padding: '12px 14px',
+          flexWrap: 'wrap',
         }}
       >
-        <div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 11,
+            minWidth: 0,
+            flex: '1 1 420px',
+          }}
+        >
           <div
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              marginBottom: 8,
-              flexWrap: 'wrap',
+              width: 30,
+              height: 30,
+              display: 'grid',
+              placeItems: 'center',
+              flexShrink: 0,
+              borderRadius: 10,
+              background: '#EEE8FF',
+              border: '1px solid #DDD1FF',
+              color: '#7158DC',
+              fontSize: 15,
+              fontWeight: 900,
             }}
           >
-            <span
+            ✦
+          </div>
+
+          <div style={{ minWidth: 0 }}>
+            <div
               style={{
-                display: 'inline-flex',
+                display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                padding: '5px 10px',
-                borderRadius: 999,
-                background: '#FFFFFF',
-                border: `1px solid ${meta.border}`,
-                color: meta.color,
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
+                gap: 8,
+                flexWrap: 'wrap',
+                marginBottom: 2,
               }}
             >
-              Current stage
-            </span>
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                  color: '#7158DC',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.11em',
+                }}
+              >
+                Venture Pulse
+              </span>
 
-            <span
+              <span
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: 999,
+                  background: meta.bg,
+                  border: `1px solid ${meta.border}`,
+                  color: meta.color,
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                }}
+              >
+                {meta.label}
+              </span>
+
+              {updatedDate ? (
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    color: '#8B829B',
+                  }}
+                >
+                  Updated {updatedDate}
+                </span>
+              ) : null}
+            </div>
+
+            <div
               style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                color: '#343047',
                 fontSize: 13,
                 fontWeight: 700,
-                color: meta.color,
               }}
             >
-              {meta.label}
-            </span>
-          </div>
-
-          <div
-            style={{
-              fontSize: 15,
-              fontWeight: 700,
-              color: '#1C1C1A',
-              marginBottom: 6,
-              lineHeight: 1.35,
-            }}
-          >
-            {summaryText}
-          </div>
-
-          <div
-            style={{
-              fontSize: 12.5,
-              color: '#5F675F',
-              lineHeight: 1.7,
-              maxWidth: 720,
-            }}
-          >
-            {reasonText}
+              Current focus: {summaryText}
+            </div>
           </div>
         </div>
 
         <div
           style={{
-            background: '#FFFFFF',
-            border: `1px solid ${meta.border}`,
-            borderRadius: 12,
-            padding: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
           }}
         >
-          <div
+          <Link
+            to={primaryCta.to}
             style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 34,
+              padding: '0 11px',
+              borderRadius: 9,
+              background: '#7158DC',
+              color: '#FFFFFF',
+              textDecoration: 'none',
               fontSize: 11.5,
               fontWeight: 800,
-              color: '#1C1C1A',
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              marginBottom: 8,
+              boxShadow: '0 7px 14px rgba(113,88,220,0.18)',
             }}
           >
-            Next logical steps
-          </div>
+            {primaryCta.label}
+          </Link>
 
-          <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
-            {nextSteps.slice(0, 3).map((step, idx) => (
-              <div
-                key={idx}
-                style={{
-                  fontSize: 12.5,
-                  color: '#6B6965',
-                  lineHeight: 1.6,
-                }}
-              >
-                • {step}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Link
-              to={primaryCta.to}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '9px 12px',
-                borderRadius: 10,
-                background: meta.color,
-                color: '#FFFFFF',
-                textDecoration: 'none',
-                fontSize: 12.5,
-                fontWeight: 700,
-              }}
-            >
-              {primaryCta.label}
-            </Link>
-
-            <Link
-              to="/app/founder-profile"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '9px 12px',
-                borderRadius: 10,
-                background: '#F7F5F0',
-                border: '1px solid #E2DED6',
-                color: '#1C1C1A',
-                textDecoration: 'none',
-                fontSize: 12.5,
-                fontWeight: 700,
-              }}
-            >
-              Review profile
-            </Link>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsExpanded((current) => !current)}
+            aria-expanded={isExpanded}
+            style={{
+              minHeight: 34,
+              padding: '0 11px',
+              borderRadius: 9,
+              border: '1px solid #DED8EF',
+              background: '#FFFFFF',
+              color: '#574F6E',
+              fontSize: 11.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            {isExpanded ? 'Hide details' : 'View next move'}
+          </button>
         </div>
       </div>
-    </div>
+
+      {isExpanded ? (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(260px, 0.8fr)',
+            gap: 16,
+            padding: '14px',
+            borderTop: '1px solid #E7E1F4',
+            background: 'rgba(255,255,255,0.72)',
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 800,
+                color: '#7158DC',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                marginBottom: 6,
+              }}
+            >
+              Why this matters now
+            </div>
+
+            <div
+              style={{
+                maxWidth: 700,
+                color: '#625B70',
+                fontSize: 12.5,
+                lineHeight: 1.65,
+              }}
+            >
+              {reasonText}
+            </div>
+
+            <Link
+              to="/app/stage-onboarding"
+              style={{
+                display: 'inline-flex',
+                marginTop: 12,
+                color: '#7158DC',
+                fontSize: 12,
+                fontWeight: 800,
+                textDecoration: 'none',
+              }}
+            >
+              Re-baseline my stage →
+            </Link>
+          </div>
+
+          <div
+            style={{
+              padding: 12,
+              border: '1px solid #E2D8FF',
+              borderRadius: 12,
+              background: '#FAF8FF',
+            }}
+          >
+            <div
+              style={{
+                color: '#40385A',
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: '0.07em',
+                textTransform: 'uppercase',
+                marginBottom: 8,
+              }}
+            >
+              Your next logical moves
+            </div>
+
+            <div style={{ display: 'grid', gap: 7 }}>
+              {nextSteps.slice(0, 3).map((step, index) => (
+                <div
+                  key={`${step}-${index}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 8,
+                    color: '#625B70',
+                    fontSize: 12,
+                    lineHeight: 1.55,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 18,
+                      height: 18,
+                      display: 'grid',
+                      placeItems: 'center',
+                      flexShrink: 0,
+                      borderRadius: 999,
+                      background: '#E9E1FF',
+                      color: '#7158DC',
+                      fontSize: 10,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {index + 1}
+                  </span>
+
+                  <span>{step}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
   )
 }
