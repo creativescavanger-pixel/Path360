@@ -1,9 +1,43 @@
 import { useEffect, useMemo, useState } from 'react'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
-import { saveFounderProfile } from '../lib/supabaseClient.js'
+import {
+  CAPITAL_TARGET_GEOGRAPHIES,
+  OPERATING_GEOGRAPHIES,
+  getCorridorContext,
+  getReadableCheckLabel,
+} from '../lib/globalCorridors.js'
+
+function normaliseLegacyGeography(value) {
+  const raw = String(value || '').trim().toLowerCase()
+
+  if (!raw) return ''
+  if (/africa|african/.test(raw)) return 'africa'
+  if (/europe|european|\beu\b/.test(raw)) return 'europe'
+  if (/united states|\bu\.?s\.?a?\b|america|american/.test(raw)) {
+    return 'united_states'
+  }
+  if (/global|international|multiple regions|multi-region/.test(raw)) {
+    return 'global'
+  }
+  if (/not raising|not fundraising|bootstrapp/.test(raw)) {
+    return 'not_raising_yet'
+  }
+
+  return ''
+}
 
 function mapStoreProfile(profile) {
   const safeProfile = profile || {}
+
+  const operatingGeography =
+    safeProfile.operating_geography ||
+    safeProfile.operatingGeography ||
+    normaliseLegacyGeography(safeProfile.geography)
+
+  const capitalTargetGeography =
+    safeProfile.capital_target_geography ||
+    safeProfile.capitalTargetGeography ||
+    normaliseLegacyGeography(safeProfile.target_investor_region)
 
   return {
     foundername:
@@ -25,6 +59,8 @@ function mapStoreProfile(profile) {
       '',
     industry: safeProfile.industry || '',
     geography: safeProfile.geography || '',
+    operating_geography: operatingGeography || '',
+    capital_target_geography: capitalTargetGeography || '',
     venturestage:
       safeProfile.venturestage ||
       safeProfile.venture_stage ||
@@ -65,7 +101,7 @@ function ProfileField({
     boxSizing: 'border-box',
     border: '1px solid #E2DED6',
     borderRadius: 11,
-    padding: textarea ? '11px 12px' : '11px 12px',
+    padding: '11px 12px',
     fontSize: 13,
     lineHeight: 1.5,
     background: '#F9F7F2',
@@ -86,24 +122,12 @@ function ProfileField({
           marginBottom: 6,
         }}
       >
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 700,
-            color: '#54514B',
-          }}
-        >
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#54514B' }}>
           {label}
         </span>
 
         {helpText ? (
-          <span
-            style={{
-              fontSize: 10.5,
-              color: '#938D84',
-              textAlign: 'right',
-            }}
-          >
+          <span style={{ fontSize: 10.5, color: '#938D84', textAlign: 'right' }}>
             {helpText}
           </span>
         ) : null}
@@ -130,6 +154,60 @@ function ProfileField({
           style={inputStyle}
         />
       )}
+    </label>
+  )
+}
+
+function SelectField({ id, label, value, onChange, options, placeholder, helpText }) {
+  return (
+    <label htmlFor={id} style={{ display: 'block' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 10,
+          marginBottom: 6,
+        }}
+      >
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#54514B' }}>
+          {label}
+        </span>
+
+        {helpText ? (
+          <span style={{ fontSize: 10.5, color: '#938D84', textAlign: 'right' }}>
+            {helpText}
+          </span>
+        ) : null}
+      </div>
+
+      <select
+        id={id}
+        name={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        style={{
+          width: '100%',
+          boxSizing: 'border-box',
+          border: '1px solid #E2DED6',
+          borderRadius: 11,
+          padding: '11px 12px',
+          fontSize: 13,
+          lineHeight: 1.5,
+          background: '#F9F7F2',
+          color: '#1C1C1A',
+          outline: 'none',
+          fontFamily: 'inherit',
+          cursor: 'pointer',
+        }}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </label>
   )
 }
@@ -188,11 +266,12 @@ function SectionCard({ eyebrow, title, description, children, accent = '#1D6B4F'
 }
 
 export default function FounderProfile() {
-  const user = useDiagnosticStore((s) => s.user)
   const founderProfile = useDiagnosticStore((s) => s.founderProfile)
-  const setFounderProfile = useDiagnosticStore((s) => s.setFounderProfile)
+  const updateFounderProfile = useDiagnosticStore((s) => s.updateFounderProfile)
   const stageAssessment = useDiagnosticStore((s) => s.stageAssessment)
   const assessmentResults = useDiagnosticStore((s) => s.assessmentResults)
+  const investorReadyPercent = useDiagnosticStore((s) => s.investorReadyPercent)
+  const storedCorridor = useDiagnosticStore((s) => s.corridor)
 
   const [form, setForm] = useState(() => mapStoreProfile(founderProfile))
   const [saving, setSaving] = useState(false)
@@ -208,7 +287,19 @@ export default function FounderProfile() {
       ...previous,
       [key]: value,
     }))
+    setMessage('')
   }
+
+  const corridorPreview = useMemo(
+    () =>
+      getCorridorContext(
+        form.operating_geography,
+        form.capital_target_geography
+      ),
+    [form.operating_geography, form.capital_target_geography]
+  )
+
+  const corridor = corridorPreview || storedCorridor
 
   const profileFields = useMemo(
     () => [
@@ -219,6 +310,8 @@ export default function FounderProfile() {
       form.venturename,
       form.industry,
       form.geography,
+      form.operating_geography,
+      form.capital_target_geography,
       form.businessmodel,
       form.summary,
     ],
@@ -239,6 +332,7 @@ export default function FounderProfile() {
     if (!form.venturename.trim()) fields.push('venture name')
     if (!form.industry.trim()) fields.push('industry')
     if (!form.businessmodel.trim()) fields.push('business model')
+    if (!form.operating_geography) fields.push('operating geography')
     if (!form.summary.trim()) fields.push('venture summary')
 
     return fields
@@ -251,22 +345,18 @@ export default function FounderProfile() {
 
   const investorReadiness =
     assessmentResults?.investorreadiness ??
-    null
+    assessmentResults?.investor_readiness ??
+    (investorReadyPercent > 0 ? investorReadyPercent : null)
 
   async function handleSave(event) {
     event.preventDefault()
-
-    if (!user?.id) {
-      setError('No authenticated user found.')
-      return
-    }
-
     setSaving(true)
     setMessage('')
     setError('')
 
     try {
-      const saved = await saveFounderProfile(user.id, {
+      const saved = await updateFounderProfile({
+        foundername: form.foundername,
         fullname: form.foundername,
         email: form.email,
         phone: form.phone,
@@ -276,22 +366,20 @@ export default function FounderProfile() {
         role: form.role,
         venturename: form.venturename,
         industry: form.industry,
-        geography: form.geography,
+        // Retain legacy fields for components that still read them.
+        geography: form.operating_geography || form.geography || null,
+        target_investor_region: form.capital_target_geography || null,
+        // New explicit fields used by corridor-aware Academy guidance.
+        operating_geography: form.operating_geography || null,
+        capital_target_geography: form.capital_target_geography || null,
         venturestage: form.venturestage,
         businessmodel: form.businessmodel,
         summary: form.summary,
         venturesummary: form.summary,
       })
 
-      setFounderProfile({
-        ...saved,
-        foundername:
-          saved?.foundername ||
-          saved?.fullname ||
-          form.foundername,
-      })
-
-      setMessage('Venture profile saved successfully.')
+      setForm(mapStoreProfile(saved))
+      setMessage('Venture profile and cross-border context saved successfully.')
     } catch (saveError) {
       console.error(saveError)
       setError(
@@ -390,23 +478,11 @@ export default function FounderProfile() {
               marginBottom: 10,
             }}
           >
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 800,
-                color: '#40385A',
-              }}
-            >
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#40385A' }}>
               Profile signal
             </span>
 
-            <span
-              style={{
-                color: '#7158DC',
-                fontSize: 14,
-                fontWeight: 800,
-              }}
-            >
+            <span style={{ color: '#7158DC', fontSize: 14, fontWeight: 800 }}>
               {profileCompletion}%
             </span>
           </div>
@@ -432,13 +508,7 @@ export default function FounderProfile() {
             />
           </div>
 
-          <div
-            style={{
-              color: '#6A6178',
-              fontSize: 11.5,
-              lineHeight: 1.55,
-            }}
-          >
+          <div style={{ color: '#6A6178', fontSize: 11.5, lineHeight: 1.55 }}>
             {missingFields.length
               ? `Add ${missingFields.slice(0, 2).join(' and ')} to improve the relevance of your PATH360 guidance.`
               : 'Your core venture context is complete and ready to power personalised guidance.'}
@@ -474,23 +544,11 @@ export default function FounderProfile() {
             Venture stage
           </div>
 
-          <div
-            style={{
-              fontSize: 16,
-              color: '#1D6B4F',
-              fontWeight: 800,
-            }}
-          >
+          <div style={{ fontSize: 16, color: '#1D6B4F', fontWeight: 800 }}>
             {formatStage(diagnosedStage)}
           </div>
 
-          <div
-            style={{
-              fontSize: 11,
-              color: '#7A776F',
-              marginTop: 4,
-            }}
-          >
+          <div style={{ fontSize: 11, color: '#7A776F', marginTop: 4 }}>
             From your stage baseline
           </div>
         </div>
@@ -519,10 +577,7 @@ export default function FounderProfile() {
           <div
             style={{
               fontSize: 16,
-              color:
-                investorReadiness === null
-                  ? '#76628D'
-                  : '#1D6B4F',
+              color: investorReadiness === null ? '#76628D' : '#1D6B4F',
               fontWeight: 800,
             }}
           >
@@ -531,13 +586,7 @@ export default function FounderProfile() {
               : `${investorReadiness}%`}
           </div>
 
-          <div
-            style={{
-              fontSize: 11,
-              color: '#7A776F',
-              marginTop: 4,
-            }}
-          >
+          <div style={{ fontSize: 11, color: '#7A776F', marginTop: 4 }}>
             {investorReadiness === null
               ? 'Unlock your intelligence'
               : 'From your latest assessment'}
@@ -578,25 +627,13 @@ export default function FounderProfile() {
             {form.venturename || 'Add venture name'}
           </div>
 
-          <div
-            style={{
-              fontSize: 11,
-              color: '#7A776F',
-              marginTop: 4,
-            }}
-          >
+          <div style={{ fontSize: 11, color: '#7A776F', marginTop: 4 }}>
             {form.industry || 'Add your industry'}
           </div>
         </div>
       </section>
 
-      <form
-        onSubmit={handleSave}
-        style={{
-          display: 'grid',
-          gap: 16,
-        }}
-      >
+      <form onSubmit={handleSave} style={{ display: 'grid', gap: 16 }}>
         <SectionCard
           eyebrow="Founder context"
           title="Who is building the venture?"
@@ -696,10 +733,11 @@ export default function FounderProfile() {
 
             <ProfileField
               id="geography"
-              label="Geography"
+              label="Primary market or location"
               value={form.geography}
               onChange={(value) => updateField('geography', value)}
-              placeholder="Primary market or region"
+              placeholder="Kenya, Nigeria, Germany..."
+              helpText="Optional detail"
             />
 
             <ProfileField
@@ -728,6 +766,157 @@ export default function FounderProfile() {
               helpText="Your baseline remains the primary stage signal"
             />
           </div>
+        </SectionCard>
+
+        <SectionCard
+          eyebrow="Cross-border venture context"
+          title="Where are you building and raising?"
+          description="PATH360 uses this context to make Academy guidance, readiness checks, and future investor materials relevant to your operating and capital environment. It does not limit your choices or assume one market is the only path to success."
+          accent="#8A6E2A"
+        >
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 14,
+            }}
+          >
+            <SelectField
+              id="operating_geography"
+              label="Primary operating geography"
+              value={form.operating_geography}
+              onChange={(value) => updateField('operating_geography', value)}
+              options={OPERATING_GEOGRAPHIES}
+              placeholder="Select where you primarily operate"
+            />
+
+            <SelectField
+              id="capital_target_geography"
+              label="Capital target geography"
+              value={form.capital_target_geography}
+              onChange={(value) =>
+                updateField('capital_target_geography', value)
+              }
+              options={CAPITAL_TARGET_GEOGRAPHIES}
+              placeholder="Select your current capital focus"
+              helpText="You can change this later"
+            />
+          </div>
+
+          {corridor ? (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 15,
+                borderRadius: 12,
+                border: '1px solid #E8DEC0',
+                background: '#FCF8EE',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  marginBottom: 7,
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#6E571A' }}>
+                  {corridor.label}
+                </div>
+
+                {corridor.academyFocusTrack ? (
+                  <span
+                    style={{
+                      padding: '4px 7px',
+                      borderRadius: 999,
+                      background: '#FFFFFF',
+                      border: '1px solid #E8DEC0',
+                      color: '#8A6E2A',
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      textTransform: 'capitalize',
+                    }}
+                  >
+                    Academy focus: {corridor.academyFocusTrack}
+                  </span>
+                ) : null}
+              </div>
+
+              {corridor.summary ? (
+                <p
+                  style={{
+                    margin: '0 0 11px',
+                    color: '#6B6965',
+                    fontSize: 12,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {corridor.summary}
+                </p>
+              ) : null}
+
+              {Array.isArray(corridor.requiredChecks) &&
+              corridor.requiredChecks.length ? (
+                <div>
+                  <div
+                    style={{
+                      color: '#7A776F',
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      marginBottom: 7,
+                    }}
+                  >
+                    Priority readiness checks
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: 6,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    {corridor.requiredChecks.slice(0, 5).map((check) => (
+                      <span
+                        key={check}
+                        style={{
+                          padding: '5px 7px',
+                          borderRadius: 8,
+                          background: '#FFFFFF',
+                          border: '1px solid #E8DEC0',
+                          color: '#5F5B52',
+                          fontSize: 10.5,
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        {getReadableCheckLabel(check)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 15,
+                padding: '11px 12px',
+                borderRadius: 10,
+                background: '#F9F7F2',
+                color: '#7A776F',
+                fontSize: 12,
+                lineHeight: 1.55,
+              }}
+            >
+              Choose both geographies to preview the cross-border context that
+              will shape your Academy and readiness guidance.
+            </div>
+          )}
         </SectionCard>
 
         <SectionCard
@@ -792,15 +981,10 @@ export default function FounderProfile() {
             background: '#FFFFFF',
           }}
         >
-          <div
-            style={{
-              fontSize: 12,
-              color: '#6B6965',
-              lineHeight: 1.55,
-            }}
-          >
+          <div style={{ fontSize: 12, color: '#6B6965', lineHeight: 1.55 }}>
             Saved profile details strengthen your Radar, AI guidance, Reports,
-            Studio outputs, and Academy recommendations.
+            Studio outputs, Academy recommendations, and cross-border readiness
+            context.
           </div>
 
           <button

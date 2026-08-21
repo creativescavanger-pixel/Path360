@@ -1,3 +1,4 @@
+// src/lib/supabaseClient.js
 import { createClient } from '@supabase/supabase-js'
 
 const url = import.meta.env.VITE_SUPABASE_URL?.trim()
@@ -6,7 +7,7 @@ const FOUNDER_FILES_BUCKET = 'founder_profiles'
 
 if (!url || !key) {
   console.error(
-    'Missing Supabase frontend env vars. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your Vite environment.'
+    'Missing Supabase frontend env vars. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your Vite environment.',
   )
 }
 
@@ -28,12 +29,12 @@ function normaliseAssessment(assessment) {
   return {
     ...assessment,
     venturestage:
-      assessment.venturestageresult ??
-      assessment.venturestage ??
-      null,
+      assessment.venturestageresult ?? assessment.venturestage ?? null,
     rawqa: Array.isArray(assessment.rawqa) ? assessment.rawqa : [],
   }
 }
+
+// AUTH
 
 export async function signUp(email, password) {
   const response = await supabase.auth.signUp({ email, password })
@@ -46,7 +47,6 @@ export async function signIn(email, password) {
     email,
     password,
   })
-
   if (response.error) throw response.error
   return response.data
 }
@@ -96,17 +96,22 @@ export async function deleteAccountViaEdgeFunction() {
   if (!response.ok) {
     throw new Error(
       body?.error ||
-      `Delete account request failed with status ${response.status}`
+        `Delete account request failed with status ${response.status}`,
     )
   }
 
   return body
 }
 
+// FOUNDER PROFILE & ASSESSMENTS
+
 export async function saveFounderProfile(userId, profile) {
   const normalizedProfile = { ...(profile || {}) }
 
-  if (normalizedProfile.foundername && !normalizedProfile.fullname) {
+  if (
+    typeof normalizedProfile.foundername === 'string' &&
+    !normalizedProfile.fullname
+  ) {
     normalizedProfile.fullname = normalizedProfile.foundername
   }
 
@@ -120,7 +125,7 @@ export async function saveFounderProfile(userId, profile) {
         ...normalizedProfile,
         updatedat: new Date().toISOString(),
       },
-      { onConflict: 'userid' }
+      { onConflict: 'userid' },
     )
     .select()
     .single()
@@ -137,19 +142,13 @@ export async function getFounderProfile(userId) {
     .maybeSingle()
 
   if (error) throw error
-  return data
+  return data ?? null
 }
 
 export async function saveAssessment(userId, results) {
   const now = new Date().toISOString()
-
-  const {
-    id,
-    assessmentid,
-    createdat,
-    completedat,
-    ...assessmentData
-  } = results || {}
+  const { id, assessmentid, createdat, completedat, ...assessmentData } =
+    results || {}
 
   const payload = {
     userid: userId,
@@ -194,17 +193,16 @@ export async function getAssessmentHistory(userId) {
     .order('createdat', { ascending: false })
 
   if (error) throw error
-
-  return Array.isArray(data)
-    ? data.map(normaliseAssessment)
-    : []
+  return Array.isArray(data) ? data.map(normaliseAssessment) : []
 }
+
+// MEMORY
 
 export async function addMemory(
   userId,
   memoryType,
   content,
-  importanceScore = 3
+  importanceScore = 3,
 ) {
   const { data, error } = await supabase
     .from('foundermemory')
@@ -233,6 +231,8 @@ export async function getMemories(userId, limit = 20) {
   if (error) throw error
   return data ?? []
 }
+
+// DOCUMENTS
 
 export async function saveDocument(userId, docType, title, content) {
   if (!userId) {
@@ -268,6 +268,8 @@ export async function getDocuments(userId) {
   return data ?? []
 }
 
+// CONVERSATIONS
+
 export async function saveConversation(userId, agentType, messages) {
   const { data, error } = await supabase
     .from('aiconversations')
@@ -278,7 +280,7 @@ export async function saveConversation(userId, agentType, messages) {
         messages,
         updatedat: new Date().toISOString(),
       },
-      { onConflict: 'userid,agenttype' }
+      { onConflict: 'userid,agenttype' },
     )
     .select()
     .single()
@@ -296,7 +298,7 @@ export async function getConversation(userId, agentType) {
     .maybeSingle()
 
   if (error) throw error
-  return data
+  return data ?? null
 }
 
 export async function getAllConversations(userId) {
@@ -310,12 +312,14 @@ export async function getAllConversations(userId) {
   return data ?? []
 }
 
+// DOCUMENT INTAKES
+
 export async function saveDocumentIntake(
   userId,
   docType,
   title,
   answers,
-  linkedAssessmentId = null
+  linkedAssessmentId = null,
 ) {
   const { data, error } = await supabase
     .from('documentintakes')
@@ -351,12 +355,14 @@ export async function getDocumentIntakes(userId, docType = null) {
   return data ?? []
 }
 
+// FOUNDER PROGRESS
+
 export async function addFounderProgress(
   userId,
   eventType,
   title,
   description = '',
-  metadata = {}
+  metadata = {},
 ) {
   const { data, error } = await supabase
     .from('founderprogress')
@@ -386,8 +392,97 @@ export async function getFounderProgress(userId, limit = 20) {
   return data ?? []
 }
 
+// COMPLIANCE PROGRESS
+
+export async function saveComplianceProgress(userId, countryCode, profile) {
+  if (!userId) {
+    throw new Error('A user ID is required to save compliance progress.')
+  }
+
+  if (!countryCode) {
+    throw new Error('A country code is required to save compliance progress.')
+  }
+
+  const safeProfile = profile || {}
+  const categories = Array.isArray(safeProfile.categories)
+    ? safeProfile.categories
+    : []
+
+  const allItems = categories.flatMap((category) =>
+    Array.isArray(category.items) ? category.items : [],
+  )
+
+  const completedCount = allItems.filter(
+    (item) => item?.status === 'done',
+  ).length
+
+  const inProgressCount = allItems.filter(
+    (item) => item?.status === 'in_progress',
+  ).length
+
+  const totalCount = allItems.length
+
+  const payload = {
+    user_id: userId,
+    country_code: countryCode,
+    country_name: safeProfile.countryName || safeProfile.country_name || null,
+    stage: safeProfile.stage || null,
+    corridor: safeProfile.corridor || null,
+    profile_data: safeProfile,
+    completed_count: completedCount,
+    in_progress_count: inProgressCount,
+    total_count: totalCount,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data, error } = await supabase
+    .from('founder_compliance_progress')
+    .upsert(payload, {
+      onConflict: 'user_id,country_code',
+    })
+    .select('*')
+    .single()
+
+  if (error) {
+    console.error('saveComplianceProgress failed', error)
+    throw error
+  }
+
+  return data
+}
+
+export async function getComplianceProgress(userId, countryCode = null) {
+  if (!userId) {
+    throw new Error('A user ID is required to load compliance progress.')
+  }
+
+  let query = supabase
+    .from('founder_compliance_progress')
+    .select('*')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
+
+  if (countryCode) {
+    query = query.eq('country_code', countryCode)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('getComplianceProgress failed', error)
+    throw error
+  }
+
+  return Array.isArray(data) ? data : []
+}
+
+// FILES
+
 export async function uploadFounderFile(userId, file) {
-  const safeName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '-')}`
+  const safeName = `${Date.now()}-${file.name.replace(
+    /[^a-zA-Z0-9._-]/g,
+    '-',
+  )}`
   const path = `${userId}/${safeName}`
 
   const { data, error } = await supabase.storage
@@ -433,7 +528,7 @@ export async function getFounderFiles(userId) {
   if (error) {
     if (isMissingRelationError(error)) {
       console.warn(
-        'founderfiles table not found; returning empty founderFiles list.'
+        'founderfiles table not found; returning empty founderFiles list.',
       )
       return []
     }
@@ -516,6 +611,7 @@ export async function loadFounderWorkspace(userId) {
   const criticalErrors = results
     .filter((result, index) => {
       if (result.status !== 'rejected') return false
+      // founderFiles (index 8) is non-critical
       return index !== 8
     })
     .map((result) => result.reason)
@@ -526,14 +622,12 @@ export async function loadFounderWorkspace(userId) {
 
   const conversations =
     conversationsResult.status === 'fulfilled'
-      ? conversationsResult.value
+      ? conversationsResult.value ?? []
       : []
 
   const conversationMap = (conversations ?? []).reduce((acc, row) => {
     if (row?.agenttype) {
-      acc[row.agenttype] = Array.isArray(row.messages)
-        ? row.messages
-        : []
+      acc[row.agenttype] = Array.isArray(row.messages) ? row.messages : []
     }
 
     return acc

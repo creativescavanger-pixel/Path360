@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
+import { scoreVentureBaseline } from '../lib/stageScoring.js'
 
 const STAGES = [
   {
@@ -144,6 +145,21 @@ function normalizeAssessment(assessment) {
       ...fallback,
       ...(assessment?.statusByItem || {}),
     },
+    productMaturity: assessment?.productMaturity || '',
+    customerStatus: assessment?.customerStatus || '',
+    revenuePattern: assessment?.revenuePattern || '',
+    goToMarketRepeatability: assessment?.goToMarketRepeatability || '',
+    teamStructure: assessment?.teamStructure || '',
+    fundingStage: assessment?.fundingStage || '',
+    priorities: Array.isArray(assessment?.priorities)
+      ? assessment.priorities
+      : [],
+    blockers: Array.isArray(assessment?.blockers)
+      ? assessment.blockers
+      : [],
+    completedActivities: Array.isArray(assessment?.completedActivities)
+      ? assessment.completedActivities
+      : [],
     notes: assessment?.notes || '',
     completedAt: assessment?.completedAt || null,
     averageScore: Number(assessment?.averageScore || 0),
@@ -180,6 +196,30 @@ export default function StageOnboarding() {
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
+  const [productMaturity, setProductMaturity] = useState(
+    existing.productMaturity
+  )
+  const [customerStatus, setCustomerStatus] = useState(
+    existing.customerStatus
+  )
+  const [revenuePattern, setRevenuePattern] = useState(
+    existing.revenuePattern
+  )
+  const [goToMarketRepeatability, setGoToMarketRepeatability] = useState(
+    existing.goToMarketRepeatability
+  )
+  const [teamStructure, setTeamStructure] = useState(
+    existing.teamStructure
+  )
+  const [fundingStage, setFundingStage] = useState(
+    existing.fundingStage
+  )
+  const [priorities, setPriorities] = useState(existing.priorities)
+  const [blockers, setBlockers] = useState(existing.blockers)
+  const [completedActivities, setCompletedActivities] = useState(
+    existing.completedActivities
+  )
+
   useEffect(() => {
     const next = normalizeAssessment(stageAssessment)
 
@@ -187,6 +227,16 @@ export default function StageOnboarding() {
     setStatusByItem(next.statusByItem)
     setNotes(next.notes)
     setShowResults(Boolean(next.completedAt))
+
+    setProductMaturity(next.productMaturity)
+    setCustomerStatus(next.customerStatus)
+    setRevenuePattern(next.revenuePattern)
+    setGoToMarketRepeatability(next.goToMarketRepeatability)
+    setTeamStructure(next.teamStructure)
+    setFundingStage(next.fundingStage)
+    setPriorities(next.priorities)
+    setBlockers(next.blockers)
+    setCompletedActivities(next.completedActivities)
   }, [stageAssessment])
 
   const averageScore = useMemo(() => {
@@ -198,10 +248,46 @@ export default function StageOnboarding() {
     return Number((total / ITEMS.length).toFixed(2))
   }, [statusByItem])
 
-  const diagnosedStage = useMemo(
-    () => getStageFromScore(averageScore),
-    [averageScore]
+  const baselineInput = useMemo(
+    () => ({
+      declaredStage: selectedStage,
+      productMaturity,
+      customerStatus,
+      revenuePattern,
+      goToMarketRepeatability,
+      teamStructure,
+      fundingStage,
+      statusByItem: Object.fromEntries(
+        Object.entries(statusByItem).map(([key, status]) => [
+          key,
+          getStatusScore(status),
+        ])
+      ),
+      priorities,
+      blockers,
+      completedActivities,
+    }),
+    [
+      selectedStage,
+      productMaturity,
+      customerStatus,
+      revenuePattern,
+      goToMarketRepeatability,
+      teamStructure,
+      fundingStage,
+      statusByItem,
+      priorities,
+      blockers,
+      completedActivities,
+    ]
   )
+
+  const stageDiagnosis = useMemo(
+    () => scoreVentureBaseline(baselineInput),
+    [baselineInput]
+  )
+
+  const diagnosedStage = stageDiagnosis.diagnosedStage || 'idea'
 
   const diagnosedStageData = useMemo(
     () => STAGES.find((stage) => stage.id === diagnosedStage) || STAGES[0],
@@ -252,6 +338,11 @@ export default function StageOnboarding() {
       .slice(0, 3)
   }, [statusByItem])
 
+  const focusPriorities = useMemo(
+    () => (stageDiagnosis.priorityScores || []).slice(0, 3),
+    [stageDiagnosis.priorityScores]
+  )
+
   function updateStatus(itemId, status) {
     setShowResults(false)
 
@@ -267,6 +358,16 @@ export default function StageOnboarding() {
     setNotes('')
     setSaveError('')
     setShowResults(false)
+
+    setProductMaturity('')
+    setCustomerStatus('')
+    setRevenuePattern('')
+    setGoToMarketRepeatability('')
+    setTeamStructure('')
+    setFundingStage('')
+    setPriorities([])
+    setBlockers([])
+    setCompletedActivities([])
   }
 
   async function handleComplete() {
@@ -278,6 +379,19 @@ export default function StageOnboarding() {
       return
     }
 
+    if (
+      !productMaturity ||
+      !customerStatus ||
+      !revenuePattern ||
+      !goToMarketRepeatability
+    ) {
+      setSaveError(
+        'Complete the venture reality questions (product, customer, revenue, and go-to-market) before continuing.'
+      )
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+
     const assessment = {
       declaredStage: selectedStage,
       diagnosedStage,
@@ -285,6 +399,22 @@ export default function StageOnboarding() {
       notes: notes.trim(),
       averageScore,
       completedAt: new Date().toISOString(),
+      productMaturity,
+      customerStatus,
+      revenuePattern,
+      goToMarketRepeatability,
+      teamStructure,
+      fundingStage,
+      priorities,
+      blockers,
+      completedActivities,
+      stageScore: stageDiagnosis.stageScore,
+      stageConfidence: stageDiagnosis.stageConfidence,
+      stageReasons: stageDiagnosis.stageReasons,
+      recommendedAcademyPath: stageDiagnosis.recommendedAcademyPath,
+      recommendedMissionKeys: stageDiagnosis.recommendedMissionKeys,
+      priorityScores: stageDiagnosis.priorityScores,
+      stageBrief: stageDiagnosis.stageBrief,
     }
 
     setIsSaving(true)
@@ -828,7 +958,193 @@ export default function StageOnboarding() {
 
         <section className="stage-card">
           <h2 className="stage-section-heading">
-            2. Score your current evidence
+            2. Describe your current venture reality
+          </h2>
+
+          <p className="stage-section-copy">
+            These factual answers help PATH360 understand how far your venture has
+            progressed. Choose the single statement that is most accurate today.
+          </p>
+
+          <div className="readiness-grid">
+            <label className="stage-notes-label">
+              <span style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700 }}>
+                Product maturity
+              </span>
+
+              <select
+                value={productMaturity}
+                onChange={(event) => {
+                  setProductMaturity(event.target.value)
+                  setShowResults(false)
+                }}
+                style={{ width: '100%', height: 44, borderRadius: 12, border: '1px solid #e3e7ef', padding: '0 12px', fontSize: 13 }}
+              >
+                <option value="">Choose one</option>
+                <option value="idea">I am exploring a problem or idea</option>
+                <option value="prototype">I have a prototype or early concept</option>
+                <option value="live_early">
+                  I have a live offer with early users
+                </option>
+                <option value="live_growing">
+                  I have a live offer with growing usage
+                </option>
+                <option value="repeatable">
+                  I have a repeatable product or service model
+                </option>
+              </select>
+            </label>
+
+            <label className="stage-notes-label">
+              <span style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700 }}>
+                Strongest customer signal
+              </span>
+
+              <select
+                value={customerStatus}
+                onChange={(event) => {
+                  setCustomerStatus(event.target.value)
+                  setShowResults(false)
+                }}
+                style={{ width: '100%', height: 44, borderRadius: 12, border: '1px solid #e3e7ef', padding: '0 12px', fontSize: 13 }}
+              >
+                <option value="">Choose one</option>
+                <option value="none">
+                  I have not yet spoken to potential customers
+                </option>
+                <option value="conversations">
+                  I have informal customer conversations
+                </option>
+                <option value="interviews">
+                  I have conducted structured interviews
+                </option>
+                <option value="pilots">
+                  I am running a pilot or test
+                </option>
+                <option value="first_paying">
+                  I have first paying customers
+                </option>
+                <option value="recurring_customers">
+                  I have recurring customers or repeat usage
+                </option>
+              </select>
+            </label>
+
+            <label className="stage-notes-label">
+              <span style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700 }}>
+                Revenue pattern
+              </span>
+
+              <select
+                value={revenuePattern}
+                onChange={(event) => {
+                  setRevenuePattern(event.target.value)
+                  setShowResults(false)
+                }}
+                style={{ width: '100%', height: 44, borderRadius: 12, border: '1px solid #e3e7ef', padding: '0 12px', fontSize: 13 }}
+              >
+                <option value="">Choose one</option>
+                <option value="none">No revenue yet</option>
+                <option value="pilot">Pre-revenue or paid pilot</option>
+                <option value="one_off">One-off or occasional revenue</option>
+                <option value="recurring">Recurring revenue</option>
+                <option value="predictable">
+                  Predictable and growing revenue
+                </option>
+              </select>
+            </label>
+
+            <label className="stage-notes-label">
+              <span style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700 }}>
+                Customer acquisition / reach
+              </span>
+
+              <select
+                value={goToMarketRepeatability}
+                onChange={(event) => {
+                  setGoToMarketRepeatability(event.target.value)
+                  setShowResults(false)
+                }}
+                style={{ width: '100%', height: 44, borderRadius: 12, border: '1px solid #e3e7ef', padding: '0 12px', fontSize: 13 }}
+              >
+                <option value="">Choose one</option>
+                <option value="none">
+                  I have not tested a customer-acquisition approach
+                </option>
+                <option value="manual">
+                  Mostly founder-led and manual outreach
+                </option>
+                <option value="emerging">
+                  An early channel or process is showing promise
+                </option>
+                <option value="repeatable">
+                  I have a repeatable acquisition motion
+                </option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section className="stage-card">
+          <h2 className="stage-section-heading">
+            3. Your priorities for the next 14 days
+          </h2>
+
+          <p className="stage-section-copy">
+            Select up to three priorities. PATH360 will use them to personalise your
+            Academy trial and AI Strategist guidance.
+          </p>
+
+          <div className="status-options">
+            {[
+              ['clarify_problem', 'Clarify my problem and customer'],
+              ['validate_demand', 'Validate demand with real users'],
+              ['improve_product', 'Improve my product or offer'],
+              ['gain_traction', 'Gain customers and traction'],
+              ['growth_systems', 'Build growth systems'],
+              ['financial_model', 'Strengthen pricing and financial model'],
+              ['investor_readiness', 'Prepare for investors'],
+              ['team_operations', 'Build team and operations'],
+              ['founder_development', 'Develop myself as a founder'],
+            ].map(([id, label]) => {
+              const selected = priorities.includes(id)
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={`status-option ${
+                    selected ? 'is-active' : ''
+                  }`}
+                  style={{ '--status-color': selected ? '#7158DC' : '#e4e8f0' }}
+                  onClick={() => {
+                    setShowResults(false)
+                    setSaveError('')
+
+                    setPriorities((current) => {
+                      if (current.includes(id)) {
+                        return current.filter((value) => value !== id)
+                      }
+                      if (current.length >= 3) {
+                        return current
+                      }
+                      return [...current, id]
+                    })
+                  }}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+
+          <p className="stage-section-copy" style={{ marginTop: 10 }}>
+            {priorities.length}/3 priorities selected.
+          </p>
+        </section>
+
+        <section className="stage-card">
+          <h2 className="stage-section-heading">
+            4. Score your current evidence
           </h2>
 
           <p className="stage-section-copy">
@@ -972,12 +1288,19 @@ export default function StageOnboarding() {
                   Diagnosed stage: {diagnosedStageData.title}
                 </span>
 
+                <span className="result-stage-pill">
+                  Confidence: {stageDiagnosis.stageConfidence || 'developing'}
+                </span>
+
                 <div className="stage-match">
-                  {stageDifference === 0
-                    ? 'Your selected stage and current evidence are aligned. Focus on strengthening the weakest areas to advance with confidence.'
-                    : stageDifference > 0
-                      ? 'Your evidence suggests you may be further along than the stage you selected. Review your strongest proof points and decide whether your positioning should reflect that progress.'
-                      : 'Your selected stage is ahead of the evidence currently recorded. That is normal—use the focus areas below as the practical bridge to your next milestone.'}
+                  Recommended Academy path: <strong>
+                    {stageDiagnosis.recommendedAcademyPath
+                      ? STAGES.find((stage) =>
+                          stage.id === stageDiagnosis.recommendedAcademyPath
+                        )?.title || 'Idea'
+                      : 'Idea'}
+                  </strong>.
+                  PATH360 will use this to suggest the first trial missions in Academy.
                 </div>
               </div>
 
@@ -1027,10 +1350,15 @@ export default function StageOnboarding() {
             </p>
 
             <div className="focus-list">
-              {nextFocusItems.map((item, index) => (
-                <div className="focus-item" key={item.id}>
+              {focusPriorities.map((item, index) => (
+                <div className="focus-item" key={item.key}>
                   <span className="focus-number">{index + 1}</span>
-                  <span>{item.label}</span>
+                  <span>
+                    {item.label}{' '}
+                    <span style={{ fontSize: 11, color: '#7C7C75' }}>
+                      · Priority score: {item.score}/100
+                    </span>
+                  </span>
                 </div>
               ))}
             </div>

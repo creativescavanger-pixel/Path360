@@ -11,8 +11,10 @@ export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const founderProfile = useDiagnosticStore((s) => s.founderProfile)
-  const clearSessionOnly = useDiagnosticStore((s) => s.clearSessionOnly)
+  const founderProfile = useDiagnosticStore((state) => state.founderProfile)
+  const clearSessionOnly = useDiagnosticStore(
+    (state) => state.clearSessionOnly,
+  )
 
   const founderName =
     founderProfile?.foundername ||
@@ -28,10 +30,23 @@ export default function AppLayout() {
     'Your business'
 
   const pageIdentity = getPageIdentity(location.pathname)
-  const isOnStageOnboarding = location.pathname === '/app/stage-onboarding'
 
-  async function handleLogout(e) {
-    e.preventDefault()
+  const isOnStageOnboarding =
+    location.pathname === '/app/stage-onboarding'
+
+  /*
+   * Venture Intelligence has a dedicated strategic header, status chips,
+   * tabs, and action controls in its page component. Do not show the generic
+   * AppLayout introduction above it, or founders see two stacked headings.
+   */
+  const isOnVentureIntelligence =
+    location.pathname === '/app/venture-intelligence'
+
+  const shouldShowSharedPageIntro =
+    !isOnStageOnboarding && !isOnVentureIntelligence
+
+  async function handleLogout(event) {
+    event.preventDefault()
 
     try {
       await signOut()
@@ -213,7 +228,7 @@ export default function AppLayout() {
         >
           {!isOnStageOnboarding && <StageBanner />}
 
-          {!isOnStageOnboarding && (
+          {shouldShowSharedPageIntro && (
             <section
               aria-labelledby="page-title"
               style={{

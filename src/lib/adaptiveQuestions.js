@@ -73,6 +73,22 @@ const FALLBACK_QUESTIONS = [
   },
 ]
 
+const BASELINE_STAGE_MAP = {
+  idea: 0,
+  validation: 5,
+  mvp: 10,
+  traction: 15,
+  growth: 20,
+}
+
+const STAGE_LABELS = {
+  idea: 'Idea',
+  validation: 'Validation',
+  mvp: 'MVP',
+  traction: 'Traction',
+  growth: 'Growth',
+}
+
 function getQuestionBank() {
   if (Array.isArray(FOUNDATION_QUESTIONS) && FOUNDATION_QUESTIONS.length > 0) {
     return FOUNDATION_QUESTIONS
@@ -190,9 +206,9 @@ function scoreAnswer(answer, dimension) {
 function detectStage(allText) {
   const text = String(allText || '').toLowerCase()
 
-  if (containsAny(text, ['series a', 'scaling', 'predictable growth'])) return 'series_a'
-  if (containsAny(text, ['paying customers', 'revenue', 'traction', 'seed'])) return 'seed'
-  if (containsAny(text, ['prototype', 'mvp', 'pilot', 'pre-seed'])) return 'pre_seed'
+  if (containsAny(text, ['series a', 'scaling', 'predictable growth'])) return 'growth'
+  if (containsAny(text, ['paying customers', 'revenue', 'traction', 'seed'])) return 'traction'
+  if (containsAny(text, ['prototype', 'mvp', 'pilot', 'pre-seed'])) return 'validation'
   return 'idea'
 }
 
@@ -202,10 +218,20 @@ function riskLevelFromScore(score) {
   return 'high'
 }
 
-export async function generateAssessmentScores(conversationHistory, founderProfile = {}) {
+function normalizeStageKey(value) {
+  if (!value) return 'idea'
+  return String(value).toLowerCase().replace(/\s+/g, '_')
+}
+
+export async function generateAssessmentScores(
+  conversationHistory,
+  founderProfile = {},
+  stageAssessment = {}
+) {
   const qaOnly = conversationHistory.filter((m) => m.role === 'user')
   const allAnswers = qaOnly.map((m) => m.content || '')
   const fullText = allAnswers.join(' \n ')
+  const stageBaseline = normalizeStageKey(stageAssessment.diagnosedStage)
 
   const dimensionMap = [
     'strategic_clarity',
@@ -254,12 +280,17 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
     )
   }
 
+  const baselineBoost = BASELINE_STAGE_MAP[stageBaseline] || 0
+  const adjustedExecution = clamp((baseScores.execution_readiness || 55) + Math.round(baselineBoost * 0.35), 0, 100)
+  const adjustedMarket = clamp((baseScores.market_understanding || 55) + Math.round(baselineBoost * 0.3), 0, 100)
+  const adjustedFinancial = clamp((baseScores.financial_maturity || 55) + Math.round(baselineBoost * 0.2), 0, 100)
+
   const founder_score = Math.round(
     (
       (baseScores.strategic_clarity || 55) +
-      (baseScores.execution_readiness || 55) +
-      (baseScores.financial_maturity || 55) +
-      (baseScores.market_understanding || 55) +
+      adjustedExecution +
+      adjustedFinancial +
+      adjustedMarket +
       (baseScores.team_strength || 55) +
       (baseScores.product_clarity || 55) +
       (baseScores.growth_potential || 55) +
@@ -270,15 +301,33 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
   const investor_readiness = Math.round(
     (
       founder_score +
-      (baseScores.financial_maturity || 55) +
-      (baseScores.execution_readiness || 55) +
-      (baseScores.market_understanding || 55)
+      adjustedFinancial +
+      adjustedExecution +
+      adjustedMarket
     ) / 4
   )
 
-  const venture_stage = detectStage(
-    `${fullText} ${founderProfile?.venture_stage ?? ''} ${founderProfile?.venturestage ?? ''}`
-  )
+  const venture_stage = stageBaseline !== 'idea'
+    ? stageBaseline
+    : detectStage(`${fullText} ${founderProfile?.venture_stage ?? ''} ${founderProfile?.venturestage ?? ''}`)
+
+  const stageBrief = stageAssessment?.stageScore
+    ? `Baseline stage assessment indicates ${STAGE_LABELS[stageBaseline] || STAGE_LABELS.idea} stage readiness with ${stageAssessment.stageScore} points and a focus on ${stageAssessment.recommendedAcademyPath || 'foundational progress'}.`
+    : `This assessment reflects the current venture status and suggests a practical path to strengthen readiness.`
+
+  const priorityScores = Array.isArray(stageAssessment?.priorities)
+    ? stageAssessment.priorities.map((key) => ({
+        key,
+        label: key,
+        score: 88,
+      }))
+    : []
+
+  const recommendedMissionKeys = Array.isArray(stageAssessment?.recommendedMissionKeys)
+    ? stageAssessment.recommendedMissionKeys
+    : []
+
+  const recommendedAcademyPath = stageAssessment?.recommendedAcademyPath || stageBaseline || 'idea'
 
   const priorities = []
 
@@ -325,8 +374,8 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
   const strengths = []
 
   if ((baseScores.strategic_clarity || 0) >= 70) strengths.push('Clear articulation of problem and strategic direction')
-  if ((baseScores.execution_readiness || 0) >= 70) strengths.push('Strong execution orientation')
-  if ((baseScores.market_understanding || 0) >= 70) strengths.push('Good understanding of customer and market dynamics')
+  if ((adjustedExecution || 0) >= 70) strengths.push('Strong execution orientation')
+  if ((adjustedMarket || 0) >= 70) strengths.push('Good understanding of customer and market dynamics')
   if ((baseScores.team_strength || 0) >= 70) strengths.push('Credible founder or team positioning')
 
   const fallbackStrengths = [
@@ -353,9 +402,9 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
     founderscore: founder_score,
     investorreadiness: investor_readiness,
     strategicclarity: baseScores.strategic_clarity || 55,
-    executionreadiness: baseScores.execution_readiness || 55,
-    financialmaturity: baseScores.financial_maturity || 55,
-    marketunderstanding: baseScores.market_understanding || 55,
+    executionreadiness: adjustedExecution || 55,
+    financialmaturity: adjustedFinancial || 55,
+    marketunderstanding: adjustedMarket || 55,
     teamstrength: baseScores.team_strength || 55,
     productclarity: baseScores.product_clarity || 55,
     growthpotential: baseScores.growth_potential || 55,
@@ -365,6 +414,10 @@ export async function generateAssessmentScores(conversationHistory, founderProfi
     strategicpriorities: priorities.slice(0, 4),
     founderstrengths: strengths.slice(0, 3),
     criticalgaps: criticalGaps.slice(0, 3),
+    stagebrief: stageBrief,
+    priorityscores: priorityScores,
+    recommendedacademypath: recommendedAcademyPath,
+    recommendedmissionkeys: recommendedMissionKeys,
     riskanalysis: {
       toprisk: criticalGaps[0] || 'Execution risk',
       marketrisk: riskLevelFromScore(baseScores.market_understanding || 55),

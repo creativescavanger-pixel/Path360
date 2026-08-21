@@ -51,6 +51,19 @@ export function getPageIdentity(pathname) {
     }
   }
 
+  if (pathname.startsWith('/app/venture-intelligence')) {
+    return {
+      eyebrow: 'Venture intelligence',
+      title: 'Your venture context',
+      description:
+        'Review and update the market, venture model, operating structure, readiness, and resources that guide your next move.',
+      accent: '#7158DC',
+      softBg: '#F5F0FF',
+      border: '#E2D8FF',
+      status: 'Founder workspace',
+    }
+  }
+
   if (pathname.startsWith('/app/studio')) {
     return {
       eyebrow: 'Creation Studio',

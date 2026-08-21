@@ -57,6 +57,7 @@ export default function Assessment() {
   const user = useDiagnosticStore((s) => s.user)
   const founderProfile = useDiagnosticStore((s) => s.founderProfile)
   const assessmentResults = useDiagnosticStore((s) => s.assessmentResults)
+  const stageAssessment = useDiagnosticStore((s) => s.stageAssessment)
   const qaPairsInStore = useDiagnosticStore((s) => s.qaPairs || [])
   const progressReviewDraft = useDiagnosticStore((s) => s.progressReviewDraft)
 
@@ -344,7 +345,8 @@ export default function Assessment() {
 
       const scores = await generateAssessmentScores(
         history,
-        founderProfile ?? {}
+        founderProfile ?? {},
+        stageAssessment ?? {}
       )
 
       const finalResults = {

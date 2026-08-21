@@ -21,6 +21,16 @@ import Reports from './pages/Reports.jsx'
 import Academy from './pages/Academy.jsx'
 import FounderProfile from './pages/FounderProfile.jsx'
 import StageOnboarding from './pages/StageOnboarding.jsx'
+import VentureIntelligenceSetup from './pages/VentureIntelligenceSetup.jsx'
+import VentureIntelligence from './pages/VentureIntelligence.jsx'
+import Environment from './pages/Environment.jsx'
+import CountryDirectory from './pages/CountryDirectory.jsx'
+import CountryBrief from './pages/CountryBrief.jsx'
+import PestelLibrary from './pages/PestelLibrary.jsx'
+import CountryPestel from './pages/CountryPestel.jsx'
+import EcosystemDirectory from './pages/EcosystemDirectory.jsx'
+import CountryEcosystem from './pages/CountryEcosystem.jsx'
+import CountryLawsSetup from './pages/CountryLawsSetup.jsx'
 import AppLayout from './layouts/AppLayout.jsx'
 
 function FullScreenLoader() {
@@ -54,10 +64,23 @@ function Protected({ children }) {
   const hasFinishedInitialLoad = useRef(false)
   const location = useLocation()
 
-  const hydrateWorkspace = useDiagnosticStore((s) => s.hydrateWorkspace)
-  const setUser = useDiagnosticStore((s) => s.setUser)
-  const clearSessionOnly = useDiagnosticStore((s) => s.clearSessionOnly)
-  const stageAssessment = useDiagnosticStore((s) => s.stageAssessment)
+  const hydrateWorkspace = useDiagnosticStore((state) => state.hydrateWorkspace)
+  const setUser = useDiagnosticStore((state) => state.setUser)
+  const clearSessionOnly = useDiagnosticStore(
+    (state) => state.clearSessionOnly,
+  )
+
+  const stageAssessment = useDiagnosticStore(
+    (state) => state.stageAssessment,
+  )
+
+  const hasCompletedVentureIntelligenceSetup = useDiagnosticStore(
+    (state) => state.hasCompletedVentureIntelligenceSetup,
+  )
+
+  const hasCompletedDiagnostic = useDiagnosticStore((state) =>
+    state.hasCompletedDiagnostic(),
+  )
 
   useEffect(() => {
     let mounted = true
@@ -125,9 +148,7 @@ function Protected({ children }) {
       (event, nextSession) => {
         if (!mounted) return
 
-        if (event === 'INITIAL_SESSION') {
-          return
-        }
+        if (event === 'INITIAL_SESSION') return
 
         if (event === 'TOKEN_REFRESHED') {
           setSession(nextSession)
@@ -141,7 +162,7 @@ function Protected({ children }) {
         }
 
         bootstrap(nextSession, false)
-      }
+      },
     )
 
     return () => {
@@ -161,8 +182,50 @@ function Protected({ children }) {
   const isOnStageOnboardingRoute =
     location.pathname === '/app/stage-onboarding'
 
+  const isOnVentureIntelligenceSetupRoute =
+    location.pathname === '/app/venture-intelligence-setup'
+
+  const isOnAssessmentRoute = location.pathname === '/app/assessment'
+
   if (!stageAssessment && !isOnStageOnboardingRoute) {
     return <Navigate to="/app/stage-onboarding" replace />
+  }
+
+  if (
+    stageAssessment &&
+    !hasCompletedVentureIntelligenceSetup &&
+    !isOnStageOnboardingRoute &&
+    !isOnVentureIntelligenceSetupRoute
+  ) {
+    return <Navigate to="/app/venture-intelligence-setup" replace />
+  }
+
+  if (
+    stageAssessment &&
+    hasCompletedVentureIntelligenceSetup &&
+    isOnVentureIntelligenceSetupRoute
+  ) {
+    return <Navigate to="/app/assessment" replace />
+  }
+
+  if (
+    stageAssessment &&
+    hasCompletedVentureIntelligenceSetup &&
+    !hasCompletedDiagnostic &&
+    !isOnStageOnboardingRoute &&
+    !isOnVentureIntelligenceSetupRoute &&
+    !isOnAssessmentRoute
+  ) {
+    return <Navigate to="/app/assessment" replace />
+  }
+
+  if (
+    stageAssessment &&
+    hasCompletedVentureIntelligenceSetup &&
+    hasCompletedDiagnostic &&
+    isOnAssessmentRoute
+  ) {
+    return <Navigate to="/app/dashboard" replace />
   }
 
   return children
@@ -193,14 +256,68 @@ export default function App() {
             element={<StageOnboarding />}
           />
 
+          <Route
+            path="venture-intelligence-setup"
+            element={<VentureIntelligenceSetup />}
+          />
+
           <Route path="assessment" element={<Assessment />} />
           <Route path="dashboard" element={<Dashboard />} />
-          <Route path="founder-profile" element={<FounderProfile />} />
+
+          <Route
+            path="founder-profile"
+            element={<FounderProfile />}
+          />
+
+          <Route
+            path="venture-intelligence"
+            element={<VentureIntelligence />}
+          />
+
+          <Route path="environment" element={<Environment />} />
+
+          <Route
+            path="environment/countries"
+            element={<CountryDirectory />}
+          />
+
+          <Route
+            path="environment/countries/:countrySlug"
+            element={<CountryBrief />}
+          />
+
+          <Route
+            path="environment/pestel"
+            element={<PestelLibrary />}
+          />
+
+          <Route
+            path="environment/pestel/:countrySlug"
+            element={<CountryPestel />}
+          />
+
+          <Route
+            path="environment/ecosystem"
+            element={<EcosystemDirectory />}
+          />
+
+          <Route
+            path="environment/ecosystem/:countrySlug"
+            element={<CountryEcosystem />}
+          />
+
+          <Route
+            path="environment/laws/:countrySlug"
+            element={<CountryLawsSetup />}
+          />
+
           <Route path="studio" element={<Studio />} />
+
           <Route
             path="studio/prep/:docType"
             element={<GuidedDocumentPrep />}
           />
+
           <Route path="memory" element={<Memory />} />
           <Route path="radar" element={<Radar />} />
           <Route path="reports" element={<Reports />} />

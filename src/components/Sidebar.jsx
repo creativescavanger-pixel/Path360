@@ -5,59 +5,42 @@ import supabase from '../lib/supabaseClient.js'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 import AppLogo from './AppLogo.jsx'
 
-const NAV_GROUPS = [
-  {
-    label: 'Command Center',
-    items: [{ to: '/app/dashboard', label: 'Command Center', icon: '•' }],
-  },
-  {
-    label: 'My Venture',
-    items: [
-      { to: '/app/founder-profile', label: 'Venture Profile', icon: '•' },
-      { to: '/app/radar', label: 'Venture Radar', icon: '•' },
-      { to: '/app/memory', label: 'Decisions & Insights', icon: '•' },
-    ],
-  },
-  {
-    label: 'Build',
-    items: [
-      { to: '/app/studio', label: 'Creation Studio', icon: '•' },
-      { to: '/app/reports', label: 'Reports', icon: '•' },
-    ],
-  },
-  {
-    label: 'Grow',
-    items: [
-      {
-        to: '/app/academy',
-        label: 'Academy',
-        icon: '•',
-        requiresAssessment: true,
-      },
-    ],
-  },
-]
-
 const FEEDBACK_PAGES = [
   {
     path: '/app/dashboard',
-    label: 'Command Center',
-    prompt: 'What would make the Command Center more useful or easier to understand?',
+    label: 'Home',
+    prompt:
+      'What would make the Home workspace more useful or easier to understand?',
   },
   {
     path: '/app/founder-profile',
     label: 'Venture Profile',
-    prompt: 'What was unclear or difficult while completing your venture profile?',
+    prompt:
+      'What was unclear or difficult while completing your venture profile?',
   },
   {
-    path: '/app/radar',
-    label: 'Venture Radar',
-    prompt: 'What would make your Radar signals easier to understand or act on?',
+    path: '/app/venture-intelligence-setup',
+    label: 'Venture Setup',
+    prompt:
+      'What would make setting up your venture context easier or clearer?',
+  },
+  {
+    path: '/app/venture-intelligence',
+    label: 'Venture Intelligence',
+    prompt:
+      'What would make your market, model, operating context, or recommendations easier to use?',
   },
   {
     path: '/app/memory',
     label: 'Decisions & Insights',
-    prompt: 'What would make it easier to capture or use your decisions and insights?',
+    prompt:
+      'What would make it easier to capture or use your decisions and insights?',
+  },
+  {
+    path: '/app/environment',
+    label: 'Explore your environment',
+    prompt:
+      'What country, ecosystem, legal, or market information would be most useful here?',
   },
   {
     path: '/app/studio',
@@ -76,8 +59,9 @@ const FEEDBACK_PAGES = [
   },
   {
     path: '/app/assessment',
-    label: 'Assessment Results',
-    prompt: 'What was unclear or difficult about your assessment results?',
+    label: 'Founder Diagnostic',
+    prompt:
+      'What was unclear or difficult while completing your founder diagnostic?',
   },
   {
     path: '/app/stage-onboarding',
@@ -87,14 +71,15 @@ const FEEDBACK_PAGES = [
   {
     path: 'other',
     label: 'Something else',
-    prompt: 'Tell us what you were trying to do and where you experienced the issue.',
+    prompt:
+      'Tell us what you were trying to do and where you experienced the issue.',
   },
 ]
 
 const OVERLAY_Z_INDEX = 2147483646
 const MODAL_Z_INDEX = 2147483647
 
-function getNavItemStyle(isActive, isLocked) {
+function getNavItemStyle(isActive, isLocked, isPreview) {
   return {
     display: 'flex',
     alignItems: 'center',
@@ -108,17 +93,23 @@ function getNavItemStyle(isActive, isLocked) {
       ? '#EEF4EF'
       : isLocked
         ? 'rgba(245,240,255,0.5)'
-        : 'transparent',
+        : isPreview
+          ? '#F8F6F1'
+          : 'transparent',
     border: isActive
       ? '1px solid #CFE0D0'
       : isLocked
         ? '1px solid rgba(226,216,255,0.72)'
-        : '1px solid transparent',
+        : isPreview
+          ? '1px solid #E7E1D7'
+          : '1px solid transparent',
     color: isActive
       ? '#1D6B4F'
       : isLocked
         ? '#76628D'
-        : '#6E6B65',
+        : isPreview
+          ? '#587365'
+          : '#6E6B65',
     cursor: 'pointer',
     transition: 'all 0.18s ease',
     fontWeight: isActive ? 700 : 600,
@@ -432,7 +423,8 @@ function FeedbackModal({
                     ))}
                   </select>
                 </div>
-                                <div>
+
+                <div>
                   <label
                     htmlFor="feedback-type"
                     style={{
@@ -455,7 +447,9 @@ function FeedbackModal({
                     <option value="suggestion">Suggestion</option>
                     <option value="bug">Bug</option>
                     <option value="confusing">Confusing</option>
-                    <option value="missing_feature">Missing feature</option>
+                    <option value="missing_feature">
+                      Missing feature
+                    </option>
                     <option value="other">Other</option>
                   </select>
                 </div>
@@ -580,7 +574,7 @@ function FeedbackModal({
         </div>
       </div>
     </>,
-    document.body
+    document.body,
   )
 }
 
@@ -589,14 +583,90 @@ export default function Sidebar() {
   const location = useLocation()
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
 
-  const user = useDiagnosticStore((s) => s.user)
-  const founderProfile = useDiagnosticStore((s) => s.founderProfile)
-  const subscriptionTier = useDiagnosticStore((s) => s.subscriptionTier)
-  const assessmentResults = useDiagnosticStore((s) => s.assessmentResults)
-  const startProgressReview = useDiagnosticStore((s) => s.startProgressReview)
+  const user = useDiagnosticStore((state) => state.user)
+  const founderProfile = useDiagnosticStore((state) => state.founderProfile)
+  const subscriptionTier = useDiagnosticStore(
+    (state) => state.subscriptionTier,
+  )
+  const startProgressReview = useDiagnosticStore(
+    (state) => state.startProgressReview,
+  )
 
-  const assessmentComplete = Boolean(
-    assessmentResults?.id || assessmentResults?.assessmentid
+  const hasVentureSetup = useDiagnosticStore((state) =>
+    state.hasVentureSetup(),
+  )
+
+  const hasCompletedDiagnostic = useDiagnosticStore((state) =>
+    state.hasCompletedDiagnostic(),
+  )
+
+  const NAV_GROUPS = useMemo(
+    () => [
+      {
+        label: 'Command Centre',
+        items: [{ to: '/app/dashboard', label: 'Home', icon: '•' }],
+      },
+      {
+        label: 'Your Venture',
+        items: [
+          {
+            to: '/app/founder-profile',
+            label: 'Venture Profile',
+            icon: '•',
+          },
+          {
+            to: hasVentureSetup
+              ? '/app/venture-intelligence'
+              : '/app/venture-intelligence-setup',
+            label: hasVentureSetup
+              ? 'Venture Intelligence'
+              : 'Venture Setup',
+            icon: '•',
+          },
+          {
+            to: '/app/memory',
+            label: 'Decisions & Insights',
+            icon: '•',
+            requiresAssessment: true,
+          },
+        ],
+      },
+      {
+        label: 'Your Environment',
+        items: [
+          {
+            to: '/app/environment',
+            label: 'Explore your environment',
+            icon: '•',
+            isPreview: !hasCompletedDiagnostic,
+          },
+        ],
+      },
+      {
+        label: 'Build & Move Forward',
+        items: [
+          {
+            to: '/app/academy',
+            label: 'Academy',
+            icon: '•',
+            requiresAssessment: true,
+          },
+          {
+            to: '/app/studio',
+            label: 'Creation Studio',
+            icon: '•',
+            requiresAssessment: true,
+          },
+          {
+            to: '/app/reports',
+            label: 'Reports',
+            icon: '•',
+            requiresAssessment: true,
+          },
+        ],
+      },
+    ],
+    [hasVentureSetup, hasCompletedDiagnostic],
   )
 
   const tierLabel =
@@ -625,8 +695,13 @@ export default function Sidebar() {
     founderProfile?.venture_name ||
     displayName
 
-  function handleAssessmentAction() {
-    if (!assessmentComplete) {
+  function handlePrimaryAction() {
+    if (!hasVentureSetup) {
+      navigate('/app/venture-intelligence-setup')
+      return
+    }
+
+    if (!hasCompletedDiagnostic) {
       navigate('/app/assessment')
       return
     }
@@ -644,11 +719,58 @@ export default function Sidebar() {
     }
   }
 
-  function handleAcademyClick(event) {
-    if (assessmentComplete) return
+  function handleLockedItemClick(event) {
     event.preventDefault()
+
+    if (!hasVentureSetup) {
+      navigate('/app/venture-intelligence-setup')
+      return
+    }
+
     navigate('/app/assessment')
   }
+
+  function handleEnvironmentClick(event) {
+    if (hasCompletedDiagnostic) return
+
+    event.preventDefault()
+
+    if (!hasVentureSetup) {
+      navigate('/app/venture-intelligence-setup')
+      return
+    }
+
+    navigate('/app/assessment')
+  }
+
+  function getPrimaryActionCopy() {
+    if (!hasVentureSetup) {
+      return {
+        title: 'Set up your venture',
+        subtitle: 'Add your market and operating context',
+        icon: '✦',
+        isComplete: false,
+      }
+    }
+
+    if (!hasCompletedDiagnostic) {
+      return {
+        title: 'Start founder diagnostic',
+        subtitle: 'Unlock your personalised Path360 plan',
+        icon: '✦',
+        isComplete: false,
+      }
+    }
+
+    return {
+      title: 'Review progress',
+      subtitle: 'Create a new version — prior work stays saved',
+      icon: '↺',
+      isComplete: true,
+    }
+  }
+
+  const primaryAction = getPrimaryActionCopy()
 
   return (
     <>
@@ -700,20 +822,25 @@ export default function Sidebar() {
               </div>
 
               {group.items.map((item) => {
-                const isLocked =
-                  Boolean(item.requiresAssessment) && !assessmentComplete
+                const isLocked = Boolean(
+                  item.requiresAssessment && !hasCompletedDiagnostic,
+                )
+
+                const isPreview = Boolean(item.isPreview)
+
+                const onClick = isLocked
+                  ? handleLockedItemClick
+                  : item.to === '/app/environment'
+                    ? handleEnvironmentClick
+                    : undefined
 
                 return (
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    onClick={
-                      item.requiresAssessment
-                        ? handleAcademyClick
-                        : undefined
-                    }
+                    onClick={onClick}
                     style={({ isActive }) =>
-                      getNavItemStyle(isActive, isLocked)
+                      getNavItemStyle(isActive, isLocked, isPreview)
                     }
                   >
                     <span
@@ -754,6 +881,23 @@ export default function Sidebar() {
                         Unlock
                       </span>
                     ) : null}
+
+                    {!isLocked && isPreview ? (
+                      <span
+                        style={{
+                          padding: '3px 6px',
+                          borderRadius: 999,
+                          background: '#EAF1EB',
+                          color: '#2A6A51',
+                          fontSize: 9.5,
+                          fontWeight: 800,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Preview
+                      </span>
+                    ) : null}
                   </NavLink>
                 )
               })}
@@ -770,7 +914,7 @@ export default function Sidebar() {
 
           <button
             type="button"
-            onClick={handleAssessmentAction}
+            onClick={handlePrimaryAction}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -779,16 +923,16 @@ export default function Sidebar() {
               padding: '13px',
               borderRadius: 14,
               border: '1px solid #7158DC',
-              background: assessmentComplete ? '#F5F0FF' : '#7158DC',
-              color: assessmentComplete ? '#7158DC' : '#FFFFFF',
+              background: primaryAction.isComplete ? '#F5F0FF' : '#7158DC',
+              color: primaryAction.isComplete ? '#7158DC' : '#FFFFFF',
               cursor: 'pointer',
-              boxShadow: assessmentComplete
+              boxShadow: primaryAction.isComplete
                 ? 'none'
                 : '0 10px 20px rgba(113,88,220,0.18)',
             }}
           >
             <span style={{ fontSize: 12, fontWeight: 800 }}>
-              {assessmentComplete ? '↺' : '✦'}
+              {primaryAction.icon}
             </span>
 
             <span
@@ -800,13 +944,11 @@ export default function Sidebar() {
               }}
             >
               <span style={{ fontSize: 12.5, fontWeight: 800 }}>
-                {assessmentComplete ? 'Review progress' : 'Your next move'}
+                {primaryAction.title}
               </span>
 
               <span style={{ fontSize: 10.5, opacity: 0.8, fontWeight: 600 }}>
-                {assessmentComplete
-                  ? 'Create a new version — prior work stays saved'
-                  : 'Complete founder assessment'}
+                {primaryAction.subtitle}
               </span>
             </span>
           </button>

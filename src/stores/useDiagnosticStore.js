@@ -10,7 +10,23 @@ import {
   getDocumentIntakes,
   addFounderProgress as addFounderProgressRecord,
   getFounderProgress,
+  saveComplianceProgress as saveComplianceProgressRecord,
+  getComplianceProgress,
 } from '../lib/supabaseClient.js'
+import {
+  GLOBAL_CORRIDOR_MATRIX,
+  getCorridorContext,
+  getCorridorKey,
+} from '../lib/globalCorridors.js'
+import {
+  getVentureIntelligenceProfile,
+  saveVentureIntelligenceProfile,
+} from '../lib/ventureIntelligence.js'
+import {
+  computeReadinessPercent,
+  diagnoseStage,
+  getVulnerabilityFlags,
+} from '../lib/readinessEngine.js'
 
 const DEFAULT_AGENT = 'venture_strategist'
 
@@ -41,7 +57,7 @@ function isCompletedStageAssessment(assessment) {
       assessment.declaredStage &&
       assessment.diagnosedStage &&
       assessment.statusByItem &&
-      Object.keys(assessment.statusByItem).length > 0
+      Object.keys(assessment.statusByItem).length > 0,
   )
 }
 
@@ -54,7 +70,6 @@ function loadLocalStage(userId) {
     const keys = getStageKeys(userId)
     const rawAssessment = window.localStorage?.getItem(keys.assessment)
     const completedRaw = window.localStorage?.getItem(keys.completed)
-
     const assessment = rawAssessment ? JSON.parse(rawAssessment) : null
     const completed = completedRaw === 'true'
 
@@ -93,7 +108,7 @@ function saveLocalStage(userId, assessment) {
       if (isComplete) {
         window.localStorage?.setItem(
           PENDING_STAGE_KEY,
-          JSON.stringify(assessment)
+          JSON.stringify(assessment),
         )
       } else {
         window.localStorage?.removeItem(PENDING_STAGE_KEY)
@@ -105,10 +120,7 @@ function saveLocalStage(userId, assessment) {
     const keys = getStageKeys(userId)
 
     if (isComplete) {
-      window.localStorage?.setItem(
-        keys.assessment,
-        JSON.stringify(assessment)
-      )
+      window.localStorage?.setItem(keys.assessment, JSON.stringify(assessment))
       window.localStorage?.setItem(keys.completed, 'true')
       window.localStorage?.removeItem(PENDING_STAGE_KEY)
       return
@@ -131,19 +143,151 @@ function normaliseAssessmentHistory(history) {
       const versionA = Number(a?.versionnumber ?? 0)
       const versionB = Number(b?.versionnumber ?? 0)
 
-      if (versionA !== versionB) {
-        return versionB - versionA
-      }
+      if (versionA !== versionB) return versionB - versionA
 
       return new Date(b?.createdat || 0) - new Date(a?.createdat || 0)
     })
 }
 
 function getAssessmentVersion(assessment) {
-  return Number(
-    assessment?.versionnumber ??
-      assessment?.version_number ??
-      0
+  return Number(assessment?.versionnumber ?? assessment?.version_number ?? 0)
+}
+
+function normaliseGeography(value) {
+  const raw = String(value || '')
+    .trim()
+    .toLowerCase()
+
+  if (!raw) return ''
+
+  if (/africa|african/.test(raw)) return 'africa'
+  if (/europe|european|\beu\b/.test(raw)) return 'europe'
+  if (/united states|\bu\.?s\.?a?\b|america|american/.test(raw)) {
+    return 'united_states'
+  }
+  if (/global|international|multiple regions|multi-region/.test(raw)) {
+    return 'global'
+  }
+  if (/not raising|not fundraising|bootstrapp/.test(raw)) {
+    return 'not_raising_yet'
+  }
+
+  return raw.replace(/[\s-]+/g, '_')
+}
+
+function getOperatingGeography(profile) {
+  return normaliseGeography(
+    profile?.operating_geography ||
+      profile?.operatingGeography ||
+      profile?.geography,
+  )
+}
+
+function getCapitalTargetGeography(profile) {
+  return normaliseGeography(
+    profile?.capital_target_geography ||
+      profile?.capitalTargetGeography ||
+      profile?.target_investor_region,
+  )
+}
+
+function resolveCorridorKey(profile) {
+  if (!profile) return null
+
+  const operatingGeography = getOperatingGeography(profile)
+  const capitalTargetGeography = getCapitalTargetGeography(profile)
+  const directMatch = getCorridorKey(
+    operatingGeography,
+    capitalTargetGeography,
+  )
+
+  if (directMatch) return directMatch
+
+  if (
+    /africa|latam|india|mena|emerging/.test(operatingGeography) &&
+    capitalTargetGeography === 'united_states'
+  ) {
+    return 'emerging_to_us'
+  }
+
+  return null
+}
+
+function resolveCorridorContext(profile, corridorKey) {
+  if (!profile) return null
+
+  const context = getCorridorContext(
+    getOperatingGeography(profile),
+    getCapitalTargetGeography(profile),
+  )
+
+  if (context) return context
+
+  const corridor = corridorKey ? GLOBAL_CORRIDOR_MATRIX[corridorKey] : null
+
+  return corridor
+    ? {
+        key: corridorKey,
+        ...corridor,
+      }
+    : null
+}
+
+function deriveAssessmentState(profile, assessment) {
+  const readinessPercent = assessment ? computeReadinessPercent(assessment) : 0
+  const stage = assessment ? diagnoseStage(assessment) : null
+  const flags = assessment ? getVulnerabilityFlags(assessment) : []
+  const resolvedCorridorKey = profile ? resolveCorridorKey(profile) : null
+  const corridor = resolveCorridorContext(profile, resolvedCorridorKey)
+  const corridorKey = corridor?.key || resolvedCorridorKey
+  const recommendedAcademyPath = corridor?.academyFocusTrack || stage || null
+
+  const enrichedAssessment = assessment
+    ? {
+        ...assessment,
+        investorreadiness:
+          assessment.investorreadiness ??
+          assessment.investor_readiness ??
+          readinessPercent,
+        diagnosedStage: assessment.diagnosedStage ?? stage,
+        recommendedacademypath:
+          assessment.recommendedacademypath ?? recommendedAcademyPath,
+        corridorKey:
+          assessment.corridorKey ?? assessment.corridor_key ?? corridorKey,
+      }
+    : null
+
+  return {
+    assessment: enrichedAssessment,
+    readinessPercent,
+    stage,
+    flags,
+    corridorKey,
+    corridor,
+    recommendedAcademyPath,
+  }
+}
+
+function hasCompletedVentureSetup(profile) {
+  return Boolean(profile?.setup_completed_at)
+}
+
+function hasCompletedFounderDiagnostic(assessment) {
+  if (!assessment) return false
+
+  const completedAt =
+    assessment.completedat || assessment.completed_at || assessment.completedAt
+  const type =
+    assessment.assessmenttype || assessment.assessment_type || 'baseline'
+  const rawQa = assessment.rawqa || assessment.raw_qa || []
+  const founderScore = assessment.founderscore ?? assessment.founder_score
+
+  return Boolean(
+    assessment.id &&
+      completedAt &&
+      type === 'baseline' &&
+      ((Array.isArray(rawQa) && rawQa.length > 0) ||
+        (founderScore !== undefined && founderScore !== null)),
   )
 }
 
@@ -151,13 +295,19 @@ const useDiagnosticStore = create((set, get) => ({
   user: null,
   founderProfile: null,
 
-  // Current, active completed assessment used throughout the workspace.
   assessmentResults: null,
+  investorReadyPercent: 0,
+  diagnosedStage: null,
+  vulnerabilityFlags: [],
 
-  // Every completed assessment remains available here, newest first.
+  corridorKey: null,
+  corridor: null,
+  recommendedAcademyPath: null,
+
+  ventureIntelligenceProfile: null,
+  hasCompletedVentureIntelligenceSetup: false,
+
   assessmentHistory: [],
-
-  // A safe local working copy created before a founder starts a review.
   progressReviewDraft: null,
 
   memories: [],
@@ -168,22 +318,56 @@ const useDiagnosticStore = create((set, get) => ({
   qaPairs: [],
   documentIntakes: [],
   progressEvents: [],
+  complianceProgress: {},
 
   stageAssessment: null,
   hasCompletedStageOnboarding: false,
 
   setUser: (user) => set({ user }),
 
-  setFounderProfile: (profile) =>
+  hasVentureSetup: () => {
+    return hasCompletedVentureSetup(get().ventureIntelligenceProfile)
+  },
+
+  hasCompletedDiagnostic: () => {
+    return hasCompletedFounderDiagnostic(get().assessmentResults)
+  },
+
+  hasCompletedPath360Baseline: () => {
+    return get().hasVentureSetup() && get().hasCompletedDiagnostic()
+  },
+
+  setFounderProfile: (profile) => {
+    const currentAssessment = get().assessmentResults
+    const derived = deriveAssessmentState(profile, currentAssessment)
+
     set({
       founderProfile: profile,
-    }),
+      assessmentResults: derived.assessment,
+      investorReadyPercent: derived.readinessPercent,
+      diagnosedStage: derived.stage,
+      vulnerabilityFlags: derived.flags,
+      corridorKey: derived.corridorKey,
+      corridor: derived.corridor,
+      recommendedAcademyPath: derived.recommendedAcademyPath,
+    })
+  },
 
-  setAssessmentResults: (results) =>
+  setAssessmentResults: (results) => {
+    const profile = get().founderProfile
+    const derived = deriveAssessmentState(profile, results || null)
+
     set({
-      assessmentResults: results || null,
+      assessmentResults: derived.assessment || null,
       qaPairs: Array.isArray(results?.rawqa) ? results.rawqa : [],
-    }),
+      investorReadyPercent: derived.readinessPercent,
+      diagnosedStage: derived.stage,
+      vulnerabilityFlags: derived.flags,
+      corridorKey: derived.corridorKey,
+      corridor: derived.corridor,
+      recommendedAcademyPath: derived.recommendedAcademyPath,
+    })
+  },
 
   setAssessmentHistory: (history) =>
     set({
@@ -235,9 +419,49 @@ const useDiagnosticStore = create((set, get) => ({
       progressEvents: Array.isArray(events) ? events : [],
     }),
 
+  saveComplianceProgress: async (userId, countryCode, profile) => {
+    if (!userId) {
+      throw new Error('No authenticated user found.')
+    }
+
+    if (!countryCode) {
+      throw new Error('A country code is required to save compliance progress.')
+    }
+
+    const saved = await saveComplianceProgressRecord(
+      userId,
+      countryCode,
+      profile,
+    )
+
+    const savedProfile = {
+      ...(saved?.profile_data || profile || {}),
+      countryCode: saved?.country_code || countryCode,
+      countryName:
+        saved?.country_name ||
+        profile?.countryName ||
+        profile?.country_name ||
+        null,
+      stage: saved?.stage || profile?.stage || null,
+      corridor: saved?.corridor || profile?.corridor || null,
+      updatedAt: saved?.updated_at || new Date().toISOString(),
+      completedCount: saved?.completed_count ?? 0,
+      inProgressCount: saved?.in_progress_count ?? 0,
+      totalCount: saved?.total_count ?? 0,
+    }
+
+    set((state) => ({
+      complianceProgress: {
+        ...(state.complianceProgress || {}),
+        [countryCode]: savedProfile,
+      },
+    }))
+
+    return savedProfile
+  },
+
   setStageAssessment: (assessment) => {
     const userId = get().user?.id
-
     const nextAssessment = isCompletedStageAssessment(assessment)
       ? { ...assessment }
       : null
@@ -252,7 +476,6 @@ const useDiagnosticStore = create((set, get) => ({
 
   clearStageAssessment: () => {
     const userId = get().user?.id
-
     saveLocalStage(userId, null)
 
     set({
@@ -261,10 +484,86 @@ const useDiagnosticStore = create((set, get) => ({
     })
   },
 
+  setVentureIntelligenceProfile: (profile) =>
+    set({
+      ventureIntelligenceProfile: profile || null,
+      hasCompletedVentureIntelligenceSetup: hasCompletedVentureSetup(profile),
+    }),
+
+  markVentureIntelligenceSetupComplete: (profile) =>
+    set({
+      ventureIntelligenceProfile:
+        profile || get().ventureIntelligenceProfile || null,
+      hasCompletedVentureIntelligenceSetup: true,
+    }),
+
+  loadVentureIntelligenceProfile: async () => {
+    const user = get().user
+
+    if (!user?.id) {
+      throw new Error('No authenticated user found.')
+    }
+
+    const profile = await getVentureIntelligenceProfile(user.id)
+
+    set({
+      ventureIntelligenceProfile: profile || null,
+      hasCompletedVentureIntelligenceSetup: hasCompletedVentureSetup(profile),
+    })
+
+    return profile
+  },
+
+  saveVentureIntelligenceSetup: async (profileData) => {
+    const user = get().user
+
+    if (!user?.id) {
+      throw new Error('No authenticated user found.')
+    }
+
+    const saved = await saveVentureIntelligenceProfile(user.id, profileData, {
+      markSetupComplete: true,
+    })
+
+    set({
+      ventureIntelligenceProfile: saved,
+      hasCompletedVentureIntelligenceSetup: true,
+    })
+
+    try {
+      const event = await addFounderProgressRecord(
+        user.id,
+        'venture_intelligence_setup_completed',
+        'Venture Intelligence Setup completed',
+        'Your market, business model and operating environment context are now available across PATH360.',
+        {
+          primaryCountryCode: saved?.primary_country_code || null,
+          primaryRegionCode: saved?.primary_region_code || null,
+          operatingScope: saved?.operating_scope || null,
+          revenueModelTags: saved?.revenue_model_tags || [],
+          operatingModelTags: saved?.operating_model_tags || [],
+        },
+      )
+
+      set((state) => ({
+        progressEvents: [
+          event,
+          ...(Array.isArray(state.progressEvents) ? state.progressEvents : []),
+        ],
+      }))
+    } catch (error) {
+      console.warn(
+        'Venture Intelligence Setup saved, but progress telemetry could not be recorded.',
+        error,
+      )
+    }
+
+    return saved
+  },
+
   getConversation: (agentType) => {
     const key = agentType || get().activeAgent || DEFAULT_AGENT
     const conversations = get().conversations || {}
-
     return Array.isArray(conversations[key]) ? conversations[key] : []
   },
 
@@ -304,14 +603,22 @@ const useDiagnosticStore = create((set, get) => ({
 
     try {
       const currentProfile = get().founderProfile || {}
-
       const saved = await saveFounderProfile(user.id, {
         ...currentProfile,
         ...profilePatch,
       })
+      const activeAssessment = get().assessmentResults
+      const derived = deriveAssessmentState(saved, activeAssessment)
 
       set({
         founderProfile: saved,
+        assessmentResults: derived.assessment,
+        investorReadyPercent: derived.readinessPercent,
+        diagnosedStage: derived.stage,
+        vulnerabilityFlags: derived.flags,
+        corridorKey: derived.corridorKey,
+        corridor: derived.corridor,
+        recommendedAcademyPath: derived.recommendedAcademyPath,
       })
 
       try {
@@ -322,7 +629,10 @@ const useDiagnosticStore = create((set, get) => ({
           'Your founder profile was saved and is now available across PATH360.',
           {
             ventureName: saved?.venturename || saved?.venture_name || null,
-          }
+            operatingGeography: getOperatingGeography(saved) || null,
+            capitalTargetGeography: getCapitalTargetGeography(saved) || null,
+            corridorKey: derived.corridorKey,
+          },
         )
       } catch (error) {
         console.warn('Failed to record founder profile milestone', error)
@@ -335,11 +645,6 @@ const useDiagnosticStore = create((set, get) => ({
     }
   },
 
-  /*
-   * Creates the first baseline assessment if no assessment exists.
-   * If a completed assessment already exists, it safely saves the submitted
-   * work as a progress-review version instead of replacing past work.
-   */
   addAssessment: async (results) => {
     const user = get().user
 
@@ -350,15 +655,13 @@ const useDiagnosticStore = create((set, get) => ({
     try {
       const currentAssessment = get().assessmentResults
       const history = normaliseAssessmentHistory(get().assessmentHistory)
-
       const isBaseline = !currentAssessment?.id
       const currentVersion = getAssessmentVersion(currentAssessment)
       const historyVersion = history.reduce(
         (highest, assessment) =>
           Math.max(highest, getAssessmentVersion(assessment)),
-        0
+        0,
       )
-
       const nextVersion = isBaseline
         ? 1
         : Math.max(currentVersion, historyVersion, 1) + 1
@@ -375,19 +678,30 @@ const useDiagnosticStore = create((set, get) => ({
       }
 
       const saved = await saveAssessment(user.id, payload)
+      const profile = get().founderProfile
+      const derived = deriveAssessmentState(profile, saved)
+      const enrichedAssessment = derived.assessment
 
       set((state) => ({
-        assessmentResults: saved,
+        assessmentResults: enrichedAssessment,
         assessmentHistory: normaliseAssessmentHistory([
-          saved,
+          enrichedAssessment,
           ...(Array.isArray(state.assessmentHistory)
             ? state.assessmentHistory.filter(
-                (assessment) => assessment?.id !== saved?.id
+                (assessment) => assessment?.id !== enrichedAssessment?.id,
               )
             : []),
         ]),
-        qaPairs: Array.isArray(saved?.rawqa) ? saved.rawqa : [],
+        qaPairs: Array.isArray(enrichedAssessment?.rawqa)
+          ? enrichedAssessment.rawqa
+          : [],
         progressReviewDraft: null,
+        investorReadyPercent: derived.readinessPercent,
+        diagnosedStage: derived.stage,
+        vulnerabilityFlags: derived.flags,
+        corridorKey: derived.corridorKey,
+        corridor: derived.corridor,
+        recommendedAcademyPath: derived.recommendedAcademyPath,
       }))
 
       try {
@@ -403,46 +717,44 @@ const useDiagnosticStore = create((set, get) => ({
             ? 'Your baseline assessment has been saved.'
             : `Your progress review was saved as version ${nextVersion}. Your previous assessment remains available in history.`,
           {
-            assessmentid: saved?.id ?? null,
-            assessmenttype: saved?.assessmenttype ?? null,
-            versionnumber: saved?.versionnumber ?? nextVersion,
-            founderscore: saved?.founderscore ?? null,
-            investorreadiness: saved?.investorreadiness ?? null,
-          }
+            assessmentid: enrichedAssessment?.id ?? null,
+            assessmenttype: enrichedAssessment?.assessmenttype ?? null,
+            versionnumber: enrichedAssessment?.versionnumber ?? nextVersion,
+            founderscore: enrichedAssessment?.founderscore ?? null,
+            investorreadiness:
+              enrichedAssessment?.investorreadiness ?? derived.readinessPercent,
+            corridorKey: derived.corridorKey,
+            recommendedAcademyPath: derived.recommendedAcademyPath,
+          },
         )
       } catch (error) {
         console.warn('Failed to record assessment milestone', error)
       }
 
-      return saved
+      return enrichedAssessment
     } catch (error) {
       console.error('addAssessment failed', error)
       throw error
     }
   },
 
-  /*
-   * Use this when the founder selects “Review progress”.
-   * It does not update Supabase or modify the existing baseline.
-   */
   startProgressReview: () => {
     const currentAssessment = get().assessmentResults
     const history = normaliseAssessmentHistory(get().assessmentHistory)
 
     if (!currentAssessment?.id) {
       throw new Error(
-        'Complete your baseline assessment before starting a progress review.'
+        'Complete your baseline assessment before starting a progress review.',
       )
     }
 
     const highestVersion = history.reduce(
       (highest, assessment) =>
         Math.max(highest, getAssessmentVersion(assessment)),
-      getAssessmentVersion(currentAssessment)
+      getAssessmentVersion(currentAssessment),
     )
 
     const now = new Date().toISOString()
-
     const draft = {
       ...currentAssessment,
       id: null,
@@ -471,23 +783,31 @@ const useDiagnosticStore = create((set, get) => ({
 
   setActiveAssessmentFromHistory: (assessmentId) => {
     const history = normaliseAssessmentHistory(get().assessmentHistory)
-
+    const profile = get().founderProfile
     const selectedAssessment = history.find(
-      (assessment) => assessment?.id === assessmentId
+      (assessment) => assessment?.id === assessmentId,
     )
 
     if (!selectedAssessment) {
       throw new Error('Assessment version not found.')
     }
 
+    const derived = deriveAssessmentState(profile, selectedAssessment)
+
     set({
-      assessmentResults: selectedAssessment,
-      qaPairs: Array.isArray(selectedAssessment.rawqa)
-        ? selectedAssessment.rawqa
+      assessmentResults: derived.assessment,
+      qaPairs: Array.isArray(derived.assessment?.rawqa)
+        ? derived.assessment.rawqa
         : [],
+      investorReadyPercent: derived.readinessPercent,
+      diagnosedStage: derived.stage,
+      vulnerabilityFlags: derived.flags,
+      corridorKey: derived.corridorKey,
+      corridor: derived.corridor,
+      recommendedAcademyPath: derived.recommendedAcademyPath,
     })
 
-    return selectedAssessment
+    return derived.assessment
   },
 
   addMemory: async (memoryType, content, importanceScore = 3) => {
@@ -502,7 +822,7 @@ const useDiagnosticStore = create((set, get) => ({
         user.id,
         memoryType,
         content,
-        importanceScore
+        importanceScore,
       )
 
       set((state) => ({
@@ -614,7 +934,7 @@ const useDiagnosticStore = create((set, get) => ({
     docType,
     title,
     answers,
-    linkedAssessmentId = null
+    linkedAssessmentId = null,
   ) => {
     const user = get().user
 
@@ -628,7 +948,7 @@ const useDiagnosticStore = create((set, get) => ({
         docType,
         title,
         answers,
-        linkedAssessmentId
+        linkedAssessmentId,
       )
 
       set((state) => ({
@@ -649,7 +969,7 @@ const useDiagnosticStore = create((set, get) => ({
           {
             doctype: docType,
             intakeid: saved?.id || null,
-          }
+          },
         )
 
         set((state) => ({
@@ -696,7 +1016,7 @@ const useDiagnosticStore = create((set, get) => ({
     eventType,
     title,
     description = '',
-    metadata = {}
+    metadata = {},
   ) => {
     const user = get().user
 
@@ -710,15 +1030,13 @@ const useDiagnosticStore = create((set, get) => ({
         eventType,
         title,
         description,
-        metadata
+        metadata,
       )
 
       set((state) => ({
         progressEvents: [
           saved,
-          ...(Array.isArray(state.progressEvents)
-            ? state.progressEvents
-            : []),
+          ...(Array.isArray(state.progressEvents) ? state.progressEvents : []),
         ],
       }))
 
@@ -740,6 +1058,11 @@ const useDiagnosticStore = create((set, get) => ({
     const documentIntakes = Array.isArray(state.documentIntakes)
       ? state.documentIntakes
       : []
+    const corridorKey = state.corridorKey
+    const corridor =
+      state.corridor ||
+      (corridorKey ? GLOBAL_CORRIDOR_MATRIX[corridorKey] : null)
+    const ventureIntelligence = state.ventureIntelligenceProfile
 
     return {
       profile: profile
@@ -757,26 +1080,21 @@ const useDiagnosticStore = create((set, get) => ({
               null,
             industry: profile.industry || null,
             venture_stage:
-              profile.venturestage ||
-              profile.venture_stage ||
-              null,
+              profile.venturestage || profile.venture_stage || null,
             business_model:
-              profile.businessmodel ||
-              profile.business_model ||
-              null,
+              profile.businessmodel || profile.business_model || null,
             geography: profile.geography || null,
-            funding_goal:
-              profile.fundinggoal ||
-              profile.funding_goal ||
-              null,
+            operating_geography: getOperatingGeography(profile) || null,
+            capital_target_geography:
+              getCapitalTargetGeography(profile) || null,
+            funding_goal: profile.fundinggoal || profile.funding_goal || null,
             website: profile.website || null,
             email: profile.email || null,
             role: profile.role || null,
             linkedin: profile.linkedin || null,
             venture_summary:
-              profile.venturesummary ||
-              profile.venture_summary ||
-              null,
+              profile.venturesummary || profile.venture_summary || null,
+            target_investor_region: profile.target_investor_region || null,
           }
         : null,
 
@@ -786,38 +1104,76 @@ const useDiagnosticStore = create((set, get) => ({
             assessment_type: assessment.assessmenttype ?? 'baseline',
             version_number: assessment.versionnumber ?? 1,
             founder_score:
-              assessment.founderscore ??
-              assessment.founder_score ??
-              null,
+              assessment.founderscore ?? assessment.founder_score ?? null,
             investor_readiness:
               assessment.investorreadiness ??
               assessment.investor_readiness ??
+              state.investorReadyPercent ??
               null,
             financial_maturity:
-              assessment.financialmaturity ??
-              assessment.financial_maturity ??
-              null,
+              assessment.financialmaturity ?? assessment.financial_maturity ?? null,
             venture_stage_result:
               assessment.venturestageresult ??
               assessment.venturestage ??
+              state.diagnosedStage ??
               null,
             strategic_priorities:
               assessment.strategicpriorities ??
               assessment.strategic_priorities ??
               [],
-            vc_verdict:
-              assessment.vcverdict ??
-              assessment.vc_verdict ??
-              null,
+            vc_verdict: assessment.vcverdict ?? assessment.vc_verdict ?? null,
             rawqa: assessment.rawqa ?? [],
+            corridor_key: corridorKey,
+            recommended_academy_path:
+              assessment.recommendedacademypath ??
+              state.recommendedAcademyPath ??
+              null,
+          }
+        : null,
+
+      venture_intelligence: ventureIntelligence
+        ? {
+            primary_country_code:
+              ventureIntelligence.primary_country_code || null,
+            primary_region_code:
+              ventureIntelligence.primary_region_code || null,
+            operating_scope: ventureIntelligence.operating_scope || null,
+            customer_model_tags:
+              ventureIntelligence.customer_model_tags || [],
+            revenue_model_tags: ventureIntelligence.revenue_model_tags || [],
+            distribution_model_tags:
+              ventureIntelligence.distribution_model_tags || [],
+            operating_model_tags:
+              ventureIntelligence.operating_model_tags || [],
+            dependency_tags: ventureIntelligence.dependency_tags || [],
+            finance_approach_tags:
+              ventureIntelligence.finance_approach_tags || [],
+            affordability_sensitivity:
+              ventureIntelligence.affordability_sensitivity || null,
+            market_formality: ventureIntelligence.market_formality || null,
+            regulatory_exposure:
+              ventureIntelligence.regulatory_exposure || null,
+            biggest_operating_concern:
+              ventureIntelligence.biggest_operating_concern || null,
+            setup_completed_at: ventureIntelligence.setup_completed_at || null,
+          }
+        : null,
+
+      corridor: corridor
+        ? {
+            corridor_key: corridorKey,
+            label: corridor.label,
+            summary: corridor.summary || null,
+            operating_geography: corridor.operatingGeography || null,
+            capital_target_geography:
+              corridor.capitalTargetGeography || null,
+            required_checks: corridor.requiredChecks || [],
+            academy_focus_track: corridor.academyFocusTrack || null,
           }
         : null,
 
       memories: memories.map((memory) => ({
-        memory_type:
-          memory.memorytype ??
-          memory.memory_type ??
-          null,
+        memory_type: memory.memorytype ?? memory.memory_type ?? null,
         content: memory.content ?? '',
       })),
 
@@ -842,28 +1198,55 @@ const useDiagnosticStore = create((set, get) => ({
     const tier = profile?.plantier || profile?.plan || 'starter'
 
     return ['growth', 'pro', 'scale', 'enterprise'].includes(
-      String(tier).toLowerCase()
+      String(tier).toLowerCase(),
     )
   },
 
   hydrateWorkspace: async (userId) => {
     try {
-      const workspace = await loadFounderWorkspace(userId)
+      const [workspace, intelligenceProfile, savedCompliance] = await Promise.all([
+        loadFounderWorkspace(userId),
+        getVentureIntelligenceProfile(userId),
+        getComplianceProgress(userId),
+      ])
+
+      const complianceProgress = (Array.isArray(savedCompliance)
+        ? savedCompliance
+        : []
+      ).reduce((accumulator, record) => {
+        const countryCode = record?.country_code
+
+        if (!countryCode) return accumulator
+
+        accumulator[countryCode] = {
+          ...(record?.profile_data || {}),
+          countryCode,
+          countryName: record?.country_name || null,
+          stage: record?.stage || null,
+          corridor: record?.corridor || null,
+          updatedAt: record?.updated_at || null,
+          completedCount: record?.completed_count ?? 0,
+          inProgressCount: record?.in_progress_count ?? 0,
+          totalCount: record?.total_count ?? 0,
+        }
+
+        return accumulator
+      }, {})
+
       const localStage = loadLocalStage(userId)
+      const profile = workspace?.founderProfile ?? null
+      const assessment = workspace?.assessmentResults ?? null
+      const derived = deriveAssessmentState(profile, assessment)
 
       set({
-        founderProfile: workspace?.founderProfile ?? null,
-        assessmentResults: workspace?.assessmentResults ?? null,
+        founderProfile: profile,
+        assessmentResults: derived.assessment,
         assessmentHistory: normaliseAssessmentHistory(
-          workspace?.assessmentHistory
+          workspace?.assessmentHistory,
         ),
         progressReviewDraft: null,
-        memories: Array.isArray(workspace?.memories)
-          ? workspace.memories
-          : [],
-        documents: Array.isArray(workspace?.documents)
-          ? workspace.documents
-          : [],
+        memories: Array.isArray(workspace?.memories) ? workspace.memories : [],
+        documents: Array.isArray(workspace?.documents) ? workspace.documents : [],
         founderFiles: Array.isArray(workspace?.founderFiles)
           ? workspace.founderFiles
           : [],
@@ -877,8 +1260,18 @@ const useDiagnosticStore = create((set, get) => ({
         progressEvents: Array.isArray(workspace?.progressEvents)
           ? workspace.progressEvents
           : [],
+        complianceProgress,
         stageAssessment: localStage.assessment,
         hasCompletedStageOnboarding: localStage.completed,
+        investorReadyPercent: derived.readinessPercent,
+        diagnosedStage: derived.stage,
+        vulnerabilityFlags: derived.flags,
+        corridorKey: derived.corridorKey,
+        corridor: derived.corridor,
+        recommendedAcademyPath: derived.recommendedAcademyPath,
+        ventureIntelligenceProfile: intelligenceProfile || null,
+        hasCompletedVentureIntelligenceSetup:
+          hasCompletedVentureSetup(intelligenceProfile),
       })
 
       return workspace
@@ -890,12 +1283,19 @@ const useDiagnosticStore = create((set, get) => ({
 
   clearWorkspace: () => {
     const userId = get().user?.id
-
     saveLocalStage(userId, null)
 
     set({
       founderProfile: null,
       assessmentResults: null,
+      investorReadyPercent: 0,
+      diagnosedStage: null,
+      vulnerabilityFlags: [],
+      corridorKey: null,
+      corridor: null,
+      recommendedAcademyPath: null,
+      ventureIntelligenceProfile: null,
+      hasCompletedVentureIntelligenceSetup: false,
       assessmentHistory: [],
       progressReviewDraft: null,
       memories: [],
@@ -906,6 +1306,7 @@ const useDiagnosticStore = create((set, get) => ({
       qaPairs: [],
       documentIntakes: [],
       progressEvents: [],
+      complianceProgress: {},
       stageAssessment: null,
       hasCompletedStageOnboarding: false,
     })
@@ -916,6 +1317,14 @@ const useDiagnosticStore = create((set, get) => ({
       user: null,
       founderProfile: null,
       assessmentResults: null,
+      investorReadyPercent: 0,
+      diagnosedStage: null,
+      vulnerabilityFlags: [],
+      corridorKey: null,
+      corridor: null,
+      recommendedAcademyPath: null,
+      ventureIntelligenceProfile: null,
+      hasCompletedVentureIntelligenceSetup: false,
       assessmentHistory: [],
       progressReviewDraft: null,
       memories: [],
@@ -926,6 +1335,7 @@ const useDiagnosticStore = create((set, get) => ({
       qaPairs: [],
       documentIntakes: [],
       progressEvents: [],
+      complianceProgress: {},
       stageAssessment: null,
       hasCompletedStageOnboarding: false,
     })

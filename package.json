@@ -13,6 +13,7 @@
     "@stripe/stripe-js": "^9.7.0",
     "@supabase/auth-helpers-react": "^0.15.0",
     "@supabase/supabase-js": "^2.106.2",
+    "git": "^0.1.5",
     "posthog-js": "^1.376.3",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
