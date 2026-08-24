@@ -19,6 +19,7 @@ import Memory from './pages/Memory.jsx'
 import Radar from './pages/Radar.jsx'
 import Reports from './pages/Reports.jsx'
 import Academy from './pages/Academy.jsx'
+import KnowledgeResourceCentre from './pages/KnowledgeResourceCentre.jsx'
 import FounderProfile from './pages/FounderProfile.jsx'
 import StageOnboarding from './pages/StageOnboarding.jsx'
 import VentureIntelligenceSetup from './pages/VentureIntelligenceSetup.jsx'
@@ -322,6 +323,11 @@ export default function App() {
           <Route path="radar" element={<Radar />} />
           <Route path="reports" element={<Reports />} />
           <Route path="academy" element={<Academy />} />
+
+          <Route
+            path="resources"
+            element={<KnowledgeResourceCentre />}
+          />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,7 +1,7 @@
 // src/pages/Academy.jsx
 
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import supabase from '../lib/supabaseClient.js'
 import MissionTwo from './MissionTwo.jsx'
 import MissionCompletionCard from './MissionCompletionCard.jsx'
@@ -12,7 +12,6 @@ const COURSE = {
   title: 'PATH360 Academy',
 }
 
-// Include MVP as a distinct stage between Validation and Traction.
 const PATH_ORDER = ['idea', 'validation', 'mvp', 'traction', 'growth']
 
 const ACADEMY_PATHS = {
@@ -166,7 +165,6 @@ const ACADEMY_PATHS = {
     ],
   },
 
-  // New MVP stage config based on your blueprint.
   mvp: {
     label: 'MVP',
     title: 'From evidence to a functioning baseline',
@@ -415,7 +413,13 @@ function SectionLabel({ children, tone = 'lilac' }) {
   )
 }
 
-function Button({ children, onClick, variant = 'primary', disabled = false, style = {} }) {
+function Button({
+  children,
+  onClick,
+  variant = 'primary',
+  disabled = false,
+  style = {},
+}) {
   const styles = {
     primary: {
       background: 'var(--green-700, #1A704D)',
@@ -455,7 +459,14 @@ function Button({ children, onClick, variant = 'primary', disabled = false, styl
   )
 }
 
-function JournalField({ label, hint, value, onChange, placeholder, rows = 4 }) {
+function JournalField({
+  label,
+  hint,
+  value,
+  onChange,
+  placeholder,
+  rows = 4,
+}) {
   return (
     <div>
       <label
@@ -515,7 +526,9 @@ function getVentureName(profile) {
 }
 
 function normaliseWork(row) {
-  const content = row?.content && typeof row.content === 'object' ? row.content : {}
+  const content =
+    row?.content && typeof row.content === 'object' ? row.content : {}
+
   return {
     ...EMPTY_WORK,
     ...content,
@@ -526,18 +539,22 @@ function normaliseWork(row) {
 }
 
 function statusColor(status) {
-  if (status === 'evidence-backed')
+  if (status === 'evidence-backed') {
     return {
       bg: 'var(--green-100, #E9F4EC)',
       border: 'rgba(26,112,77,.22)',
       text: 'var(--green-800, #15563E)',
     }
-  if (status === 'applied')
+  }
+
+  if (status === 'applied') {
     return {
       bg: 'var(--lilac-050, #F8F6FF)',
       border: 'var(--lilac-200, #DED5F6)',
       text: 'var(--lilac-800, #5B449D)',
     }
+  }
+
   return {
     bg: 'var(--surface-soft, #F8F9F6)',
     border: 'var(--border, #DDE2DC)',
@@ -545,7 +562,6 @@ function statusColor(status) {
   }
 }
 
-// Map readiness-engine stage strings into Academy path keys.
 function normalisePathKey(raw) {
   const key = String(raw || '').toLowerCase()
 
@@ -560,9 +576,13 @@ function normalisePathKey(raw) {
 
 export default function Academy() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
+
   const user = useDiagnosticStore((state) => state.user)
   const founderProfile = useDiagnosticStore((state) => state.founderProfile)
-  const assessmentResults = useDiagnosticStore((state) => state.assessmentResults)
+  const assessmentResults = useDiagnosticStore(
+    (state) => state.assessmentResults,
+  )
   const stageAssessment = useDiagnosticStore((state) => state.stageAssessment)
   const investorReadyPercent = useDiagnosticStore(
     (state) => state.investorReadyPercent,
@@ -572,7 +592,6 @@ export default function Academy() {
     (state) => state.vulnerabilityFlags || [],
   )
 
-  // Prefer explicit Academy path overrides, then readiness-engine stage.
   const rawStagePath =
     assessmentResults?.recommendedacademypath ||
     stageAssessment?.recommendedAcademyPath ||
@@ -625,8 +644,9 @@ export default function Academy() {
       work.status === 'evidence-backed'
         ? 3
         : work.status === 'applied'
-        ? 2
-        : 1
+          ? 2
+          : 1
+
     return Math.round((completed / 3) * 100)
   }, [work.status])
 
@@ -636,8 +656,9 @@ export default function Academy() {
         activeMissionKey,
       ) ||
       !user?.id
-    )
+    ) {
       return
+    }
 
     let mounted = true
 
@@ -667,6 +688,7 @@ export default function Academy() {
     }
 
     loadJournal()
+
     return () => {
       mounted = false
     }
@@ -689,7 +711,6 @@ export default function Academy() {
     setSearchParams({ stage: selectedPath, mission: key })
   }
 
-  // Allow routing directly into a mission for a specific stage (used by flags).
   function openMissionForStage(stageKey, missionKey) {
     setFieldNoteOpen(false)
     setVideoOpen(false)
@@ -702,13 +723,28 @@ export default function Academy() {
     setSearchParams({ stage: key })
   }
 
+  function openSupportingResources(missionKey = '') {
+    const params = new URLSearchParams({
+      stage: selectedPath,
+    })
+
+    if (missionKey) {
+      params.set('mission', missionKey)
+    }
+
+    navigate(`/app/resources?${params.toString()}`)
+  }
+
   async function uploadEvidence(event) {
     const file = event.target.files?.[0]
     if (!file || !user?.id) return
 
     setUploading(true)
+
     try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 80)
+      const safeName = file.name
+        .replace(/[^a-zA-Z0-9._-]/g, '-')
+        .slice(0, 80)
       const filePath = `${user.id}/${activeMissionKey}/${Date.now()}-${safeName}`
 
       const { error: uploadError } = await supabase.storage
@@ -779,7 +815,6 @@ export default function Academy() {
     setSaving(false)
   }
 
-  // Mission routing
   if (activeMission?.key === 'notice-friction') {
     return (
       <MissionTwo
@@ -844,7 +879,6 @@ export default function Academy() {
         color: 'var(--text, #151614)',
       }}
     >
-      {/* Hero */}
       <section
         style={{
           position: 'relative',
@@ -925,6 +959,14 @@ export default function Academy() {
                 : 'Begin your path'}{' '}
               →
             </Button>
+
+            <Button
+              variant="secondary"
+              onClick={() => openSupportingResources()}
+            >
+              Find supporting resources →
+            </Button>
+
             <span
               style={{
                 color: 'var(--green-800, #15563E)',
@@ -940,7 +982,6 @@ export default function Academy() {
         </div>
       </section>
 
-      {/* Main layout */}
       <div
         style={{
           display: 'grid',
@@ -950,8 +991,10 @@ export default function Academy() {
         }}
       >
         <main style={{ display: 'grid', gap: 16 }}>
-          {/* Learning sequence */}
-          <section className="p360-card" style={{ padding: 20, borderRadius: 18 }}>
+          <section
+            className="p360-card"
+            style={{ padding: 20, borderRadius: 18 }}
+          >
             <SectionLabel>YOUR FOCUSED LEARNING SEQUENCE</SectionLabel>
             <div
               style={{
@@ -979,13 +1022,12 @@ export default function Academy() {
                   key={mission.key}
                   mission={mission}
                   onOpen={() => openMission(mission.key)}
+                  onFindResources={() => openSupportingResources(mission.key)}
                 />
               ))}
             </div>
           </section>
-
-          {/* Founder field note & resource */}
-          <FieldNote
+                    <FieldNote
             path={path}
             isOpen={fieldNoteOpen}
             videoOpen={videoOpen}
@@ -993,8 +1035,10 @@ export default function Academy() {
             onWatch={() => setVideoOpen((current) => !current)}
           />
 
-          {/* Path selector */}
-          <section className="p360-card" style={{ padding: 20, borderRadius: 18 }}>
+          <section
+            className="p360-card"
+            style={{ padding: 20, borderRadius: 18 }}
+          >
             <SectionLabel>YOUR PATH THROUGH ACADEMY</SectionLabel>
             <div
               style={{
@@ -1007,6 +1051,7 @@ export default function Academy() {
                 const item = ACADEMY_PATHS[key]
                 const selected = key === selectedPath
                 const current = key === recommendedPath
+
                 return (
                   <button
                     key={key}
@@ -1065,6 +1110,7 @@ export default function Academy() {
                 )
               })}
             </div>
+
             <div
               style={{
                 marginTop: 13,
@@ -1085,6 +1131,7 @@ export default function Academy() {
                 All stages are available during your trial. Your diagnosis keeps
                 the highest-value path in focus.
               </div>
+
               <Button
                 variant="secondary"
                 onClick={() => openStage(recommendedPath)}
@@ -1095,10 +1142,14 @@ export default function Academy() {
             </div>
           </section>
 
-          {/* Structural risk flags from readiness engine */}
           {vulnerabilityFlags.length > 0 && (
-            <section className="p360-card" style={{ padding: 18, borderRadius: 18 }}>
-              <SectionLabel tone="muted">STRUCTURAL RISKS IN YOUR CURRENT PLAN</SectionLabel>
+            <section
+              className="p360-card"
+              style={{ padding: 18, borderRadius: 18 }}
+            >
+              <SectionLabel tone="muted">
+                STRUCTURAL RISKS IN YOUR CURRENT PLAN
+              </SectionLabel>
               <p
                 style={{
                   margin: '0 0 10px',
@@ -1107,10 +1158,11 @@ export default function Academy() {
                   lineHeight: 1.6,
                 }}
               >
-                Your readiness scores reveal imbalances between product, evidence, and
-                unit economics. Use these flags to focus your next Academy sessions on
-                the risks that matter most.
+                Your readiness scores reveal imbalances between product,
+                evidence, and unit economics. Use these flags to focus your
+                next Academy sessions on the risks that matter most.
               </p>
+
               <div style={{ display: 'grid', gap: 8 }}>
                 {vulnerabilityFlags.map((flag) => (
                   <div
@@ -1141,24 +1193,64 @@ export default function Academy() {
                     >
                       {flag.description}
                     </div>
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        if (flag.key === 'over_engineering_trap') {
-                          // Route into Validation · Listen without pitching
-                          openMissionForStage('validation', 'interview-without-pitching')
-                        } else if (flag.key === 'leaky_bucket_trap') {
-                          // Route into Traction · Validate repeatable demand
-                          openMissionForStage('traction', 'ready-to-scale')
-                        }
-                      }}
+
+                    <div
                       style={{
-                        padding: '6px 10px',
-                        fontSize: 11,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flexWrap: 'wrap',
                       }}
                     >
-                      Focus on this risk →
-                    </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          if (flag.key === 'over_engineering_trap') {
+                            openMissionForStage(
+                              'validation',
+                              'interview-without-pitching',
+                            )
+                          } else if (flag.key === 'leaky_bucket_trap') {
+                            openMissionForStage(
+                              'traction',
+                              'ready-to-scale',
+                            )
+                          }
+                        }}
+                        style={{
+                          padding: '6px 10px',
+                          fontSize: 11,
+                        }}
+                      >
+                        Focus on this risk →
+                      </Button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (flag.key === 'over_engineering_trap') {
+                            openSupportingResources(
+                              'interview-without-pitching',
+                            )
+                          } else if (flag.key === 'leaky_bucket_trap') {
+                            openSupportingResources('ready-to-scale')
+                          } else {
+                            openSupportingResources()
+                          }
+                        }}
+                        style={{
+                          border: 0,
+                          padding: '6px 2px',
+                          background: 'transparent',
+                          color: '#8B2020',
+                          fontSize: 10.5,
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Find resources →
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1166,7 +1258,6 @@ export default function Academy() {
           )}
         </main>
 
-        {/* Sidebar */}
         <aside style={{ display: 'grid', gap: 16 }}>
           <section
             style={{
@@ -1204,6 +1295,46 @@ export default function Academy() {
               style={{ width: '100%' }}
             >
               Open your journal →
+            </Button>
+          </section>
+
+          <section
+            style={{
+              borderRadius: 18,
+              padding: 18,
+              background: 'var(--lilac-050, #F8F6FF)',
+              border: '1px solid var(--lilac-200, #DED5F6)',
+            }}
+          >
+            <SectionLabel>RESOURCE CENTRE</SectionLabel>
+            <div
+              style={{
+                fontSize: 16,
+                fontWeight: 850,
+                marginBottom: 6,
+                color: 'var(--text, #151614)',
+              }}
+            >
+              Find tools for your next move.
+            </div>
+            <p
+              style={{
+                margin: '0 0 14px',
+                fontSize: 12,
+                lineHeight: 1.6,
+                color: 'var(--text-soft, #5D635D)',
+              }}
+            >
+              Browse supporting templates, official sources, market research,
+              ecosystem directories, and PATH360 tools for the {path.label.toLowerCase()}{' '}
+              stage.
+            </p>
+            <Button
+              variant="lilac"
+              onClick={() => openSupportingResources()}
+              style={{ width: '100%' }}
+            >
+              Explore resources →
             </Button>
           </section>
 
@@ -1284,23 +1415,20 @@ export default function Academy() {
   )
 }
 
-function LessonCard({ mission, onOpen }) {
+function LessonCard({ mission, onOpen, onFindResources }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
+    <div
       style={{
         width: '100%',
         display: 'grid',
-        gridTemplateColumns: '34px minmax(0,1fr) auto',
+        gridTemplateColumns: '34px minmax(0,1fr) auto auto',
         alignItems: 'center',
         gap: 12,
         padding: '13px 12px',
         background: 'var(--surface, #FFF)',
         border: '1px solid var(--border, #DDE2DC)',
         borderRadius: 13,
-        cursor: 'pointer',
-        textAlign: 'left',
+        boxSizing: 'border-box',
       }}
     >
       <span
@@ -1318,7 +1446,19 @@ function LessonCard({ mission, onOpen }) {
       >
         {String(mission.number).padStart(2, '0')}
       </span>
-      <span>
+
+      <button
+        type="button"
+        onClick={onOpen}
+        style={{
+          minWidth: 0,
+          padding: 0,
+          border: 0,
+          background: 'transparent',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
         <span
           style={{
             display: 'block',
@@ -1353,18 +1493,42 @@ function LessonCard({ mission, onOpen }) {
             Create: {mission.artefact}
           </span>
         ) : null}
-      </span>
-      <span
+      </button>
+
+      <button
+        type="button"
+        onClick={onFindResources}
         style={{
+          border: 0,
+          padding: '5px 2px',
+          background: 'transparent',
+          color: 'var(--lilac-800, #5B449D)',
+          fontSize: 10.5,
+          fontWeight: 800,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Resources
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpen}
+        style={{
+          border: 0,
+          padding: '5px 2px',
+          background: 'transparent',
           color: 'var(--green-700, #1A704D)',
           fontSize: 11.5,
           fontWeight: 850,
+          cursor: 'pointer',
           whiteSpace: 'nowrap',
         }}
       >
         Begin →
-      </span>
-    </button>
+      </button>
+    </div>
   )
 }
 
@@ -1433,7 +1597,9 @@ function FieldNote({ path, isOpen, videoOpen, onToggle, onWatch }) {
           <h3>Try this this week</h3>
           <p>{note.challenge}</p>
 
-          <div className="p360-field-note-create">Create: {note.create}</div>
+          <div className="p360-field-note-create">
+            Create: {note.create}
+          </div>
 
           <div
             style={{
@@ -1668,7 +1834,10 @@ function MissionOne({
             </p>
           </section>
 
-          <section className="p360-card" style={{ padding: 18, borderRadius: 18 }}>
+          <section
+            className="p360-card"
+            style={{ padding: 18, borderRadius: 18 }}
+          >
             <SectionLabel>REFLECT</SectionLabel>
             <JournalField
               label="What friction or problem keeps catching your attention?"
@@ -1681,7 +1850,10 @@ function MissionOne({
             />
           </section>
 
-          <section className="p360-card" style={{ padding: 18, borderRadius: 18 }}>
+          <section
+            className="p360-card"
+            style={{ padding: 18, borderRadius: 18 }}
+          >
             <SectionLabel>FIELD CHALLENGE</SectionLabel>
             <h2 style={{ margin: '0 0 8px', fontSize: 17 }}>
               Record three observed friction points
@@ -1717,7 +1889,10 @@ function MissionOne({
             </div>
           </section>
 
-          <section className="p360-card" style={{ padding: 18, borderRadius: 18 }}>
+          <section
+            className="p360-card"
+            style={{ padding: 18, borderRadius: 18 }}
+          >
             <SectionLabel>EVIDENCE</SectionLabel>
             <input
               value={work.evidenceUrl}
@@ -1763,7 +1938,10 @@ function MissionOne({
             </div>
           </section>
 
-          <section className="p360-card" style={{ padding: 18, borderRadius: 18 }}>
+          <section
+            className="p360-card"
+            style={{ padding: 18, borderRadius: 18 }}
+          >
             <SectionLabel>DECIDE</SectionLabel>
             <JournalField
               label="What do I want to investigate next?"
@@ -1844,6 +2022,7 @@ function ComingSoonMission({ mission, onBack }) {
       >
         ← Back to Academy
       </button>
+
       <section
         className="p360-card"
         style={{ padding: 22, borderRadius: 18 }}
@@ -1904,6 +2083,7 @@ function MissionSidebar({ work, updateWork, progress, versions, loading }) {
         {STATUS_OPTIONS.map((option) => {
           const selected = work.status === option.value
           const colors = statusColor(option.value)
+
           return (
             <button
               key={option.value}

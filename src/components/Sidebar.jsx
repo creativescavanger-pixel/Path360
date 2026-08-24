@@ -58,6 +58,12 @@ const FEEDBACK_PAGES = [
     prompt: 'What would improve this learning experience?',
   },
   {
+    path: '/app/resources',
+    label: 'Resource Centre',
+    prompt:
+      'What resource, tool, or source would make it easier to move your venture forward?',
+  },
+  {
     path: '/app/assessment',
     label: 'Founder Diagnostic',
     prompt:
@@ -648,6 +654,12 @@ export default function Sidebar() {
           {
             to: '/app/academy',
             label: 'Academy',
+            icon: '•',
+            requiresAssessment: true,
+          },
+          {
+            to: '/app/resources',
+            label: 'Resource Centre',
             icon: '•',
             requiresAssessment: true,
           },

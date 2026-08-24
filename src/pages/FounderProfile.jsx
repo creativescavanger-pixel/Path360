@@ -74,6 +74,10 @@ function mapStoreProfile(profile) {
       safeProfile.venturesummary ||
       safeProfile.venture_summary ||
       '',
+    workspace_private: safeProfile.workspace_private !== false,
+    anonymous_benchmarking_opt_in:
+      safeProfile.anonymous_benchmarking_opt_in === true,
+    report_sharing_enabled: safeProfile.report_sharing_enabled === true,
   }
 }
 
@@ -265,6 +269,61 @@ function SectionCard({ eyebrow, title, description, children, accent = '#1D6B4F'
   )
 }
 
+function PrivacyOption({ checked, onChange, title, description, disabled = false }) {
+  return (
+    <label
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 11,
+        padding: 13,
+        border: '1px solid #E2DED6',
+        borderRadius: 12,
+        background: disabled ? '#F8F6F1' : '#FFFFFF',
+        cursor: disabled ? 'default' : 'pointer',
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+        style={{
+          width: 16,
+          height: 16,
+          marginTop: 1,
+          accentColor: '#7158DC',
+          cursor: disabled ? 'default' : 'pointer',
+          flexShrink: 0,
+        }}
+      />
+      <span>
+        <span
+          style={{
+            display: 'block',
+            color: '#1C1C1A',
+            fontSize: 12.5,
+            fontWeight: 800,
+            marginBottom: 4,
+          }}
+        >
+          {title}
+        </span>
+        <span
+          style={{
+            display: 'block',
+            color: '#6B6965',
+            fontSize: 11.5,
+            lineHeight: 1.6,
+          }}
+        >
+          {description}
+        </span>
+      </span>
+    </label>
+  )
+}
+
 export default function FounderProfile() {
   const founderProfile = useDiagnosticStore((s) => s.founderProfile)
   const updateFounderProfile = useDiagnosticStore((s) => s.updateFounderProfile)
@@ -288,15 +347,16 @@ export default function FounderProfile() {
       [key]: value,
     }))
     setMessage('')
+    setError('')
   }
 
   const corridorPreview = useMemo(
     () =>
       getCorridorContext(
         form.operating_geography,
-        form.capital_target_geography
+        form.capital_target_geography,
       ),
-    [form.operating_geography, form.capital_target_geography]
+    [form.operating_geography, form.capital_target_geography],
   )
 
   const corridor = corridorPreview || storedCorridor
@@ -315,15 +375,15 @@ export default function FounderProfile() {
       form.businessmodel,
       form.summary,
     ],
-    [form]
+    [form],
   )
 
   const completedFields = profileFields.filter((value) =>
-    String(value || '').trim()
+    String(value || '').trim(),
   ).length
 
   const profileCompletion = Math.round(
-    (completedFields / profileFields.length) * 100
+    (completedFields / profileFields.length) * 100,
   )
 
   const missingFields = useMemo(() => {
@@ -366,25 +426,28 @@ export default function FounderProfile() {
         role: form.role,
         venturename: form.venturename,
         industry: form.industry,
-        // Retain legacy fields for components that still read them.
         geography: form.operating_geography || form.geography || null,
         target_investor_region: form.capital_target_geography || null,
-        // New explicit fields used by corridor-aware Academy guidance.
         operating_geography: form.operating_geography || null,
         capital_target_geography: form.capital_target_geography || null,
         venturestage: form.venturestage,
         businessmodel: form.businessmodel,
         summary: form.summary,
         venturesummary: form.summary,
+        workspace_private: true,
+        anonymous_benchmarking_opt_in: Boolean(
+          form.anonymous_benchmarking_opt_in,
+        ),
+        report_sharing_enabled: Boolean(form.report_sharing_enabled),
       })
 
       setForm(mapStoreProfile(saved))
-      setMessage('Venture profile and cross-border context saved successfully.')
+      setMessage('Your venture profile and privacy preferences were saved.')
     } catch (saveError) {
       console.error(saveError)
       setError(
         saveError?.message ||
-          'Could not save profile. Please try again.'
+          'We could not save that change. Your previous information is still safe. Please try again.',
       )
     } finally {
       setSaving(false)
@@ -456,8 +519,7 @@ export default function FounderProfile() {
               maxWidth: 650,
             }}
           >
-            This context personalises your assessment, Venture Radar, AI
-            guidance, investor materials, and founder learning path.
+            This context personalises your assessment, Venture Radar, AI guidance, investor materials, and founder learning path.
           </p>
         </div>
 
@@ -481,7 +543,6 @@ export default function FounderProfile() {
             <span style={{ fontSize: 12, fontWeight: 800, color: '#40385A' }}>
               Profile signal
             </span>
-
             <span style={{ color: '#7158DC', fontSize: 14, fontWeight: 800 }}>
               {profileCompletion}%
             </span>
@@ -501,8 +562,7 @@ export default function FounderProfile() {
                 width: `${profileCompletion}%`,
                 height: '100%',
                 borderRadius: 999,
-                background:
-                  'linear-gradient(90deg, #7158DC 0%, #9A7EF2 100%)',
+                background: 'linear-gradient(90deg, #7158DC 0%, #9A7EF2 100%)',
                 transition: 'width 180ms ease',
               }}
             />
@@ -543,11 +603,9 @@ export default function FounderProfile() {
           >
             Venture stage
           </div>
-
           <div style={{ fontSize: 16, color: '#1D6B4F', fontWeight: 800 }}>
             {formatStage(diagnosedStage)}
           </div>
-
           <div style={{ fontSize: 11, color: '#7A776F', marginTop: 4 }}>
             From your stage baseline
           </div>
@@ -573,7 +631,6 @@ export default function FounderProfile() {
           >
             Investor readiness
           </div>
-
           <div
             style={{
               fontSize: 16,
@@ -585,7 +642,6 @@ export default function FounderProfile() {
               ? 'Assessment needed'
               : `${investorReadiness}%`}
           </div>
-
           <div style={{ fontSize: 11, color: '#7A776F', marginTop: 4 }}>
             {investorReadiness === null
               ? 'Unlock your intelligence'
@@ -613,7 +669,6 @@ export default function FounderProfile() {
           >
             Your venture
           </div>
-
           <div
             style={{
               fontSize: 16,
@@ -626,7 +681,6 @@ export default function FounderProfile() {
           >
             {form.venturename || 'Add venture name'}
           </div>
-
           <div style={{ fontSize: 11, color: '#7A776F', marginTop: 4 }}>
             {form.industry || 'Add your industry'}
           </div>
@@ -654,7 +708,6 @@ export default function FounderProfile() {
               onChange={(value) => updateField('foundername', value)}
               placeholder="Your full name"
             />
-
             <ProfileField
               id="role"
               label="Role"
@@ -663,7 +716,6 @@ export default function FounderProfile() {
               onChange={(value) => updateField('role', value)}
               placeholder="Founder, CEO, Co-founder..."
             />
-
             <ProfileField
               id="email"
               label="Email"
@@ -672,7 +724,6 @@ export default function FounderProfile() {
               onChange={(value) => updateField('email', value)}
               placeholder="you@company.com"
             />
-
             <ProfileField
               id="phone"
               label="Phone"
@@ -681,7 +732,6 @@ export default function FounderProfile() {
               onChange={(value) => updateField('phone', value)}
               placeholder="+00 000 000 000"
             />
-
             <ProfileField
               id="linkedin"
               label="LinkedIn"
@@ -690,7 +740,6 @@ export default function FounderProfile() {
               onChange={(value) => updateField('linkedin', value)}
               placeholder="linkedin.com/in/..."
             />
-
             <ProfileField
               id="twitter"
               label="X / Twitter"
@@ -722,7 +771,6 @@ export default function FounderProfile() {
               onChange={(value) => updateField('venturename', value)}
               placeholder="Your venture name"
             />
-
             <ProfileField
               id="industry"
               label="Industry"
@@ -730,7 +778,6 @@ export default function FounderProfile() {
               onChange={(value) => updateField('industry', value)}
               placeholder="FinTech, SaaS, HealthTech..."
             />
-
             <ProfileField
               id="geography"
               label="Primary market or location"
@@ -739,7 +786,6 @@ export default function FounderProfile() {
               placeholder="Kenya, Nigeria, Germany..."
               helpText="Optional detail"
             />
-
             <ProfileField
               id="businessmodel"
               label="Business model"
@@ -747,7 +793,6 @@ export default function FounderProfile() {
               onChange={(value) => updateField('businessmodel', value)}
               placeholder="B2B SaaS, marketplace, services..."
             />
-
             <ProfileField
               id="website"
               label="Website"
@@ -756,7 +801,6 @@ export default function FounderProfile() {
               onChange={(value) => updateField('website', value)}
               placeholder="https://..."
             />
-
             <ProfileField
               id="venturestage"
               label="Declared venture stage"
@@ -789,14 +833,11 @@ export default function FounderProfile() {
               options={OPERATING_GEOGRAPHIES}
               placeholder="Select where you primarily operate"
             />
-
             <SelectField
               id="capital_target_geography"
               label="Capital target geography"
               value={form.capital_target_geography}
-              onChange={(value) =>
-                updateField('capital_target_geography', value)
-              }
+              onChange={(value) => updateField('capital_target_geography', value)}
               options={CAPITAL_TARGET_GEOGRAPHIES}
               placeholder="Select your current capital focus"
               helpText="You can change this later"
@@ -826,7 +867,6 @@ export default function FounderProfile() {
                 <div style={{ fontSize: 13, fontWeight: 800, color: '#6E571A' }}>
                   {corridor.label}
                 </div>
-
                 {corridor.academyFocusTrack ? (
                   <span
                     style={{
@@ -858,8 +898,7 @@ export default function FounderProfile() {
                 </p>
               ) : null}
 
-              {Array.isArray(corridor.requiredChecks) &&
-              corridor.requiredChecks.length ? (
+              {Array.isArray(corridor.requiredChecks) && corridor.requiredChecks.length ? (
                 <div>
                   <div
                     style={{
@@ -873,14 +912,7 @@ export default function FounderProfile() {
                   >
                     Priority readiness checks
                   </div>
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: 6,
-                      flexWrap: 'wrap',
-                    }}
-                  >
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {corridor.requiredChecks.slice(0, 5).map((check) => (
                       <span
                         key={check}
@@ -913,8 +945,7 @@ export default function FounderProfile() {
                 lineHeight: 1.55,
               }}
             >
-              Choose both geographies to preview the cross-border context that
-              will shape your Academy and readiness guidance.
+              Choose both geographies to preview the cross-border context that will shape your Academy and readiness guidance.
             </div>
           )}
         </SectionCard>
@@ -937,8 +968,131 @@ export default function FounderProfile() {
           />
         </SectionCard>
 
+        <SectionCard
+          eyebrow="Privacy & sharing"
+          title="Your workspace stays private by default"
+          description="Your venture details, assessment answers, documents, journals, saved resources, and work inside PATH360 are not public. You decide what to share, with whom, and when."
+          accent="#28627F"
+        >
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1.1fr) minmax(250px, 0.9fr)',
+              gap: 14,
+              marginBottom: 14,
+            }}
+          >
+            <div
+              style={{
+                border: '1px solid #D5E4EF',
+                background: '#EEF5FA',
+                borderRadius: 12,
+                padding: 14,
+              }}
+            >
+              <div
+                style={{
+                  color: '#28627F',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  marginBottom: 6,
+                }}
+              >
+                Private workspace
+              </div>
+              <div
+                style={{
+                  color: '#1C1C1A',
+                  fontSize: 14,
+                  fontWeight: 800,
+                  marginBottom: 6,
+                }}
+              >
+                Your founder workspace is private
+              </div>
+              <div style={{ color: '#4F6D7D', fontSize: 11.5, lineHeight: 1.65 }}>
+                PATH360 does not create a public venture profile or list your workspace in a public directory. This setting is always on for your account.
+              </div>
+            </div>
+
+            <div
+              style={{
+                border: '1px solid #EEE4C9',
+                background: '#FCF8EE',
+                borderRadius: 12,
+                padding: 14,
+              }}
+            >
+              <div
+                style={{
+                  color: '#765A1E',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  marginBottom: 6,
+                }}
+              >
+                Sharing is deliberate
+              </div>
+              <div
+                style={{
+                  color: '#1C1C1A',
+                  fontSize: 14,
+                  fontWeight: 800,
+                  marginBottom: 6,
+                }}
+              >
+                You control every future share
+              </div>
+              <div style={{ color: '#6B6965', fontSize: 11.5, lineHeight: 1.65 }}>
+                Reports and documents are never shared automatically. When sharing is available, you will choose the exact item, audience, and access period.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: 10 }}>
+            <PrivacyOption
+              checked={form.workspace_private}
+              onChange={() => {}}
+              disabled
+              title="Keep my venture workspace private"
+              description="Private by default. Your profile, assessment answers, saved resources, documents, and founder work are not publicly visible."
+            />
+            <PrivacyOption
+              checked={form.anonymous_benchmarking_opt_in}
+              onChange={(value) => updateField('anonymous_benchmarking_opt_in', value)}
+              title="Contribute anonymous product insights"
+              description="Allow PATH360 to use de-identified, aggregated patterns to improve benchmarks and product learning. This does not publish your venture name, documents, responses, or personal details."
+            />
+            <PrivacyOption
+              checked={form.report_sharing_enabled}
+              onChange={(value) => updateField('report_sharing_enabled', value)}
+              title="Allow me to enable report sharing later"
+              description="Keep this off if you never want share controls surfaced. Turning it on does not share anything now; it only allows you to create a controlled report link when that feature is available."
+            />
+          </div>
+
+          <div
+            style={{
+              marginTop: 14,
+              padding: '10px 12px',
+              borderRadius: 10,
+              background: '#F9F7F2',
+              color: '#6B6965',
+              fontSize: 11.5,
+              lineHeight: 1.65,
+            }}
+          >
+            PATH360 can help you organise and reflect on your venture work. For legal, tax, investment, compliance, or other professional decisions, verify information with an appropriately qualified adviser.
+          </div>
+        </SectionCard>
+
         {message ? (
           <div
+            role="status"
             style={{
               background: '#EDF6EF',
               border: '1px solid #D7E8DA',
@@ -955,6 +1109,7 @@ export default function FounderProfile() {
 
         {error ? (
           <div
+            role="alert"
             style={{
               background: '#FDEAEA',
               border: '1px solid rgba(139,32,32,0.25)',
@@ -982,11 +1137,8 @@ export default function FounderProfile() {
           }}
         >
           <div style={{ fontSize: 12, color: '#6B6965', lineHeight: 1.55 }}>
-            Saved profile details strengthen your Radar, AI guidance, Reports,
-            Studio outputs, Academy recommendations, and cross-border readiness
-            context.
+            Saved profile details strengthen your Radar, AI guidance, Reports, Studio outputs, Academy recommendations, and cross-border readiness context.
           </div>
-
           <button
             type="submit"
             disabled={saving}
