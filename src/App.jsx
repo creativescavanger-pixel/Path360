@@ -13,6 +13,7 @@ import Landing from './pages/Landing.jsx'
 import Auth from './pages/Auth.jsx'
 import Assessment from './pages/Assessment.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import PriorityProgress from './pages/PriorityProgress.jsx'
 import Studio from './pages/Studio.jsx'
 import GuidedDocumentPrep from './pages/GuidedDocumentPrep.jsx'
 import Memory from './pages/Memory.jsx'
@@ -188,6 +189,10 @@ function Protected({ children }) {
 
   const isOnAssessmentRoute = location.pathname === '/app/assessment'
 
+  const isAssessmentReview =
+    isOnAssessmentRoute &&
+    new URLSearchParams(location.search).get('review') === '1'
+
   if (!stageAssessment && !isOnStageOnboardingRoute) {
     return <Navigate to="/app/stage-onboarding" replace />
   }
@@ -224,7 +229,8 @@ function Protected({ children }) {
     stageAssessment &&
     hasCompletedVentureIntelligenceSetup &&
     hasCompletedDiagnostic &&
-    isOnAssessmentRoute
+    isOnAssessmentRoute &&
+    !isAssessmentReview
   ) {
     return <Navigate to="/app/dashboard" replace />
   }
@@ -264,6 +270,10 @@ export default function App() {
 
           <Route path="assessment" element={<Assessment />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route
+            path="priority-progress"
+            element={<PriorityProgress />}
+          />
 
           <Route
             path="founder-profile"

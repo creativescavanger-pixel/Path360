@@ -13,6 +13,12 @@ const FEEDBACK_PAGES = [
       'What would make the Home workspace more useful or easier to understand?',
   },
   {
+    path: '/app/priority-progress',
+    label: 'Priority Progress',
+    prompt:
+      'What would make it easier to turn your priorities into action and evidence?',
+  },
+  {
     path: '/app/founder-profile',
     label: 'Venture Profile',
     prompt:
@@ -365,10 +371,7 @@ function FeedbackModal({
                 </button>
               </div>
             ) : (
-              <form
-                onSubmit={handleSubmit}
-                style={{ display: 'grid', gap: 14 }}
-              >
+              <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
                 <div
                   style={{
                     background: '#F5F0FF',
@@ -453,9 +456,7 @@ function FeedbackModal({
                     <option value="suggestion">Suggestion</option>
                     <option value="bug">Bug</option>
                     <option value="confusing">Confusing</option>
-                    <option value="missing_feature">
-                      Missing feature
-                    </option>
+                    <option value="missing_feature">Missing feature</option>
                     <option value="other">Other</option>
                   </select>
                 </div>
@@ -559,16 +560,12 @@ function FeedbackModal({
                       borderRadius: 10,
                       border: '1px solid #7158DC',
                       background:
-                        submitting || !message.trim()
-                          ? '#B9ADC9'
-                          : '#7158DC',
+                        submitting || !message.trim() ? '#B9ADC9' : '#7158DC',
                       color: '#FFFFFF',
                       fontSize: 12.5,
                       fontWeight: 800,
                       cursor:
-                        submitting || !message.trim()
-                          ? 'default'
-                          : 'pointer',
+                        submitting || !message.trim() ? 'default' : 'pointer',
                     }}
                   >
                     {submitting ? 'Sending…' : 'Submit feedback'}
@@ -651,6 +648,12 @@ export default function Sidebar() {
       {
         label: 'Build & Move Forward',
         items: [
+          {
+            to: '/app/priority-progress',
+            label: 'Priority Progress',
+            icon: '•',
+            requiresAssessment: true,
+          },
           {
             to: '/app/academy',
             label: 'Academy',
