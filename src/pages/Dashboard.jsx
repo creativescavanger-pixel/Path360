@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
-import { getDocuments } from '../lib/supabaseClient.js'
+import {
+  getDocuments,
+  getPriorityProgress,
+  savePriorityProgress,
+} from '../lib/supabaseClient.js'
 import { getStudioDocuments } from '../lib/studioDocuments.js'
 
 function safeNumber(value, fallback = 0) {
@@ -13,6 +17,7 @@ function normalizeResults(results) {
   if (!results) return null
 
   return {
+    id: results.id || null,
     founderscore: safeNumber(results.founderscore),
     investorreadiness: safeNumber(results.investorreadiness),
     strategicclarity: safeNumber(results.strategicclarity),
@@ -24,9 +29,25 @@ function normalizeResults(results) {
     growthpotential: safeNumber(results.growthpotential),
     riskawareness: safeNumber(results.riskawareness),
     venturestage:
-      results.venturestageresult ||
-      results.venturestage ||
-      'unknown',
+      results.venturestageresult || results.venturestage || 'unknown',
+    assessmenttype:
+      results.assessmenttype || results.assessment_type || 'baseline',
+    versionnumber: safeNumber(
+      results.versionnumber ?? results.version_number,
+      1,
+    ),
+    createdat:
+      results.createdat ||
+      results.created_at ||
+      results.completedat ||
+      results.completed_at ||
+      null,
+    completedat:
+      results.completedat ||
+      results.completed_at ||
+      results.createdat ||
+      results.created_at ||
+      null,
     strategicpriorities: Array.isArray(results.strategicpriorities)
       ? results.strategicpriorities
       : [],
@@ -41,6 +62,47 @@ function normalizeResults(results) {
     riskanalysis: results.riskanalysis || {},
     rawqa: Array.isArray(results.rawqa) ? results.rawqa : [],
   }
+}
+
+function priorityKeyFromTitle(title, index = 0) {
+  const normalized = String(title || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  return normalized || `priority-${index + 1}`
+}
+
+function priorityStatusMeta(status) {
+  const statuses = {
+    not_started: {
+      label: 'Not started',
+      color: '#5F675F',
+      background: '#F1F4F0',
+      border: '#D9DFD7',
+    },
+    in_progress: {
+      label: 'In progress',
+      color: '#8A5A00',
+      background: '#FFF8E8',
+      border: '#F0DEAE',
+    },
+    completed: {
+      label: 'Completed',
+      color: '#176A40',
+      background: '#EAF5ED',
+      border: '#BFDCC7',
+    },
+    blocked: {
+      label: 'Blocked',
+      color: '#9A3D30',
+      background: '#FCEDEA',
+      border: '#F1C9C2',
+    },
+  }
+
+  return statuses[status] || statuses.not_started
 }
 
 function ScoreRing({ score = 0, label, tone = '#1A7A4A', size = 86 }) {
@@ -155,8 +217,7 @@ function RadarChart({ data, size = 220 }) {
     data
       .map((d, i) => {
         const a = angle(i)
-        const value =
-          Math.max(0, Math.min(100, safeNumber(d.value))) / 100
+        const value = Math.max(0, Math.min(100, safeNumber(d.value))) / 100
         const x = cx + Math.cos(a) * r * value
         const y = cy + Math.sin(a) * r * value
 
@@ -203,8 +264,7 @@ function RadarChart({ data, size = 220 }) {
 
       {data.map((d, i) => {
         const a = angle(i)
-        const value =
-          Math.max(0, Math.min(100, safeNumber(d.value))) / 100
+        const value = Math.max(0, Math.min(100, safeNumber(d.value))) / 100
         const px = cx + Math.cos(a) * r * value
         const py = cy + Math.sin(a) * r * value
         const lx = cx + Math.cos(a) * (r + 22)
@@ -327,18 +387,52 @@ function prettifyStage(stage = '') {
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
+function formatAssessmentDate(value) {
+  if (!value) return 'Date unavailable'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Date unavailable'
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date)
+}
+
+function deltaLabel(value) {
+  const delta = safeNumber(value)
+
+  if (delta > 0) return `+${delta}`
+  if (delta < 0) return String(delta)
+  return 'No change'
+}
+
+function deltaTone(value) {
+  if (value > 0) return '#1A7A4A'
+  if (value < 0) return '#9A3D30'
+  return '#7A827A'
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
 
   const rawResults = useDiagnosticStore((s) => s.assessmentResults)
+  const assessmentHistory = useDiagnosticStore((s) => s.assessmentHistory)
   const profile = useDiagnosticStore((s) => s.founderProfile)
   const documents = useDiagnosticStore((s) => s.documents)
   const setDocuments = useDiagnosticStore((s) => s.setDocuments)
   const user = useDiagnosticStore((s) => s.user)
   const stageAssessment = useDiagnosticStore((s) => s.stageAssessment)
+  const storePriorityProgress = useDiagnosticStore((s) => s.priorityProgress)
 
   const [activeTab, setActiveTab] = useState('overview')
   const [studioDocs, setStudioDocs] = useState([])
+  const [priorityProgress, setPriorityProgress] = useState([])
+  const [savingPriorityKey, setSavingPriorityKey] = useState(null)
+  const [priorityError, setPriorityError] = useState('')
+  const [expandedPriorityKey, setExpandedPriorityKey] = useState(null)
+  const [evidenceDrafts, setEvidenceDrafts] = useState({})
 
   useEffect(() => {
     let cancelled = false
@@ -392,7 +486,115 @@ export default function Dashboard() {
     }
   }, [user?.id])
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadPriorityProgress() {
+      if (!user?.id) {
+        if (!cancelled) setPriorityProgress([])
+        return
+      }
+
+      const fromStore = Array.isArray(storePriorityProgress)
+        ? storePriorityProgress
+        : []
+
+      if (fromStore.length) {
+        if (!cancelled) setPriorityProgress(fromStore)
+        return
+      }
+
+      try {
+        const rows = await getPriorityProgress(user.id)
+        if (!cancelled) {
+          setPriorityProgress(rows || [])
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load priority progress', error)
+          setPriorityError('Priority progress could not be loaded yet.')
+        }
+      }
+    }
+
+    loadPriorityProgress()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id, storePriorityProgress])
+
   const results = useMemo(() => normalizeResults(rawResults), [rawResults])
+
+  const normalizedHistory = useMemo(() => {
+    const byId = new Map()
+
+    ;[...(assessmentHistory || []), rawResults]
+      .filter(Boolean)
+      .forEach((assessment, index) => {
+        const normalized = normalizeResults(assessment)
+        if (!normalized) return
+
+        const key =
+          normalized.id || `${normalized.versionnumber}-${normalized.createdat || index}`
+        byId.set(key, normalized)
+      })
+
+    return [...byId.values()].sort((a, b) => {
+      const versionDifference =
+        safeNumber(b.versionnumber) - safeNumber(a.versionnumber)
+      if (versionDifference !== 0) return versionDifference
+
+      return (
+        new Date(b.completedat || b.createdat || 0) -
+        new Date(a.completedat || a.createdat || 0)
+      )
+    })
+  }, [assessmentHistory, rawResults])
+
+  const progressComparison = useMemo(() => {
+    if (!results || normalizedHistory.length < 2) return null
+
+    const current = normalizedHistory[0]
+    const previous = normalizedHistory[1]
+    const baseline = normalizedHistory[normalizedHistory.length - 1]
+
+    const dimensions = [
+      { key: 'investorreadiness', label: 'Investor readiness' },
+      { key: 'strategicclarity', label: 'Strategy' },
+      { key: 'executionreadiness', label: 'Execution' },
+      { key: 'financialmaturity', label: 'Financial maturity' },
+      { key: 'marketunderstanding', label: 'Market understanding' },
+      { key: 'productclarity', label: 'Product clarity' },
+      { key: 'teamstrength', label: 'Team strength' },
+      { key: 'growthpotential', label: 'Growth potential' },
+    ].map((dimension) => {
+      const currentScore = safeNumber(current[dimension.key])
+      const previousScore = safeNumber(previous[dimension.key])
+      const baselineScore = safeNumber(baseline[dimension.key])
+
+      return {
+        ...dimension,
+        current: currentScore,
+        previous: previousScore,
+        baseline: baselineScore,
+        change: currentScore - previousScore,
+        changeFromBaseline: currentScore - baselineScore,
+      }
+    })
+
+    const rankedByImprovement = [...dimensions].sort((a, b) => b.change - a.change)
+    const rankedByCurrentScore = [...dimensions].sort((a, b) => a.current - b.current)
+
+    return {
+      current,
+      previous,
+      baseline,
+      dimensions,
+      mostImproved: rankedByImprovement[0],
+      nextFocus: rankedByCurrentScore[0],
+    }
+  }, [normalizedHistory, results])
 
   const radarData = useMemo(() => {
     if (!results) return []
@@ -411,8 +613,30 @@ export default function Dashboard() {
 
   const questionThemes = useMemo(
     () => buildQuestionThemes(results?.rawqa || []),
-    [results]
+    [results],
   )
+
+  const priorityProgressByKey = useMemo(() => {
+    return (priorityProgress || []).reduce((map, item) => {
+      if (item?.prioritykey) {
+        map[item.prioritykey] = item
+      }
+      return map
+    }, {})
+  }, [priorityProgress])
+
+  const prioritySummary = useMemo(() => {
+    const priorities = results?.strategicpriorities?.slice(0, 4) || []
+    const completed = priorities.filter((priority, index) => {
+      const key = priorityKeyFromTitle(priority?.priority, index)
+      return priorityProgressByKey[key]?.status === 'completed'
+    }).length
+
+    return {
+      total: priorities.length,
+      completed,
+    }
+  }, [results?.strategicpriorities, priorityProgressByKey])
 
   const recentItems = useMemo(() => {
     const generated = (documents || []).map((doc) => ({
@@ -429,31 +653,81 @@ export default function Dashboard() {
       source: 'studio',
       title: getField(doc, 'title') || 'Untitled Studio draft',
       type: prettifyDocType(
-        getField(doc, 'docType', 'doc_type', 'doctype') ||
-          'studio_document'
+        getField(doc, 'docType', 'doc_type', 'doctype') || 'studio_document',
       ),
       updated: getField(doc, 'updatedAt', 'updated_at', 'updatedat'),
       raw: doc,
     }))
 
     return [...drafts, ...generated]
-      .sort(
-        (a, b) =>
-          new Date(b.updated || 0) - new Date(a.updated || 0)
-      )
+      .sort((a, b) => new Date(b.updated || 0) - new Date(a.updated || 0))
       .slice(0, 4)
   }, [documents, studioDocs])
 
-  if (!results) {
-    const founderName =
-      profile?.fullname ||
-      profile?.foundername ||
-      'Founder'
+  async function updatePriority(priority, index, nextStatus, evidenceOverride) {
+    if (!user?.id) {
+      setPriorityError('Sign in before saving priority progress.')
+      return
+    }
 
+    const title = priority?.priority || `Priority ${index + 1}`
+    const prioritykey = priorityKeyFromTitle(title, index)
+    const current = priorityProgressByKey[prioritykey]
+    const evidence =
+      evidenceOverride !== undefined
+        ? evidenceOverride
+        : evidenceDrafts[prioritykey] ?? current?.evidence ?? ''
+
+    const optimistic = {
+      ...current,
+      userid: user.id,
+      assessmentid: results?.id || null,
+      prioritykey,
+      title,
+      status: nextStatus,
+      evidence: evidence || null,
+      updatedat: new Date().toISOString(),
+      completedat:
+        nextStatus === 'completed'
+          ? current?.completedat || new Date().toISOString()
+          : null,
+    }
+
+    setPriorityError('')
+    setSavingPriorityKey(prioritykey)
+    setPriorityProgress((items) => {
+      const rest = (items || []).filter((item) => item?.prioritykey !== prioritykey)
+      return [optimistic, ...rest]
+    })
+
+    try {
+      const saved = await savePriorityProgress(user.id, optimistic)
+      setPriorityProgress((items) => {
+        const rest = (items || []).filter((item) => item?.prioritykey !== prioritykey)
+        return [saved, ...rest]
+      })
+      setEvidenceDrafts((drafts) => ({
+        ...drafts,
+        [prioritykey]: saved?.evidence || '',
+      }))
+    } catch (error) {
+      console.error('Failed to save priority progress', error)
+      setPriorityError(
+        error?.message || 'Priority progress could not be saved. Please try again.',
+      )
+      setPriorityProgress((items) => {
+        const rest = (items || []).filter((item) => item?.prioritykey !== prioritykey)
+        return current ? [current, ...rest] : rest
+      })
+    } finally {
+      setSavingPriorityKey(null)
+    }
+  }
+
+  if (!results) {
+    const founderName = profile?.fullname || profile?.foundername || 'Founder'
     const ventureName =
-      profile?.venturename ||
-      profile?.venture_name ||
-      'your venture'
+      profile?.venturename || profile?.venture_name || 'your venture'
 
     return (
       <div
@@ -468,8 +742,7 @@ export default function Dashboard() {
           className="p360-card"
           style={{
             padding: '26px 24px 22px',
-            background:
-              'linear-gradient(180deg, #FCFBF8 0%, #F9F7F2 100%)',
+            background: 'linear-gradient(180deg, #FCFBF8 0%, #F9F7F2 100%)',
             borderRadius: 24,
           }}
         >
@@ -546,12 +819,7 @@ export default function Dashboard() {
               Re-baseline my stage
             </button>
 
-            <div
-              style={{
-                fontSize: 12.5,
-                color: '#8B938B',
-              }}
-            >
+            <div style={{ fontSize: 12.5, color: '#8B938B' }}>
               Takes about 12–15 minutes. You can pause and resume.
             </div>
           </div>
@@ -569,12 +837,7 @@ export default function Dashboard() {
             Command Center
           </div>
 
-          <div
-            style={{
-              fontSize: 12.5,
-              color: '#8B938B',
-            }}
-          >
+          <div style={{ fontSize: 12.5, color: '#8B938B' }}>
             Once the assessment is complete, this space will show your scores,
             explanations, and evidence from your own answers.
           </div>
@@ -608,6 +871,7 @@ export default function Dashboard() {
 
   const tabs = [
     { key: 'overview', label: 'Overview' },
+    { key: 'progress', label: 'Progress' },
     { key: 'strategy', label: 'Strategy' },
     { key: 'execution', label: 'Execution' },
     { key: 'investor', label: 'Investor Readiness' },
@@ -636,11 +900,7 @@ export default function Dashboard() {
               justifyContent: 'center',
             }}
           >
-            <ScoreRing
-              score={card.score}
-              label={card.label}
-              tone={card.color}
-            />
+            <ScoreRing score={card.score} label={card.label} tone={card.color} />
           </div>
         ))}
       </div>
@@ -665,12 +925,7 @@ export default function Dashboard() {
             Venture Radar
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-            }}
-          >
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
             <RadarChart data={radarData} size={230} />
           </div>
         </div>
@@ -678,13 +933,36 @@ export default function Dashboard() {
         <div className="p360-card" style={{ padding: 16, minHeight: 280 }}>
           <div
             style={{
-              fontSize: 13,
-              fontWeight: 700,
-              color: '#111111',
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              alignItems: 'flex-start',
               marginBottom: 4,
             }}
           >
-            Strategic priorities
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: '#111111',
+              }}
+            >
+              Strategic priorities
+            </div>
+            <div
+              style={{
+                fontSize: 11.5,
+                fontWeight: 800,
+                color: '#176A40',
+                background: '#EAF5ED',
+                border: '1px solid #BFDCC7',
+                borderRadius: 999,
+                padding: '5px 8px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {prioritySummary.completed} of {prioritySummary.total} complete
+            </div>
           </div>
 
           <div
@@ -697,68 +975,264 @@ export default function Dashboard() {
             Personalized from your answers and ranked by investor impact.
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
-            }}
-          >
+          {priorityError ? (
+            <div
+              role="alert"
+              style={{
+                marginBottom: 12,
+                padding: '9px 10px',
+                background: '#FCEDEA',
+                border: '1px solid #F1C9C2',
+                borderRadius: 10,
+                color: '#9A3D30',
+                fontSize: 11.5,
+                lineHeight: 1.45,
+              }}
+            >
+              {priorityError}
+            </div>
+          ) : null}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {results.strategicpriorities.length ? (
-              results.strategicpriorities.slice(0, 4).map((priority, index) => (
-                <div
-                  key={`${priority?.priority || 'priority'}-${index}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 10,
-                    padding: '10px 0',
-                    borderTop:
-                      index === 0 ? 'none' : '1px solid #EEF2EE',
-                  }}
-                >
+              results.strategicpriorities.slice(0, 4).map((priority, index) => {
+                const title = priority?.priority || `Priority ${index + 1}`
+                const prioritykey = priorityKeyFromTitle(title, index)
+                const savedProgress = priorityProgressByKey[prioritykey]
+                const status = savedProgress?.status || 'not_started'
+                const statusMeta = priorityStatusMeta(status)
+                const isSaving = savingPriorityKey === prioritykey
+                const isExpanded = expandedPriorityKey === prioritykey
+                const evidence =
+                  evidenceDrafts[prioritykey] ?? savedProgress?.evidence ?? ''
+
+                return (
                   <div
+                    key={prioritykey}
                     style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 8,
-                      background: '#F1F4F0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: '#1A7A4A',
-                      flexShrink: 0,
+                      padding: '10px 0',
+                      borderTop: index === 0 ? 'none' : '1px solid #EEF2EE',
                     }}
                   >
-                    {index + 1}
-                  </div>
-
-                  <div style={{ flex: 1 }}>
                     <div
                       style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: '#111111',
-                        marginBottom: 4,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 10,
                       }}
                     >
-                      {priority?.priority || 'Priority'}
-                    </div>
+                      <div
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 8,
+                          background: '#F1F4F0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: '#1A7A4A',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {index + 1}
+                      </div>
 
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: '#5F675F',
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      {priority?.rationale || 'No rationale available.'}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: 8,
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            marginBottom: 4,
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 700,
+                              color: '#111111',
+                              flex: '1 1 220px',
+                            }}
+                          >
+                            {title}
+                          </div>
+
+                          <span
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: 800,
+                              color: statusMeta.color,
+                              background: statusMeta.background,
+                              border: `1px solid ${statusMeta.border}`,
+                              borderRadius: 999,
+                              padding: '4px 7px',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {isSaving ? 'Saving…' : statusMeta.label}
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: '#5F675F',
+                            lineHeight: 1.6,
+                            marginBottom: 9,
+                          }}
+                        >
+                          {priority?.rationale || 'No rationale available.'}
+                        </div>
+
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: 6,
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                          }}
+                        >
+                          {[
+                            ['not_started', 'Not started'],
+                            ['in_progress', 'Start'],
+                            ['completed', 'Complete'],
+                            ['blocked', 'Blocked'],
+                          ].map(([value, label]) => {
+                            const active = status === value
+                            const buttonMeta = priorityStatusMeta(value)
+
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                disabled={isSaving}
+                                onClick={() => updatePriority(priority, index, value)}
+                                style={{
+                                  padding: '6px 8px',
+                                  borderRadius: 8,
+                                  border: `1px solid ${
+                                    active ? buttonMeta.border : '#D9DFD7'
+                                  }`,
+                                  background: active
+                                    ? buttonMeta.background
+                                    : '#FFFFFF',
+                                  color: active ? buttonMeta.color : '#5F675F',
+                                  fontSize: 10.5,
+                                  fontWeight: 700,
+                                  cursor: isSaving ? 'wait' : 'pointer',
+                                  opacity: isSaving ? 0.65 : 1,
+                                }}
+                              >
+                                {label}
+                              </button>
+                            )
+                          })}
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedPriorityKey((current) =>
+                                current === prioritykey ? null : prioritykey,
+                              )
+                            }
+                            style={{
+                              padding: '6px 3px',
+                              border: 'none',
+                              background: 'transparent',
+                              color: '#1A7A4A',
+                              fontSize: 10.5,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {isExpanded ? 'Hide note' : evidence ? 'Edit note' : 'Add note'}
+                          </button>
+                        </div>
+
+                        {isExpanded ? (
+                          <div style={{ marginTop: 10 }}>
+                            <textarea
+                              value={evidence}
+                              onChange={(event) =>
+                                setEvidenceDrafts((drafts) => ({
+                                  ...drafts,
+                                  [prioritykey]: event.target.value,
+                                }))
+                              }
+                              placeholder="Add evidence, a next step, or what is blocking this priority…"
+                              rows={3}
+                              style={{
+                                width: '100%',
+                                resize: 'vertical',
+                                boxSizing: 'border-box',
+                                padding: '9px 10px',
+                                borderRadius: 9,
+                                border: '1px solid #D9DFD7',
+                                background: '#FFFFFF',
+                                color: '#2A2F2A',
+                                fontSize: 11.5,
+                                lineHeight: 1.5,
+                                fontFamily: 'inherit',
+                              }}
+                            />
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                                gap: 8,
+                                marginTop: 7,
+                              }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedPriorityKey((current) =>
+                                    current === prioritykey ? null : current,
+                                  )
+                                }
+                                style={{
+                                  padding: '7px 9px',
+                                  borderRadius: 8,
+                                  border: '1px solid #D9DFD7',
+                                  background: '#FFFFFF',
+                                  color: '#5F675F',
+                                  fontSize: 10.5,
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isSaving}
+                                onClick={() => updatePriority(priority, index, status, evidence)}
+                                style={{
+                                  padding: '7px 9px',
+                                  borderRadius: 8,
+                                  border: '1px solid #163A2C',
+                                  background: '#163A2C',
+                                  color: '#FFFFFF',
+                                  fontSize: 10.5,
+                                  fontWeight: 700,
+                                  cursor: isSaving ? 'wait' : 'pointer',
+                                  opacity: isSaving ? 0.65 : 1,
+                                }}
+                              >
+                                Save note
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             ) : (
               <EmptyInline text="No strategic priorities were returned for this assessment yet." />
             )}
@@ -786,13 +1260,7 @@ export default function Dashboard() {
             Founder strengths
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
-            }}
-          >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {results.founderstrengths.length ? (
               results.founderstrengths.slice(0, 4).map((item, index) => (
                 <div
@@ -860,7 +1328,315 @@ export default function Dashboard() {
       </div>
     </>
   )
-    const renderStrategy = () => (
+
+  const renderProgress = () => {
+    if (!progressComparison) {
+      return (
+        <div className="p360-card" style={{ padding: 22 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 8 }}>
+            Your progress journey starts here
+          </div>
+
+          <div
+            style={{
+              maxWidth: 680,
+              fontSize: 13.5,
+              color: '#5F675F',
+              lineHeight: 1.75,
+              marginBottom: 18,
+            }}
+          >
+            Complete a progress review when meaningful evidence changes—such as
+            customer validation, revenue, pricing, product delivery, hiring, or
+            fundraising readiness. PATH360 will compare it with your current
+            baseline and show what improved.
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+              padding: 14,
+              borderRadius: 14,
+              background: '#F4F8F5',
+              border: '1px solid #DDE7DF',
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#111111', marginBottom: 4 }}>
+                Current investor readiness: {results.investorreadiness}%
+              </div>
+              <div style={{ fontSize: 12, color: '#5F675F', lineHeight: 1.6 }}>
+                Your latest assessment is saved. A second check-in unlocks your
+                first meaningful before-and-after comparison.
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate('/app/assessment?review=1')}
+              style={{
+                padding: '10px 14px',
+                borderRadius: 10,
+                border: '1px solid #163A2C',
+                background: '#163A2C',
+                color: '#FFFFFF',
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Update assessment
+            </button>
+          </div>
+
+          <div style={{ marginTop: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#5F675F', marginBottom: 10 }}>
+              Assessment timeline
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: 12,
+                borderRadius: 12,
+                background: '#F7F8F5',
+                border: '1px solid #E4E8E3',
+              }}
+            >
+              <div
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: '50%',
+                  background: '#1A7A4A',
+                  flexShrink: 0,
+                }}
+              />
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#111111' }}>
+                  Your first assessment
+                </div>
+                <div style={{ fontSize: 11.5, color: '#8B938B', marginTop: 3 }}>
+                  {formatAssessmentDate(results.completedat || results.createdat)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    const readinessChange =
+      progressComparison.current.investorreadiness -
+      progressComparison.previous.investorreadiness
+
+    const latestDate = formatAssessmentDate(
+      progressComparison.current.completedat || progressComparison.current.createdat,
+    )
+
+    return (
+      <div style={{ display: 'grid', gap: 14 }}>
+        <div
+          className="p360-card"
+          style={{
+            padding: 18,
+            background: 'linear-gradient(180deg, #F4F8F5 0%, #FFFFFF 100%)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 16,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#4D6B57', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 7 }}>
+                Progress since your last check-in
+              </div>
+              <div style={{ fontSize: 25, fontWeight: 800, color: '#111111', letterSpacing: '-0.04em', lineHeight: 1.15, marginBottom: 6 }}>
+                Investor readiness: {progressComparison.previous.investorreadiness} → {progressComparison.current.investorreadiness}
+                <span style={{ color: deltaTone(readinessChange), marginLeft: 8, fontSize: 18 }}>
+                  ({deltaLabel(readinessChange)})
+                </span>
+              </div>
+              <div style={{ fontSize: 12.5, color: '#5F675F', lineHeight: 1.65 }}>
+                Latest check-in saved {latestDate}. Your active dashboard always reflects your newest evidence.
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate('/app/assessment?review=1')}
+              style={{
+                padding: '10px 14px',
+                borderRadius: 10,
+                border: '1px solid #163A2C',
+                background: '#163A2C',
+                color: '#FFFFFF',
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Update assessment
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="p360-card" style={{ padding: 16 }}>
+            <div style={{ fontSize: 11, color: '#8B938B', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, marginBottom: 8 }}>
+              Most improved
+            </div>
+            <div style={{ fontSize: 17, color: '#111111', fontWeight: 800, marginBottom: 6 }}>
+              {progressComparison.mostImproved.label}
+            </div>
+            <div style={{ fontSize: 13, color: deltaTone(progressComparison.mostImproved.change), fontWeight: 800, marginBottom: 5 }}>
+              {progressComparison.mostImproved.previous} → {progressComparison.mostImproved.current} ({deltaLabel(progressComparison.mostImproved.change)})
+            </div>
+            <div style={{ fontSize: 12, color: '#5F675F', lineHeight: 1.6 }}>
+              This is the area with the strongest movement since your previous check-in.
+            </div>
+          </div>
+
+          <div className="p360-card" style={{ padding: 16 }}>
+            <div style={{ fontSize: 11, color: '#8B938B', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, marginBottom: 8 }}>
+              Next focus
+            </div>
+            <div style={{ fontSize: 17, color: '#111111', fontWeight: 800, marginBottom: 6 }}>
+              {progressComparison.nextFocus.label}
+            </div>
+            <div style={{ fontSize: 13, color: '#111111', fontWeight: 800, marginBottom: 5 }}>
+              Current score: {progressComparison.nextFocus.current}/100
+            </div>
+            <div style={{ fontSize: 12, color: '#5F675F', lineHeight: 1.6 }}>
+              Focus on evidence and actions that strengthen this area before your next investor conversation.
+            </div>
+          </div>
+        </div>
+
+        <div className="p360-card" style={{ padding: 18 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 4 }}>
+            What changed
+          </div>
+          <div style={{ fontSize: 11.5, color: '#8B938B', marginBottom: 14 }}>
+            Your latest assessment compared with your previous check-in.
+          </div>
+
+          <div style={{ display: 'grid', gap: 1 }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(150px, 1fr) 88px 88px 88px',
+                gap: 10,
+                padding: '0 10px 8px',
+                color: '#8B938B',
+                fontSize: 10.5,
+                textTransform: 'uppercase',
+                letterSpacing: '0.07em',
+                fontWeight: 700,
+              }}
+            >
+              <div>Area</div>
+              <div style={{ textAlign: 'right' }}>Previous</div>
+              <div style={{ textAlign: 'right' }}>Current</div>
+              <div style={{ textAlign: 'right' }}>Change</div>
+            </div>
+
+            {progressComparison.dimensions.map((dimension) => (
+              <div
+                key={dimension.key}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(150px, 1fr) 88px 88px 88px',
+                  gap: 10,
+                  alignItems: 'center',
+                  padding: '11px 10px',
+                  borderTop: '1px solid #EEF2EE',
+                  fontSize: 12.5,
+                }}
+              >
+                <div style={{ color: '#111111', fontWeight: 700 }}>
+                  {dimension.label}
+                </div>
+                <div style={{ textAlign: 'right', color: '#5F675F' }}>
+                  {dimension.previous}
+                </div>
+                <div style={{ textAlign: 'right', color: '#111111', fontWeight: 700 }}>
+                  {dimension.current}
+                </div>
+                <div style={{ textAlign: 'right', color: deltaTone(dimension.change), fontWeight: 800 }}>
+                  {deltaLabel(dimension.change)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="p360-card" style={{ padding: 18 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 4 }}>
+            Assessment timeline
+          </div>
+          <div style={{ fontSize: 11.5, color: '#8B938B', marginBottom: 14 }}>
+            Your saved snapshots stay in PATH360 so progress can be measured over time.
+          </div>
+
+          <div style={{ display: 'grid', gap: 10 }}>
+            {[...normalizedHistory].reverse().map((assessment, index, items) => {
+              const isLatest = index === items.length - 1
+              const isBaseline = assessment.assessmenttype === 'baseline' || index === 0
+
+              return (
+                <div
+                  key={assessment.id || `${assessment.versionnumber}-${index}`}
+                  style={{
+                    display: 'flex',
+                    gap: 12,
+                    alignItems: 'flex-start',
+                    padding: '10px 0',
+                    borderTop: index === 0 ? 'none' : '1px solid #EEF2EE',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 10,
+                      height: 10,
+                      marginTop: 4,
+                      borderRadius: '50%',
+                      background: isLatest ? '#1A7A4A' : '#B8C5B9',
+                      boxShadow: isLatest ? '0 0 0 4px #EAF2EB' : 'none',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#111111', marginBottom: 3 }}>
+                      {isBaseline ? 'Baseline assessment' : 'Progress check-in'}
+                      {isLatest ? ' · Current view' : ''}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: '#8B938B' }}>
+                      {formatAssessmentDate(assessment.completedat || assessment.createdat)} · Investor readiness {assessment.investorreadiness}%
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderStrategy = () => (
     <div className="p360-card" style={{ padding: 18 }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 10 }}>
         Strategic diagnosis
@@ -877,14 +1653,7 @@ export default function Dashboard() {
         {results.investornarrative || 'No strategic narrative available yet.'}
       </div>
 
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          color: '#5F675F',
-          marginBottom: 10,
-        }}
-      >
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#5F675F', marginBottom: 10 }}>
         Questions that shaped your strategy score
       </div>
 
@@ -900,28 +1669,11 @@ export default function Dashboard() {
                 padding: 12,
               }}
             >
-              <div
-                style={{
-                  fontSize: 11,
-                  color: '#8B938B',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  fontWeight: 700,
-                  marginBottom: 6,
-                }}
-              >
+              <div style={{ fontSize: 11, color: '#8B938B', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, marginBottom: 6 }}>
                 Question
               </div>
 
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#111111',
-                  lineHeight: 1.5,
-                  marginBottom: 6,
-                }}
-              >
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#111111', lineHeight: 1.5, marginBottom: 6 }}>
                 {qa?.question}
               </div>
 
@@ -935,14 +1687,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          color: '#5F675F',
-          marginBottom: 10,
-        }}
-      >
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#5F675F', marginBottom: 10 }}>
         Top strategic gaps
       </div>
 
@@ -977,14 +1722,7 @@ export default function Dashboard() {
 
     return (
       <div className="p360-card" style={{ padding: 18 }}>
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: '#111111',
-            marginBottom: 12,
-          }}
-        >
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 12 }}>
           Execution evidence from your assessment
         </div>
 
@@ -1000,28 +1738,11 @@ export default function Dashboard() {
                   padding: 12,
                 }}
               >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: '#8B938B',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    fontWeight: 700,
-                    marginBottom: 6,
-                  }}
-                >
+                <div style={{ fontSize: 11, color: '#8B938B', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, marginBottom: 6 }}>
                   Question
                 </div>
 
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: '#111111',
-                    lineHeight: 1.5,
-                    marginBottom: 6,
-                  }}
-                >
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#111111', lineHeight: 1.5, marginBottom: 6 }}>
                   {qa?.question}
                 </div>
 
@@ -1044,15 +1765,7 @@ export default function Dashboard() {
         Investor readiness
       </div>
 
-      <div
-        style={{
-          fontSize: 34,
-          fontWeight: 800,
-          color: '#111111',
-          lineHeight: 1,
-          marginBottom: 12,
-        }}
-      >
+      <div style={{ fontSize: 34, fontWeight: 800, color: '#111111', lineHeight: 1, marginBottom: 12 }}>
         {results.investorreadiness}%
       </div>
 
@@ -1108,20 +1821,14 @@ export default function Dashboard() {
             fontWeight: 700,
             fontSize: 12.5,
             whiteSpace: 'nowrap',
+            cursor: 'pointer',
           }}
         >
           Start memo prep
         </button>
       </div>
 
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          color: '#5F675F',
-          marginBottom: 10,
-        }}
-      >
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#5F675F', marginBottom: 10 }}>
         Questions that shaped investor readiness
       </div>
 
@@ -1137,14 +1844,7 @@ export default function Dashboard() {
                 padding: 12,
               }}
             >
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#111111',
-                  marginBottom: 5,
-                }}
-              >
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#111111', marginBottom: 5 }}>
                 {qa?.question}
               </div>
 
@@ -1228,14 +1928,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          color: '#5F675F',
-          marginBottom: 10,
-        }}
-      >
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#5F675F', marginBottom: 10 }}>
         Questions related to team & growth
       </div>
 
@@ -1251,14 +1944,7 @@ export default function Dashboard() {
                 padding: 12,
               }}
             >
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#111111',
-                  marginBottom: 5,
-                }}
-              >
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#111111', marginBottom: 5 }}>
                 {qa?.question}
               </div>
 
@@ -1274,25 +1960,16 @@ export default function Dashboard() {
     </div>
   )
 
-  const founderName =
-    profile?.fullname ||
-    profile?.foundername ||
-    'Founder'
+  const founderName = profile?.fullname || profile?.foundername || 'Founder'
 
   const ventureName =
-    profile?.venturename ||
-    profile?.venture_name ||
-    'your venture'
+    profile?.venturename || profile?.venture_name || 'your venture'
 
   const onboardingStage =
-    stageAssessment?.diagnosedStage ||
-    stageAssessment?.declaredStage ||
-    null
+    stageAssessment?.diagnosedStage || stageAssessment?.declaredStage || null
 
   const stageToDisplay = prettifyStage(
-    onboardingStage ||
-      results.venturestage ||
-      'unknown'
+    onboardingStage || results.venturestage || 'unknown',
   )
 
   const stageUpdatedLabel = stageAssessment?.completedAt
@@ -1391,8 +2068,17 @@ export default function Dashboard() {
               marginBottom: 8,
             }}
           >
-            Stage: {stageToDisplay} · {results.strategicpriorities.length} priorities identified
+            Stage: {stageToDisplay} · {results.strategicpriorities.length} priorities identified · {prioritySummary.completed} completed
           </div>
+
+          {progressComparison ? (
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.68)', marginTop: 4 }}>
+              Investor readiness since last check-in: {deltaLabel(
+                progressComparison.current.investorreadiness -
+                  progressComparison.previous.investorreadiness,
+              )}
+            </div>
+          ) : null}
 
           <div
             style={{
@@ -1428,7 +2114,8 @@ export default function Dashboard() {
         </div>
 
         <button
-          onClick={() => navigate('/app/assessment?restart=1')}
+          type="button"
+          onClick={() => navigate('/app/assessment?review=1')}
           style={{
             padding: '11px 18px',
             borderRadius: 12,
@@ -1446,6 +2133,7 @@ export default function Dashboard() {
       </div>
 
       {activeTab === 'overview' && renderOverview()}
+      {activeTab === 'progress' && renderProgress()}
       {activeTab === 'strategy' && renderStrategy()}
       {activeTab === 'execution' && renderExecution()}
       {activeTab === 'investor' && renderInvestor()}
@@ -1517,14 +2205,7 @@ export default function Dashboard() {
                 }}
               >
                 <div>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: '#111111',
-                      marginBottom: 3,
-                    }}
-                  >
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#111111', marginBottom: 3 }}>
                     {item.title}
                   </div>
 
@@ -1536,9 +2217,7 @@ export default function Dashboard() {
                 {item.source === 'studio' ? (
                   <button
                     onClick={() =>
-                      navigate(
-                        `/app/reports?studioDraft=${getField(item.raw, 'id')}`
-                      )
+                      navigate(`/app/reports?studioDraft=${getField(item.raw, 'id')}`)
                     }
                     style={{
                       border: 'none',
@@ -1612,12 +2291,12 @@ export default function Dashboard() {
             </div>
 
             <div style={{ fontSize: 11.5, color: '#8B938B', marginTop: 3 }}>
-              Every question and answer used in this assessment run.
+              Every question and answer used in your latest assessment check-in.
             </div>
           </div>
 
           <button
-            onClick={() => navigate('/app/assessment?restart=1')}
+            onClick={() => navigate('/app/assessment?review=1')}
             style={{
               border: 'none',
               background: 'transparent',

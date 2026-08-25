@@ -476,6 +476,75 @@ export async function getComplianceProgress(userId, countryCode = null) {
   return Array.isArray(data) ? data : []
 }
 
+// PRIORITY PROGRESS
+
+export async function getPriorityProgress(userId) {
+  if (!userId) {
+    throw new Error('A user ID is required to load priority progress.')
+  }
+
+  const { data, error } = await supabase
+    .from('founderpriorityprogress')
+    .select('*')
+    .eq('userid', userId)
+    .order('updatedat', { ascending: false })
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      console.warn(
+        'founderpriorityprogress table not found; returning empty priority progress.',
+      )
+      return []
+    }
+
+    throw error
+  }
+
+  return data ?? []
+}
+
+export async function savePriorityProgress(userId, priority) {
+  if (!userId) {
+    throw new Error('A user ID is required to save priority progress.')
+  }
+
+  if (!priority?.prioritykey) {
+    throw new Error('A priority key is required to save priority progress.')
+  }
+
+  const now = new Date().toISOString()
+  const status = priority.status || 'not_started'
+
+  const payload = {
+    userid: userId,
+    assessmentid: priority.assessmentid || null,
+    prioritykey: priority.prioritykey,
+    title: priority.title || priority.prioritykey,
+    status,
+    evidence: priority.evidence || null,
+    updatedat: now,
+    completedat:
+      status === 'completed'
+        ? priority.completedat || now
+        : null,
+  }
+
+  const { data, error } = await supabase
+    .from('founderpriorityprogress')
+    .upsert(payload, {
+      onConflict: 'userid,prioritykey',
+    })
+    .select('*')
+    .single()
+
+  if (error) {
+    console.error('savePriorityProgress failed', error)
+    throw error
+  }
+
+  return data
+}
+
 // FILES
 
 export async function uploadFounderFile(userId, file) {
@@ -594,6 +663,7 @@ export async function loadFounderWorkspace(userId) {
     getDocumentIntakes(userId),
     getFounderProgress(userId, 20),
     getFounderFiles(userId),
+    getPriorityProgress(userId),
   ])
 
   const [
@@ -606,13 +676,14 @@ export async function loadFounderWorkspace(userId) {
     documentIntakesResult,
     progressEventsResult,
     founderFilesResult,
+    priorityProgressResult,
   ] = results
 
   const criticalErrors = results
     .filter((result, index) => {
       if (result.status !== 'rejected') return false
-      // founderFiles (index 8) is non-critical
-      return index !== 8
+      // founderFiles (index 8) and priorityProgress (index 9) are non-critical.
+      return index !== 8 && index !== 9
     })
     .map((result) => result.reason)
 
@@ -674,6 +745,11 @@ export async function loadFounderWorkspace(userId) {
     progressEvents:
       progressEventsResult.status === 'fulfilled'
         ? progressEventsResult.value ?? []
+        : [],
+
+    priorityProgress:
+      priorityProgressResult.status === 'fulfilled'
+        ? priorityProgressResult.value ?? []
         : [],
   }
 }
