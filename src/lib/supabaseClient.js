@@ -523,10 +523,7 @@ export async function savePriorityProgress(userId, priority) {
     status,
     evidence: priority.evidence || null,
     updatedat: now,
-    completedat:
-      status === 'completed'
-        ? priority.completedat || now
-        : null,
+    completedat: status === 'completed' ? priority.completedat || now : null,
   }
 
   const { data, error } = await supabase
@@ -539,6 +536,78 @@ export async function savePriorityProgress(userId, priority) {
 
   if (error) {
     console.error('savePriorityProgress failed', error)
+    throw error
+  }
+
+  return data
+}
+
+// FOUNDER MISSIONS
+
+export async function getFounderMissions(userId) {
+  if (!userId) {
+    throw new Error('A user ID is required to load founder missions.')
+  }
+
+  const { data, error } = await supabase
+    .from('founder_missions')
+    .select('*')
+    .eq('userid', userId)
+    .order('updatedat', { ascending: false })
+
+  if (error) {
+    if (isMissingRelationError(error)) {
+      console.warn(
+        'founder_missions table not found; returning an empty mission list.',
+      )
+      return []
+    }
+
+    throw error
+  }
+
+  return Array.isArray(data) ? data : []
+}
+
+export async function saveFounderMission(userId, mission) {
+  if (!userId) {
+    throw new Error('A user ID is required to save a founder mission.')
+  }
+
+  if (!mission?.missionkey) {
+    throw new Error('A mission key is required to save a founder mission.')
+  }
+
+  const now = new Date().toISOString()
+
+  const payload = {
+    userid: userId,
+    assessmentid: mission.assessmentid || null,
+    missionkey: mission.missionkey,
+    title: mission.title || mission.missionkey,
+    rationale: mission.rationale || null,
+    state: mission.state || 'not_started',
+    definitionofdone: Array.isArray(mission.definitionofdone)
+      ? mission.definitionofdone
+      : [],
+    actions: Array.isArray(mission.actions) ? mission.actions : [],
+    evidence: Array.isArray(mission.evidence) ? mission.evidence : [],
+    submittedat: mission.submittedat || null,
+    reviewedat: mission.reviewedat || null,
+    completedat: mission.completedat || null,
+    updatedat: now,
+  }
+
+  const { data, error } = await supabase
+    .from('founder_missions')
+    .upsert(payload, {
+      onConflict: 'userid,missionkey',
+    })
+    .select('*')
+    .single()
+
+  if (error) {
+    console.error('saveFounderMission failed', error)
     throw error
   }
 
@@ -664,6 +733,7 @@ export async function loadFounderWorkspace(userId) {
     getFounderProgress(userId, 20),
     getFounderFiles(userId),
     getPriorityProgress(userId),
+    getFounderMissions(userId),
   ])
 
   const [
@@ -677,13 +747,14 @@ export async function loadFounderWorkspace(userId) {
     progressEventsResult,
     founderFilesResult,
     priorityProgressResult,
+    founderMissionsResult,
   ] = results
 
   const criticalErrors = results
     .filter((result, index) => {
       if (result.status !== 'rejected') return false
-      // founderFiles (index 8) and priorityProgress (index 9) are non-critical.
-      return index !== 8 && index !== 9
+      // founderFiles (8), priorityProgress (9), and founderMissions (10) are non-critical.
+      return index !== 8 && index !== 9 && index !== 10
     })
     .map((result) => result.reason)
 
@@ -750,6 +821,11 @@ export async function loadFounderWorkspace(userId) {
     priorityProgress:
       priorityProgressResult.status === 'fulfilled'
         ? priorityProgressResult.value ?? []
+        : [],
+
+    founderMissions:
+      founderMissionsResult.status === 'fulfilled'
+        ? founderMissionsResult.value ?? []
         : [],
   }
 }

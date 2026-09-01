@@ -1,59 +1,95 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap');
+/* src/global.css
+   PATH360 core application visual system
+   Warm white · near black · forest green
+
+   Lilac is reserved exclusively for Investment Readiness,
+   investor diligence, capital planning, and funding workflows.
+*/
+
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* =========================================================
+   Design tokens
+   ========================================================= */
+
 :root {
-  --bg-app: #f5f6f2;
-  --bg-shell: #eef1eb;
+  /* Core surfaces */
+  --bg-app: #f8f7f3;
+  --bg-shell: #f4f3ee;
   --surface: #ffffff;
-  --surface-soft: #f7f8f5;
-  --surface-muted: #edf2ec;
-  --surface-strong: #e7ece5;
+  --surface-soft: #f5f4ef;
+  --surface-muted: #edede8;
+  --surface-strong: #e6e6df;
+  --surface-dark: #11110f;
 
-  --text: #111111;
-  --text-soft: #5f675f;
-  --text-faint: #8b938b;
-
-  --border: #d9dfd7;
-  --border-strong: #c8d0c7;
-  --border-dark: #b7c1b7;
-
-  --green-900: #0f3d2e;
-  --green-850: #114634;
-  --green-800: #145239;
-  --green-700: #1a7a4a;
-  --green-600: #2d8f5d;
-  --green-500: #4da974;
-  --green-100: #e9f5ee;
-  --green-050: #f4faf6;
-
-  --black: #111111;
+  /* Typography */
+  --text: #11110f;
+  --text-soft: #61625d;
+  --text-faint: #8b8c86;
+  --black: #11110f;
   --white: #ffffff;
 
+  /* Borders */
+  --border: #ddded7;
+  --border-strong: #c9cbc3;
+  --border-dark: #b7b9b0;
+
+  /* Forest green: action, progress, active state, proof */
+  --green-900: #0f3325;
+  --green-850: #143f2e;
+  --green-800: #174b36;
+  --green-700: #1c5b42;
+  --green-600: #2c6f50;
+  --green-500: #54876b;
+  --green-100: #e8f0ea;
+  --green-050: #f4f8f4;
+
+  /* Investment only — never use as generic UI colour */
+  --investment-lilac-800: #51388e;
+  --investment-lilac-700: #6546ad;
+  --investment-lilac-600: #775bd1;
+  --investment-lilac-200: #ddd3f7;
+  --investment-lilac-100: #f1edff;
+  --investment-lilac-050: #f9f7ff;
+
+  /* Semantic feedback */
   --danger: #8b2020;
   --danger-bg: #fdeaea;
   --warning: #8a5b00;
   --warning-bg: #fdf4e3;
-  --info: #215f46;
-  --info-bg: #eef7f1;
+  --info: var(--green-800);
+  --info-bg: var(--green-050);
 
-  --shadow-sm: 0 1px 2px rgba(17, 17, 17, 0.03);
-  --shadow-md: 0 10px 30px rgba(17, 17, 17, 0.05);
-  --shadow-lg: 0 24px 50px rgba(17, 17, 17, 0.08);
+  /* Minimal depth */
+  --shadow-sm: 0 1px 2px rgba(17, 17, 15, 0.025);
+  --shadow-md: 0 12px 30px rgba(17, 17, 15, 0.045);
+  --shadow-lg: 0 26px 52px rgba(17, 17, 15, 0.065);
 
+  /* Shape */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
   --radius-2xl: 28px;
 
+  /* Shell */
   --sidebar-w: 268px;
-  --rail-w: 330px;
+  --rail-w: 286px;
   --topbar-h: 78px;
-  --content-max: 1180px;
+  --content-max: 1320px;
+
+  /* Font */
+  --font-sans: "DM Sans", Inter, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
+
+/* =========================================================
+   Reset and global baseline
+   ========================================================= */
 
 *,
 *::before,
@@ -67,17 +103,18 @@ html,
 body,
 #root {
   width: 100%;
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 body {
-  font-family: 'DM Sans', sans-serif;
-  background:
-    radial-gradient(circle at top left, rgba(26, 122, 74, 0.05), transparent 24%),
-    linear-gradient(180deg, #f8faf7 0%, var(--bg-app) 100%);
+  background: var(--bg-app);
   color: var(--text);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -87,13 +124,9 @@ select {
   font: inherit;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
 button {
   cursor: pointer;
+  letter-spacing: -0.005em;
   transition:
     background 0.16s ease,
     color 0.16s ease,
@@ -104,17 +137,26 @@ button {
 }
 
 button:hover {
-  opacity: 0.96;
+  opacity: 0.98;
 }
 
 button:active {
   transform: translateY(1px);
 }
 
+button:disabled {
+  cursor: not-allowed;
+}
+
 textarea,
 input,
 select {
   outline: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
 img,
@@ -133,58 +175,69 @@ svg {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
   border-radius: 999px;
+  background: var(--border-strong);
 }
 
-/* Shell */
+/* =========================================================
+   App shell
+   ========================================================= */
 
 .p360-shell {
-  min-height: 100vh;
   display: grid;
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--rail-w);
-  background: transparent;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0 !important;
+  overflow: hidden;
+  background: var(--bg-app);
 }
 
 .p360-shell-sidebar {
-  width: var(--sidebar-w);
-  min-height: 100vh;
-  height: 100vh;
-  background: #f6f4ef;
-  color: #1c1c1a;
-  border-right: 1px solid #d9d4ca;
   position: sticky;
   top: 0;
+  width: var(--sidebar-w);
+  height: 100dvh;
+  min-height: 0 !important;
   overflow: hidden;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
 }
 
 .p360-shell-main {
-  min-width: 0;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  height: 100dvh;
+  min-height: 0 !important;
+  overflow: hidden;
 }
 
 .p360-shell-topbar {
-  min-height: var(--topbar-h);
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  min-height: var(--topbar-h);
   padding: 18px 28px;
-  background: rgba(245, 246, 242, 0.88);
-  backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 20;
+  background: rgba(248, 247, 243, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .p360-shell-content {
   flex: 1;
-  padding: 28px;
-  overflow-y: auto;
   min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 28px;
+  overscroll-behavior: contain;
 }
 
 .p360-shell-content-inner {
@@ -193,123 +246,161 @@ svg {
 }
 
 .p360-shell-rail {
-  min-height: 100vh;
-  background: rgba(255, 255, 255, 0.76);
-  border-left: 1px solid var(--border);
-  backdrop-filter: blur(14px);
   position: sticky;
   top: 0;
+  width: var(--rail-w);
+  min-width: 0;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: none;
 }
 
-/* Common surfaces */
+/* =========================================================
+   Shared surfaces
+   ========================================================= */
 
 .p360-card {
-  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .p360-card-soft {
-  background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  background: var(--surface-soft);
+  box-shadow: none;
 }
 
 .p360-panel {
-  background: linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(247,248,245,0.96) 100%);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-sm);
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .p360-feature-card {
-  background: linear-gradient(180deg, #ffffff 0%, #f8faf7 100%);
+  padding: 22px;
   border: 1px solid var(--border);
   border-radius: 18px;
-  box-shadow: var(--shadow-sm);
-  padding: 22px;
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .p360-empty {
+  padding: 22px;
   border: 1px dashed var(--border-dark);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.5);
-  padding: 22px;
+  background: var(--surface-soft);
 }
 
-/* Buttons */
+/* =========================================================
+   Buttons
+   ========================================================= */
 
 .p360-btn-primary {
-  background: var(--green-700);
-  color: var(--white);
-  border: none;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--green-800);
   border-radius: 10px;
-  padding: 10px 18px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  box-shadow: 0 8px 20px rgba(26, 122, 74, 0.16);
+  background: var(--green-800);
+  box-shadow: none;
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: 0;
 }
 
-.p360-btn-primary:hover {
-  background: var(--green-800);
+.p360-btn-primary:hover:not(:disabled) {
+  border-color: var(--green-900);
+  background: var(--green-900);
+  opacity: 1;
+}
+
+.p360-btn-primary:disabled {
+  border-color: var(--border-strong);
+  background: var(--border-strong);
+  color: var(--white);
+  opacity: 1;
 }
 
 .p360-btn-secondary {
-  background: transparent;
-  color: var(--text-soft);
+  min-height: 44px;
+  padding: 0 18px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px 18px;
-  font-size: 13px;
-  font-weight: 600;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.p360-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.8);
+.p360-btn-secondary:hover:not(:disabled) {
   border-color: var(--border-strong);
+  background: var(--surface-soft);
+  opacity: 1;
 }
 
 .p360-btn-ghost {
-  background: rgba(255, 255, 255, 0.65);
-  color: var(--text);
+  min-height: 40px;
+  padding: 0 14px;
   border: 1px solid transparent;
   border-radius: 10px;
-  padding: 10px 16px;
-  font-size: 13px;
-  font-weight: 600;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.p360-btn-ghost:hover:not(:disabled) {
+  background: var(--surface-soft);
+  color: var(--text);
+  opacity: 1;
 }
 
 .p360-btn-danger {
-  background: var(--danger-bg);
-  color: var(--danger);
+  min-height: 40px;
+  padding: 0 16px;
   border: 1px solid rgba(139, 32, 32, 0.14);
   border-radius: 10px;
-  padding: 10px 16px;
+  background: var(--danger-bg);
+  color: var(--danger);
   font-size: 13px;
   font-weight: 700;
 }
 
-/* Inputs */
+/* =========================================================
+   Inputs
+   ========================================================= */
 
 .p360-input,
 .p360-textarea,
 .p360-select {
   width: 100%;
+  padding: 11px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 11px 14px;
-  font-size: 14px;
-  color: var(--text);
   background: var(--surface-soft);
-  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  color: var(--text);
+  font-size: 14px;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .p360-textarea {
-  resize: vertical;
   min-height: 110px;
+  resize: vertical;
+}
+
+.p360-input::placeholder,
+.p360-textarea::placeholder {
+  color: var(--text-faint);
 }
 
 .p360-input:focus,
@@ -317,69 +408,81 @@ svg {
 .p360-select:focus {
   border-color: var(--green-600);
   background: var(--surface);
-  box-shadow: 0 0 0 4px rgba(45, 143, 93, 0.08);
+  box-shadow: 0 0 0 4px rgba(44, 111, 80, 0.1);
 }
 
 .p360-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-faint);
-  margin-bottom: 6px;
   display: block;
+  margin-bottom: 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-/* Typography */
+/* =========================================================
+   Typography
+   ========================================================= */
 
 .p360-kicker {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
   color: var(--green-700);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.p360-title-xl,
+.p360-title-lg,
+.p360-title-md {
+  color: var(--black);
+  text-wrap: balance;
 }
 
 .p360-title-xl {
-  font-size: clamp(34px, 5vw, 64px);
-  line-height: 0.96;
-  letter-spacing: -0.05em;
+  font-size: clamp(42px, 5vw, 58px);
   font-weight: 800;
-  color: var(--black);
+  letter-spacing: -0.055em;
+  line-height: 0.98;
 }
 
 .p360-title-lg {
-  font-size: clamp(24px, 3vw, 34px);
-  line-height: 1.02;
-  letter-spacing: -0.04em;
+  font-size: clamp(30px, 3vw, 36px);
   font-weight: 800;
-  color: var(--black);
+  letter-spacing: -0.045em;
+  line-height: 1.05;
 }
 
 .p360-title-md {
   font-size: 18px;
-  line-height: 1.15;
-  font-weight: 700;
-  color: var(--black);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .p360-body {
-  font-size: 16px;
-  line-height: 1.7;
   color: var(--text-soft);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.65;
 }
 
 .p360-body-sm {
-  font-size: 14px;
-  line-height: 1.65;
   color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.6;
 }
 
 .p360-muted {
   color: var(--text-faint);
 }
 
-/* Utility layout */
+/* =========================================================
+   Layout utilities
+   ========================================================= */
 
 .p360-divider {
   width: 100%;
@@ -399,13 +502,39 @@ svg {
   gap: 18px;
 }
 
-.p360-stack-8 { display: flex; flex-direction: column; gap: 8px; }
-.p360-stack-12 { display: flex; flex-direction: column; gap: 12px; }
-.p360-stack-16 { display: flex; flex-direction: column; gap: 16px; }
-.p360-stack-20 { display: flex; flex-direction: column; gap: 20px; }
-.p360-stack-24 { display: flex; flex-direction: column; gap: 24px; }
+.p360-stack-8 {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
-/* Tags / status */
+.p360-stack-12 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.p360-stack-16 {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.p360-stack-20 {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.p360-stack-24 {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* =========================================================
+   Status and progress
+   ========================================================= */
 
 .p360-tag {
   display: inline-flex;
@@ -418,14 +547,28 @@ svg {
   letter-spacing: 0.04em;
 }
 
+.p360-tag-learning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--green-700);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .p360-tag-success {
   background: var(--green-100);
   color: var(--green-800);
 }
 
 .p360-tag-info {
-  background: var(--info-bg);
-  color: var(--info);
+  background: var(--surface-soft);
+  color: var(--text-soft);
 }
 
 .p360-tag-warning {
@@ -438,15 +581,115 @@ svg {
   color: var(--text-soft);
 }
 
-/* Sidebar */
+.p360-progress-rail {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.p360-progress-rail > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green-700);
+}
+
+.p360-stage-current {
+  border: 1px solid rgba(28, 91, 66, 0.2);
+  background: var(--green-050);
+  color: var(--green-800);
+}
+
+.p360-stage-complete {
+  border: 1px solid rgba(28, 91, 66, 0.2);
+  background: var(--green-100);
+  color: var(--green-800);
+}
+
+/* =========================================================
+   Learning and fieldwork
+   Neutral and green only — no lilac
+   ========================================================= */
+
+.p360-learning-surface {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface-soft);
+  box-shadow: none;
+}
+
+.p360-field-note {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.p360-field-note-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+
+.p360-field-note-body {
+  max-width: 760px;
+  padding: 20px;
+}
+
+.p360-field-note-body h3 {
+  margin: 18px 0 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.p360-field-note-body p,
+.p360-field-note-body li {
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.p360-field-note-body ul {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.p360-field-note-create {
+  margin-top: 20px;
+  padding: 13px 14px;
+  border: 1px solid rgba(28, 91, 66, 0.18);
+  border-radius: 12px;
+  background: var(--green-050);
+  color: var(--green-800);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* =========================================================
+   Sidebar
+   ========================================================= */
 
 .p360-sidebar {
-  min-height: 100vh;
-  height: 100%;
-  padding: 24px 18px;
   display: flex;
   flex-direction: column;
-  background: #f6f4ef;
+  min-height: 0;
+  height: 100%;
+  padding: 24px 18px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.p360-sidebar-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .p360-sidebar-brand {
@@ -457,31 +700,32 @@ svg {
 }
 
 .p360-sidebar-brand-mark {
+  display: grid;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #2d8f5d 0%, #1a7a4a 100%);
-  display: grid;
   place-items: center;
-  color: #fff;
+  border-radius: 12px;
+  background: var(--green-800);
+  box-shadow: none;
+  color: var(--white);
   font-size: 14px;
   font-weight: 800;
-  box-shadow: 0 10px 24px rgba(26, 122, 74, 0.18);
 }
 
 .p360-sidebar-brand-copy strong {
   display: block;
+  color: var(--text);
   font-size: 15px;
   letter-spacing: 0.03em;
 }
 
 .p360-sidebar-brand-copy span {
   display: block;
+  margin-top: 2px;
+  color: var(--text-faint);
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #8f8779;
-  margin-top: 2px;
 }
 
 .p360-sidebar-nav {
@@ -491,67 +735,82 @@ svg {
 }
 
 .p360-sidebar-link {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border-radius: 14px;
-  color: #6e6b65;
   border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--text-soft);
   font-size: 14px;
   font-weight: 600;
-  transition: all 0.18s ease;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .p360-sidebar-link:hover {
-  color: #1d1d1b;
-  background: #f0ece4;
+  background: var(--surface-soft);
+  color: var(--text);
 }
 
 .p360-sidebar-link.active {
-  color: #1d6b4f;
-  background: #edf4ee;
-  border-color: #cfe0d0;
+  border-color: transparent;
+  background: var(--green-050);
+  color: var(--green-800);
+}
+
+.p360-sidebar-link.active::before {
+  position: absolute;
+  left: -18px;
+  width: 3px;
+  height: 20px;
+  border-radius: 0 999px 999px 0;
+  background: var(--green-700);
+  content: "";
 }
 
 .p360-sidebar-badge {
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-faint);
   font-size: 10px;
   font-weight: 700;
-  padding: 4px 7px;
-  border-radius: 999px;
-  background: #efece5;
-  color: #9a9285;
-  border: 1px solid #e0dbd1;
 }
 
 .p360-sidebar-footer {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  margin-top: auto;
 }
 
 .p360-sidebar-profile {
   padding: 14px;
-  border-radius: 16px;
-  background: #eef4ef;
-  border: 1px solid #d6e4d7;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
 }
 
-.p360-sidebar-profile .meta {
-  font-size: 12px;
-  color: #6e6b65;
+.p360-sidebar-profile .meta,
+.p360-sidebar-signout {
+  color: var(--text-soft);
 }
 
 .p360-sidebar-signout {
   width: 100%;
+  border-color: var(--border);
   background: transparent;
-  color: #6e6b65;
-  border: 1px solid #d9d4ca;
 }
 
-/* Topbar */
+/* =========================================================
+   Topbar
+   ========================================================= */
 
 .p360-topbar-left,
 .p360-topbar-right {
@@ -561,8 +820,8 @@ svg {
 }
 
 .p360-breadcrumb {
-  font-size: 13px;
   color: var(--text-faint);
+  font-size: 13px;
 }
 
 .p360-chip {
@@ -571,9 +830,9 @@ svg {
   gap: 8px;
   min-height: 38px;
   padding: 0 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
   border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
   color: var(--text-soft);
   font-size: 13px;
   font-weight: 600;
@@ -585,8 +844,9 @@ svg {
   gap: 8px;
   min-height: 38px;
   padding: 0 14px;
+  border: 1px solid rgba(28, 91, 66, 0.18);
   border-radius: 999px;
-  background: var(--green-100);
+  background: var(--green-050);
   color: var(--green-800);
   font-size: 12px;
   font-weight: 700;
@@ -599,214 +859,25 @@ svg {
   background: currentColor;
 }
 
-/* AI rail */
-
-.p360-rail {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  padding: 20px 18px;
-  gap: 16px;
-}
-
-.p360-rail-head {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.p360-rail-prompts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.p360-rail-chat {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-right: 4px;
-}
-
-.p360-chat-bubble {
-  max-width: 92%;
-  border-radius: 16px;
-  padding: 12px 14px;
-  font-size: 13px;
-  line-height: 1.65;
-}
-
-.p360-chat-bubble.user {
-  align-self: flex-end;
-  background: var(--green-700);
-  color: #fff;
-}
-
-.p360-chat-bubble.assistant {
-  align-self: flex-start;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--border);
-  color: var(--text-soft);
-}
-
-.p360-rail-compose {
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-/* Motion */
-
-.fade-up {
-  animation: fadeUp 0.35s ease-out forwards;
-}
-
-.fade-up-1 {
-  animation: fadeUp 0.35s 0.08s ease-out both;
-}
-
-.fade-up-2 {
-  animation: fadeUp 0.35s 0.16s ease-out both;
-}
-
-.fade-up-3 {
-  animation: fadeUp 0.35s 0.24s ease-out both;
-}
-
-.fade-up-4 {
-  animation: fadeUp 0.35s 0.32s ease-out both;
-}
-
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.score-reveal {
-  animation: scoreReveal 0.55s ease-out forwards;
-}
-
-@keyframes scoreReveal {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.ai-pulse {
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
-}
-
-/* Responsive */
-
-@media (max-width: 1280px) {
-  :root {
-    --sidebar-w: 244px;
-    --rail-w: 290px;
-  }
-
-  .p360-shell-topbar,
-  .p360-shell-content {
-    padding-left: 22px;
-    padding-right: 22px;
-  }
-}
-
-@media (max-width: 1080px) {
-  .p360-shell {
-    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-  }
-
-  .p360-shell-rail {
-    display: none;
-  }
-}
-
-@media (max-width: 840px) {
-  .p360-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .p360-shell-sidebar {
-    position: relative;
-    min-height: auto;
-    height: auto;
-    width: 100%;
-  }
-
-  .p360-sidebar {
-    min-height: auto;
-  }
-
-  .p360-shell-topbar {
-    position: relative;
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .p360-topbar-left,
-  .p360-topbar-right {
-    flex-wrap: wrap;
-  }
-
-  .p360-grid-2,
-  .p360-grid-3 {
-    grid-template-columns: 1fr;
-  }
-}
 /* =========================================================
-   Compact AI strategist rail
-   Append this block at the end of index.css
+   AI strategist rail
    ========================================================= */
 
-:root {
-  --rail-w: 286px;
-}
-
-.p360-shell-rail {
-  width: var(--rail-w);
-  min-width: 0;
-  overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 250, 247, 0.9) 100%);
-  border-left: 1px solid rgba(207, 220, 207, 0.9);
-  box-shadow: -12px 0 32px rgba(16, 48, 31, 0.035);
-}
-
 .p360-rail {
-  height: 100vh;
-  min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
   padding: 14px 12px 12px;
+  overflow: hidden;
   color: var(--text);
 }
 
 .p360-rail-head {
   padding: 4px 2px 12px;
-  border-bottom: 1px solid rgba(217, 223, 215, 0.86);
+  border-bottom: 1px solid var(--border);
 }
 
 .p360-rail-title-row {
@@ -817,20 +888,20 @@ svg {
 }
 
 .p360-rail-live-dot {
+  flex: 0 0 auto;
   width: 8px;
   height: 8px;
-  flex: 0 0 auto;
   border-radius: 999px;
   background: var(--green-600);
-  box-shadow: 0 0 0 4px rgba(45, 143, 93, 0.1);
+  box-shadow: 0 0 0 4px rgba(44, 111, 80, 0.1);
 }
 
 .p360-rail-title-copy {
-  min-width: 0;
-  flex: 1;
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 1px;
+  min-width: 0;
 }
 
 .p360-rail-kicker {
@@ -877,10 +948,10 @@ svg {
 }
 
 .p360-rail-agent-tab {
-  min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   padding: 7px 8px;
   border: 1px solid transparent;
   border-radius: 9px;
@@ -893,22 +964,23 @@ svg {
 }
 
 .p360-rail-agent-tab:hover {
-  background: var(--surface-soft);
   border-color: var(--border);
+  background: var(--surface-soft);
   color: var(--text-soft);
+  opacity: 1;
 }
 
 .p360-rail-agent-tab.active {
+  border-color: rgba(28, 91, 66, 0.22);
   background: var(--green-050);
-  border-color: rgba(45, 143, 93, 0.22);
   color: var(--green-800);
 }
 
 .p360-rail-agent-short {
+  display: grid;
+  flex: 0 0 auto;
   width: 18px;
   height: 18px;
-  flex: 0 0 auto;
-  display: grid;
   place-items: center;
   border-radius: 6px;
   background: var(--surface-muted);
@@ -924,12 +996,14 @@ svg {
 }
 
 .p360-rail-chat {
-  min-height: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 13px;
+  min-height: 0;
   padding: 14px 3px 14px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
 
@@ -969,33 +1043,33 @@ svg {
 
 .p360-chat-bubble {
   max-width: 96%;
-  border-radius: 13px;
   padding: 9px 10px;
+  border-radius: 13px;
   font-size: 11.5px;
   line-height: 1.58;
   overflow-wrap: anywhere;
 }
 
 .p360-chat-bubble.user {
-  border: 1px solid rgba(20, 82, 57, 0.1);
+  border: 1px solid rgba(23, 75, 54, 0.12);
   border-bottom-right-radius: 4px;
-  background: linear-gradient(145deg, var(--green-700), var(--green-800));
-  box-shadow: 0 6px 16px rgba(26, 122, 74, 0.14);
+  background: var(--green-800);
+  box-shadow: none;
   color: var(--white);
 }
 
 .p360-chat-bubble.assistant {
-  border: 1px solid rgba(217, 223, 215, 0.92);
+  border: 1px solid var(--border);
   border-bottom-left-radius: 4px;
-  background: rgba(255, 255, 255, 0.93);
-  box-shadow: 0 4px 12px rgba(17, 17, 17, 0.025);
+  background: var(--surface);
+  box-shadow: none;
   color: var(--text-soft);
 }
 
 .p360-streaming-caret {
+  display: inline-block;
   width: 2px;
   height: 11px;
-  display: inline-block;
   margin-left: 3px;
   vertical-align: -1px;
   background: var(--green-700);
@@ -1011,7 +1085,7 @@ svg {
   border: 1px solid var(--border);
   border-radius: 12px;
   border-bottom-left-radius: 4px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface);
 }
 
 .p360-rail-typing span {
@@ -1049,9 +1123,9 @@ svg {
   gap: 5px;
   margin: 0 0 12px;
   padding: 10px;
-  border: 1px solid rgba(207, 220, 207, 0.85);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: linear-gradient(145deg, rgba(244, 250, 246, 0.96), rgba(255, 255, 255, 0.9));
+  background: var(--surface-soft);
 }
 
 .p360-rail-suggestions-label {
@@ -1064,14 +1138,14 @@ svg {
 }
 
 .p360-rail-suggestion {
-  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  width: 100%;
   padding: 7px 2px;
   border: 0;
-  border-bottom: 1px solid rgba(217, 223, 215, 0.75);
+  border-bottom: 1px solid var(--border);
   background: transparent;
   color: var(--text-soft);
   font-size: 10.5px;
@@ -1086,6 +1160,7 @@ svg {
 
 .p360-rail-suggestion:hover {
   color: var(--green-800);
+  opacity: 1;
 }
 
 .p360-rail-suggestion span:last-child {
@@ -1096,7 +1171,7 @@ svg {
 
 .p360-rail-compose {
   padding-top: 10px;
-  border-top: 1px solid rgba(217, 223, 215, 0.9);
+  border-top: 1px solid var(--border);
 }
 
 .p360-rail-compose-box {
@@ -1106,14 +1181,14 @@ svg {
   padding: 7px;
   border: 1px solid var(--border);
   border-radius: 13px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 5px 14px rgba(17, 17, 17, 0.035);
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .p360-rail-textarea {
+  flex: 1;
   min-height: 48px;
   max-height: 96px;
-  flex: 1;
   padding: 4px 2px;
   border: 0;
   border-radius: 0;
@@ -1136,31 +1211,34 @@ svg {
 }
 
 .p360-rail-send {
+  display: grid;
+  flex: 0 0 auto;
   width: 32px;
   height: 32px;
-  flex: 0 0 auto;
-  display: grid;
   place-items: center;
   padding: 0;
-  border: 0;
+  border: 1px solid var(--green-800);
   border-radius: 9px;
-  background: var(--green-700);
+  background: var(--green-800);
+  box-shadow: none;
   color: var(--white);
   font-size: 16px;
   font-weight: 700;
   line-height: 1;
-  box-shadow: 0 5px 12px rgba(26, 122, 74, 0.18);
 }
 
 .p360-rail-send:hover:not(:disabled) {
-  background: var(--green-800);
+  border-color: var(--green-900);
+  background: var(--green-900);
+  opacity: 1;
   transform: translateY(-1px);
 }
 
 .p360-rail-send:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+  border-color: var(--border-strong);
+  background: var(--border-strong);
   box-shadow: none;
+  opacity: 1;
 }
 
 .p360-rail-compose-help {
@@ -1182,37 +1260,145 @@ svg {
   font-weight: 700;
 }
 
-/* Shell refinements for the smaller 286px rail */
+/* =========================================================
+   Investment Readiness only
+   These classes must only appear in investment, funding,
+   capital planning, investor diligence, and investor export UI.
+   ========================================================= */
 
-.p360-shell-content-inner {
-  max-width: 1320px;
+.p360-investment-surface {
+  border: 1px solid var(--investment-lilac-200);
+  border-radius: var(--radius-xl);
+  background: var(--investment-lilac-050);
+  color: var(--text);
 }
 
-/* Inline grid styles in AppLayout need !important for breakpoints. */
+.p360-investment-label {
+  color: var(--investment-lilac-800);
+}
 
-@media (max-width: 1280px) {
-  .p360-shell {
-    grid-template-columns: 244px minmax(0, 1fr) 272px !important;
+.p360-investment-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--investment-lilac-200);
+  border-radius: 999px;
+  background: var(--investment-lilac-050);
+  color: var(--investment-lilac-800);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+/* =========================================================
+   Motion
+   ========================================================= */
+
+.fade-up {
+  animation: fadeUp 0.35s ease-out forwards;
+}
+
+.fade-up-1 {
+  animation: fadeUp 0.35s 0.08s ease-out both;
+}
+
+.fade-up-2 {
+  animation: fadeUp 0.35s 0.16s ease-out both;
+}
+
+.fade-up-3 {
+  animation: fadeUp 0.35s 0.24s ease-out both;
+}
+
+.fade-up-4 {
+  animation: fadeUp 0.35s 0.32s ease-out both;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
   }
 
-  .p360-shell-rail {
-    width: 272px;
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.score-reveal {
+  animation: scoreReveal 0.55s ease-out forwards;
+}
+
+@keyframes scoreReveal {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ai-pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* =========================================================
+   Responsive shell
+   ========================================================= */
+
+@media (max-width: 1280px) {
+  :root {
+    --sidebar-w: 244px;
+    --rail-w: 272px;
+  }
+
+  .p360-shell-topbar,
+  .p360-shell-content {
+    padding-right: 22px;
+    padding-left: 22px;
   }
 
   .p360-rail {
-    padding-left: 10px;
     padding-right: 10px;
+    padding-left: 10px;
   }
 
   .p360-rail-agent-tab {
-    padding-left: 6px;
     padding-right: 6px;
+    padding-left: 6px;
   }
 }
 
 @media (max-width: 1080px) {
   .p360-shell {
-    grid-template-columns: 244px minmax(0, 1fr) !important;
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   }
 
   .p360-shell-rail {
@@ -1221,90 +1407,6 @@ svg {
 }
 
 @media (max-width: 840px) {
-  .p360-shell {
-    grid-template-columns: 1fr !important;
-  }
-
-  .p360-shell-sidebar {
-    width: 100% !important;
-    height: auto !important;
-    min-height: auto !important;
-    position: relative !important;
-  }
-}
-/* =========================================================
-   Fixed workspace: independent navigation/content scrolling
-   ========================================================= */
-
-html,
-body,
-#root {
-  height: 100%;
-  overflow: hidden;
-}
-
-.p360-shell {
-  height: 100dvh;
-  min-height: 0 !important;
-  overflow: hidden;
-}
-
-/* The centre column must stay within the viewport. */
-.p360-shell-main {
-  height: 100dvh;
-  min-height: 0 !important;
-  overflow: hidden;
-}
-
-/* Keep the topbar visible; scroll only the page body beneath it. */
-.p360-shell-content {
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-/*
-  Sidebar navigation scrolls independently.
-  This overrides the earlier .p360-sidebar { min-height: 100vh }
-  rule, which otherwise makes the left navigation taller than
-  its allotted scroll region.
-*/
-.p360-sidebar-scroll {
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.p360-sidebar {
-  min-height: 0;
-  height: 100%;
-}
-
-/* Keep founder controls pinned at the bottom of the left column. */
-.p360-shell-sidebar {
-  height: 100dvh;
-  min-height: 0 !important;
-  overflow: hidden;
-}
-
-/* The strategist chat already has its own scrollable message region. */
-.p360-shell-rail,
-.p360-rail {
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.p360-rail-chat {
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-/* Mobile must return to normal document scrolling. */
-@media (max-width: 840px) {
   html,
   body,
   #root {
@@ -1312,10 +1414,33 @@ body,
     overflow: auto;
   }
 
-  .p360-shell,
+  .p360-shell {
+    display: grid;
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+
+  .p360-shell-sidebar {
+    position: relative;
+    top: auto;
+    width: 100%;
+    height: auto;
+    min-height: auto !important;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
   .p360-shell-main {
     height: auto;
     overflow: visible;
+  }
+
+  .p360-shell-topbar {
+    position: relative;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .p360-shell-content,
@@ -1323,8 +1448,13 @@ body,
     overflow: visible;
   }
 
-  .p360-shell-sidebar {
-    height: auto;
-    overflow: visible;
+  .p360-topbar-left,
+  .p360-topbar-right {
+    flex-wrap: wrap;
+  }
+
+  .p360-grid-2,
+  .p360-grid-3 {
+    grid-template-columns: 1fr;
   }
 }

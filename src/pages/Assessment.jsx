@@ -52,7 +52,8 @@ function validateAnswer(value) {
 export default function Assessment() {
   const navigate = useNavigate()
   const textRef = useRef(null)
-  const [searchParams, setSearchParams] = useSearchParams()
+  const reviewInitialisedRef = useRef(false)
+  const [searchParams] = useSearchParams()
 
   const user = useDiagnosticStore((s) => s.user)
   const founderProfile = useDiagnosticStore((s) => s.founderProfile)
@@ -74,8 +75,10 @@ export default function Assessment() {
     (s) => s.cancelProgressReview
   )
 
+  const reviewRequested = searchParams.get('review') === '1'
+
   const [phase, setPhase] = useState(
-    assessmentResults ? 'results' : 'questioning'
+    reviewRequested || !assessmentResults ? 'questioning' : 'results'
   )
   const [questions, setQuestions] = useState([])
   const [qaPairs, setLocalQAPairs] = useState(qaPairsInStore)
@@ -85,9 +88,7 @@ export default function Assessment() {
   const [infoMessage, setInfoMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  const isProgressReview =
-    Boolean(progressReviewDraft) ||
-    searchParams.get('review') === '1'
+  const isProgressReview = reviewRequested || Boolean(progressReviewDraft)
 
   function syncPairs(nextPairs) {
     setLocalQAPairs(nextPairs)
@@ -122,11 +123,7 @@ export default function Assessment() {
 
     const savedQuestions = savedPairs.map((item) => item.question)
     const firstQuestion = savedQuestions[0] || getBootQuestion()
-
-    const nextPairs = savedPairs.length
-      ? savedPairs
-      : []
-
+    const nextPairs = savedPairs.length ? savedPairs : []
     const nextQuestions = savedQuestions.length
       ? savedQuestions
       : [firstQuestion]
@@ -144,35 +141,40 @@ export default function Assessment() {
   }
 
   useEffect(() => {
-    const reviewRequested = searchParams.get('review') === '1'
+    if (reviewRequested) {
+      if (reviewInitialisedRef.current) return
 
-    if (reviewRequested && progressReviewDraft) {
-      loadProgressReview(progressReviewDraft)
-      setSearchParams({}, { replace: true })
+      const draft =
+        progressReviewDraft ||
+        (assessmentResults?.id ? startProgressReview() : null)
+
+      if (draft) {
+        reviewInitialisedRef.current = true
+        loadProgressReview(draft)
+        return
+      }
+
+      if (!assessmentResults && currentIndex === -1) {
+        reviewInitialisedRef.current = true
+        startFreshBaseline()
+      }
+
       return
     }
 
-    if (reviewRequested && !progressReviewDraft && assessmentResults?.id) {
-      const draft = startProgressReview()
-      loadProgressReview(draft)
-      setSearchParams({}, { replace: true })
-      return
-    }
-
-    if (assessmentResults && !reviewRequested) {
+    if (assessmentResults) {
       setPhase('results')
       return
     }
 
-    if (!assessmentResults && currentIndex === -1) {
+    if (currentIndex === -1) {
       startFreshBaseline()
     }
   }, [
     assessmentResults,
     currentIndex,
     progressReviewDraft,
-    searchParams,
-    setSearchParams,
+    reviewRequested,
     startProgressReview,
   ])
 
@@ -354,11 +356,6 @@ export default function Assessment() {
         rawqa: finalPairs,
       }
 
-      /*
-       * Important: do not setAssessmentResults(finalResults) before saving.
-       * addAssessment determines whether this is a baseline or progress
-       * review from the existing saved assessment.
-       */
       const savedAssessment = await addAssessmentToStore({
         founderscore: finalResults.founderscore,
         investorreadiness: finalResults.investorreadiness,
@@ -380,9 +377,14 @@ export default function Assessment() {
         investornarrative: finalResults.investornarrative,
       })
 
+      if (!savedAssessment) {
+        throw new Error('Your progress review could not be saved.')
+      }
+
       setAssessmentResults(savedAssessment)
       setQAPairs(finalPairs)
       setProgressReviewDraft(null)
+      reviewInitialisedRef.current = false
 
       if (finalResults?.vcverdict && user?.id) {
         await addMemoryToStore(
@@ -399,7 +401,7 @@ export default function Assessment() {
         versionnumber: savedAssessment?.versionnumber,
       })
 
-      setPhase('results')
+      navigate('/app/dashboard', { replace: true })
     } catch (error) {
       console.error(error)
       setValidationError(error?.message || 'Scoring failed.')
@@ -410,6 +412,7 @@ export default function Assessment() {
   }
 
   function handleReviewProgress() {
+    reviewInitialisedRef.current = false
     const draft = startProgressReview()
     loadProgressReview(draft)
   }
@@ -429,6 +432,10 @@ export default function Assessment() {
               ? 'Update anything that changed since your prior assessment. Your previous version will remain available in Assessment history.'
               : 'Edit anything before generating your founder baseline assessment.'}
           </p>
+
+          {validationError ? (
+            <div style={errorBox}>{validationError}</div>
+          ) : null}
 
           <div style={listWrap}>
             {qaPairs.map((item, index) => (
@@ -461,6 +468,7 @@ export default function Assessment() {
                 handleEdit(Math.max(qaPairs.length - 1, 0))
               }
               style={secondaryBtn}
+              disabled={isLoading}
             >
               Back
             </button>
@@ -472,7 +480,7 @@ export default function Assessment() {
               disabled={isLoading}
             >
               {isLoading
-                ? 'Scoring…'
+                ? 'Saving…'
                 : isProgressReview
                   ? 'Save Progress Review'
                   : 'Generate Baseline Score'}
@@ -689,6 +697,17 @@ const noticeBox = {
   border: '1px solid #D6E4D7',
   background: '#EEF4EF',
   color: '#315C46',
+  fontSize: 13,
+  lineHeight: 1.6,
+}
+
+const errorBox = {
+  marginBottom: 18,
+  padding: '12px 14px',
+  borderRadius: 14,
+  border: '1px solid #E8CACA',
+  background: '#FBECEC',
+  color: '#8B2020',
   fontSize: 13,
   lineHeight: 1.6,
 }

@@ -277,17 +277,16 @@ function hasCompletedFounderDiagnostic(assessment) {
 
   const completedAt =
     assessment.completedat || assessment.completed_at || assessment.completedAt
-  const type =
-    assessment.assessmenttype || assessment.assessment_type || 'baseline'
   const rawQa = assessment.rawqa || assessment.raw_qa || []
   const founderScore = assessment.founderscore ?? assessment.founder_score
 
   return Boolean(
     assessment.id &&
       completedAt &&
-      type === 'baseline' &&
-      ((Array.isArray(rawQa) && rawQa.length > 0) ||
-        (founderScore !== undefined && founderScore !== null)),
+      (
+        (Array.isArray(rawQa) && rawQa.length > 0) ||
+        (founderScore !== undefined && founderScore !== null)
+      ),
   )
 }
 
@@ -737,8 +736,7 @@ const useDiagnosticStore = create((set, get) => ({
       throw error
     }
   },
-
-  startProgressReview: () => {
+   startProgressReview: () => {
     const currentAssessment = get().assessmentResults
     const history = normaliseAssessmentHistory(get().assessmentHistory)
 

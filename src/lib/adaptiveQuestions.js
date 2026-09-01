@@ -89,15 +89,27 @@ const STAGE_LABELS = {
   growth: 'Growth',
 }
 
+function clamp(value, minimum = 0, maximum = 100) {
+  const numericValue = Number(value)
+
+  if (!Number.isFinite(numericValue)) {
+    return minimum
+  }
+
+  return Math.min(Math.max(numericValue, minimum), maximum)
+}
+
 function getQuestionBank() {
   if (Array.isArray(FOUNDATION_QUESTIONS) && FOUNDATION_QUESTIONS.length > 0) {
     return FOUNDATION_QUESTIONS
   }
+
   return FALLBACK_QUESTIONS
 }
 
 function normalizeQuestion(item) {
   if (!item) return null
+
   if (typeof item === 'string') {
     return {
       id: null,
@@ -124,22 +136,27 @@ export function getFirstQuestion() {
 
 export function getNextFoundationQuestion(answeredCount) {
   const bank = getQuestionBank()
+
   if (answeredCount < bank.length) {
     return normalizeQuestion(bank[answeredCount])
   }
+
   return null
 }
 
 export function buildConversationHistory(qaPairs) {
   const history = []
+
   for (const qa of qaPairs) {
     if (qa?.question) {
       history.push({ role: 'assistant', content: qa.question })
     }
+
     if (qa?.answer) {
       history.push({ role: 'user', content: qa.answer })
     }
   }
+
   return history
 }
 
@@ -152,11 +169,12 @@ export async function generateNextQuestion(_conversationHistory, questionNumber)
 
 function containsAny(text, patterns) {
   const lower = String(text || '').toLowerCase()
-  return patterns.some((p) => lower.includes(p))
+  return patterns.some((pattern) => lower.includes(pattern))
 }
 
 function scoreAnswer(answer, dimension) {
   const text = String(answer || '').trim()
+
   if (!text) return 20
 
   let score = 40
@@ -228,8 +246,8 @@ export async function generateAssessmentScores(
   founderProfile = {},
   stageAssessment = {}
 ) {
-  const qaOnly = conversationHistory.filter((m) => m.role === 'user')
-  const allAnswers = qaOnly.map((m) => m.content || '')
+  const qaOnly = conversationHistory.filter((message) => message.role === 'user')
+  const allAnswers = qaOnly.map((message) => message.content || '')
   const fullText = allAnswers.join(' \n ')
   const stageBaseline = normalizeStageKey(stageAssessment.diagnosedStage)
 
@@ -262,13 +280,18 @@ export async function generateAssessmentScores(
     const dimension = dimensionMap[index] || 'strategic_clarity'
     const score = scoreAnswer(answer, dimension)
 
-    if (!baseScores[dimension]) baseScores[dimension] = score
-    else baseScores[dimension] = Math.round((baseScores[dimension] + score) / 2)
+    if (!baseScores[dimension]) {
+      baseScores[dimension] = score
+    } else {
+      baseScores[dimension] = Math.round((baseScores[dimension] + score) / 2)
+    }
   })
 
   if (!baseScores.product_clarity) {
     baseScores.product_clarity = Math.round(
-      ((baseScores.strategic_clarity || 55) + (baseScores.market_understanding || 55)) / 2
+      ((baseScores.strategic_clarity || 55) +
+        (baseScores.market_understanding || 55)) /
+        2
     )
   }
 
@@ -276,16 +299,30 @@ export async function generateAssessmentScores(
 
   if (!baseScores.growth_potential) {
     baseScores.growth_potential = Math.round(
-      ((baseScores.market_understanding || 55) + (baseScores.execution_readiness || 55)) / 2
+      ((baseScores.market_understanding || 55) +
+        (baseScores.execution_readiness || 55)) /
+        2
     )
   }
 
   const baselineBoost = BASELINE_STAGE_MAP[stageBaseline] || 0
-  const adjustedExecution = clamp((baseScores.execution_readiness || 55) + Math.round(baselineBoost * 0.35), 0, 100)
-  const adjustedMarket = clamp((baseScores.market_understanding || 55) + Math.round(baselineBoost * 0.3), 0, 100)
-  const adjustedFinancial = clamp((baseScores.financial_maturity || 55) + Math.round(baselineBoost * 0.2), 0, 100)
+  const adjustedExecution = clamp(
+    (baseScores.execution_readiness || 55) + Math.round(baselineBoost * 0.35),
+    0,
+    100
+  )
+  const adjustedMarket = clamp(
+    (baseScores.market_understanding || 55) + Math.round(baselineBoost * 0.3),
+    0,
+    100
+  )
+  const adjustedFinancial = clamp(
+    (baseScores.financial_maturity || 55) + Math.round(baselineBoost * 0.2),
+    0,
+    100
+  )
 
-  const founder_score = Math.round(
+  const founderScore = Math.round(
     (
       (baseScores.strategic_clarity || 55) +
       adjustedExecution +
@@ -298,22 +335,24 @@ export async function generateAssessmentScores(
     ) / 8
   )
 
-  const investor_readiness = Math.round(
+  const investorReadiness = Math.round(
     (
-      founder_score +
+      founderScore +
       adjustedFinancial +
       adjustedExecution +
       adjustedMarket
     ) / 4
   )
 
-  const venture_stage = stageBaseline !== 'idea'
+  const ventureStage = stageBaseline !== 'idea'
     ? stageBaseline
-    : detectStage(`${fullText} ${founderProfile?.venture_stage ?? ''} ${founderProfile?.venturestage ?? ''}`)
+    : detectStage(
+        `${fullText} ${founderProfile?.venture_stage ?? ''} ${founderProfile?.venturestage ?? ''}`
+      )
 
   const stageBrief = stageAssessment?.stageScore
     ? `Baseline stage assessment indicates ${STAGE_LABELS[stageBaseline] || STAGE_LABELS.idea} stage readiness with ${stageAssessment.stageScore} points and a focus on ${stageAssessment.recommendedAcademyPath || 'foundational progress'}.`
-    : `This assessment reflects the current venture status and suggests a practical path to strengthen readiness.`
+    : 'This assessment reflects the current venture status and suggests a practical path to strengthen readiness.'
 
   const priorityScores = Array.isArray(stageAssessment?.priorities)
     ? stageAssessment.priorities.map((key) => ({
@@ -327,7 +366,8 @@ export async function generateAssessmentScores(
     ? stageAssessment.recommendedMissionKeys
     : []
 
-  const recommendedAcademyPath = stageAssessment?.recommendedAcademyPath || stageBaseline || 'idea'
+  const recommendedAcademyPath =
+    stageAssessment?.recommendedAcademyPath || stageBaseline || 'idea'
 
   const priorities = []
 
@@ -373,10 +413,21 @@ export async function generateAssessmentScores(
 
   const strengths = []
 
-  if ((baseScores.strategic_clarity || 0) >= 70) strengths.push('Clear articulation of problem and strategic direction')
-  if ((adjustedExecution || 0) >= 70) strengths.push('Strong execution orientation')
-  if ((adjustedMarket || 0) >= 70) strengths.push('Good understanding of customer and market dynamics')
-  if ((baseScores.team_strength || 0) >= 70) strengths.push('Credible founder or team positioning')
+  if ((baseScores.strategic_clarity || 0) >= 70) {
+    strengths.push('Clear articulation of problem and strategic direction')
+  }
+
+  if (adjustedExecution >= 70) {
+    strengths.push('Strong execution orientation')
+  }
+
+  if (adjustedMarket >= 70) {
+    strengths.push('Good understanding of customer and market dynamics')
+  }
+
+  if ((baseScores.team_strength || 0) >= 70) {
+    strengths.push('Credible founder or team positioning')
+  }
 
   const fallbackStrengths = [
     'Founder demonstrates initiative',
@@ -390,17 +441,25 @@ export async function generateAssessmentScores(
 
   const criticalGaps = []
 
-  if ((baseScores.financial_maturity || 0) < 65) criticalGaps.push('Financial model and pricing logic need work')
-  if (investor_readiness < 65) criticalGaps.push('Investor readiness is not yet strong enough for a convincing raise')
-  if ((baseScores.market_understanding || 0) < 65) criticalGaps.push('Customer segmentation and market focus remain underdeveloped')
+  if ((baseScores.financial_maturity || 0) < 65) {
+    criticalGaps.push('Financial model and pricing logic need work')
+  }
+
+  if (investorReadiness < 65) {
+    criticalGaps.push('Investor readiness is not yet strong enough for a convincing raise')
+  }
+
+  if ((baseScores.market_understanding || 0) < 65) {
+    criticalGaps.push('Customer segmentation and market focus remain underdeveloped')
+  }
 
   while (criticalGaps.length < 3) {
     criticalGaps.push('Narrative and proof points need sharpening')
   }
 
   return {
-    founderscore: founder_score,
-    investorreadiness: investor_readiness,
+    founderscore: founderScore,
+    investorreadiness: investorReadiness,
     strategicclarity: baseScores.strategic_clarity || 55,
     executionreadiness: adjustedExecution || 55,
     financialmaturity: adjustedFinancial || 55,
@@ -409,8 +468,8 @@ export async function generateAssessmentScores(
     productclarity: baseScores.product_clarity || 55,
     growthpotential: baseScores.growth_potential || 55,
     riskawareness: baseScores.risk_awareness || 55,
-    venturestage: venture_stage,
-    venturestageresult: venture_stage,
+    venturestage: ventureStage,
+    venturestageresult: ventureStage,
     strategicpriorities: priorities.slice(0, 4),
     founderstrengths: strengths.slice(0, 3),
     criticalgaps: criticalGaps.slice(0, 3),
@@ -428,7 +487,7 @@ export async function generateAssessmentScores(
     investornarrative:
       'This venture should be positioned around a clearly defined customer problem, a focused entry market, and a milestone-driven plan to reduce execution and commercial risk.',
     vcverdict:
-      investor_readiness >= 70
+      investorReadiness >= 70
         ? 'There is enough structure here to justify deeper diligence, but the venture still needs sharper proof points before it becomes truly investable.'
         : 'The venture is directionally interesting, but it is not yet investor-ready. The founder needs stronger market evidence, better economic logic, and a clearer next-milestone narrative.',
   }
