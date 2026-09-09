@@ -1,0 +1,1 @@
+export { customerDiscoveryResources } from './discoverObservationResources';
