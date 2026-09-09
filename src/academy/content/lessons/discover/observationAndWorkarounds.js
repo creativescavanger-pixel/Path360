@@ -4,7 +4,7 @@ import { customerDiscoveryResources } from '../../resources';
 export const observationAndWorkaroundsLesson = {
   id: 'discover-observation-and-workarounds',
   stageKey: 'discover',
-  moduleKey: 'observation-and-workarounds',
+  moduleKey: 'observation-workarounds',
   order: 4,
   title: 'Observe people, behaviour, and workarounds',
   eyebrow: 'Discover · Lesson 0.4',
@@ -19,26 +19,11 @@ export const observationAndWorkaroundsLesson = {
     title: 'Observe before you interpret',
     introduction: 'Do not begin by asking whether someone likes your idea. Start by understanding what they already do when they are trying to get an important task done.',
     distinctions: [
-      {
-        term: 'Complaint',
-        definition: 'A stated frustration. It is a signal, but it does not automatically show frequency, severity, or willingness to change behaviour.'
-      },
-      {
-        term: 'Behaviour',
-        definition: 'What a person actually does, including delays, repetition, abandonment, spending, asking for help, or changing a routine.'
-      },
-      {
-        term: 'Workaround',
-        definition: 'A substitute, manual process, informal service, spreadsheet, extra trip, personal contact, or unreliable alternative used to cope with friction.'
-      },
-      {
-        term: 'Pattern',
-        definition: 'A similar friction or workaround appearing across more than one person, moment, or source.'
-      },
-      {
-        term: 'Hypothesis',
-        definition: 'A possible explanation for what you observed. It still needs evidence and should not be treated as a fact.'
-      }
+      { term: 'Complaint', definition: 'A stated frustration. It is a signal, but it does not automatically show frequency, severity, or willingness to change behaviour.' },
+      { term: 'Behaviour', definition: 'What a person actually does, including delays, repetition, abandonment, spending, asking for help, or changing a routine.' },
+      { term: 'Workaround', definition: 'A substitute, manual process, informal service, spreadsheet, extra trip, personal contact, or unreliable alternative used to cope with friction.' },
+      { term: 'Pattern', definition: 'A similar friction or workaround appearing across more than one person, moment, or source.' },
+      { term: 'Hypothesis', definition: 'A possible explanation for what you observed. It still needs evidence and should not be treated as a fact.' }
     ],
     commonMistakes: [
       'Treating polite enthusiasm as proof of demand.',

@@ -1,7 +1,7 @@
 export function FieldworkMission({ fieldwork }) {
   return (
     <section className="academy-learning-path__section academy-fieldwork">
-      <p className="academy-learning-path__section-label">05 · Go into the field</p>
+      <p className="academy-learning-path__section-label">06 · Go into the field</p>
       <div className="academy-fieldwork__heading">
         <div>
           <h2>{fieldwork.title}</h2>
