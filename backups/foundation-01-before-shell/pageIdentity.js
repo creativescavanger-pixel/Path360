@@ -158,6 +158,7 @@ export function getPageIdentity(pathname) {
     })
   }
 
+  // Reserved only for current or future dedicated funding/investment workflows.
   if (
     pathname.startsWith('/app/investment-readiness') ||
     pathname.startsWith('/app/funding') ||

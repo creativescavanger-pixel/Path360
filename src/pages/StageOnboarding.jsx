@@ -1,131 +1,391 @@
+// src/pages/StageOnboarding.jsx
+
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
-import { scoreVentureBaseline } from '../lib/stageScoring.js'
-
-const STAGES = [
-  {
-    id: 'idea',
-    title: 'Idea',
-    subtitle: 'You are validating the problem, customer, and opportunity.',
-    color: '#7C5CFC',
-  },
-  {
-    id: 'validation',
-    title: 'Validation',
-    subtitle: 'You are testing demand and proving early customer interest.',
-    color: '#2D8CFF',
-  },
-  {
-    id: 'mvp',
-    title: 'MVP',
-    subtitle: 'You have a usable product and are learning from real users.',
-    color: '#00A984',
-  },
-  {
-    id: 'traction',
-    title: 'Traction',
-    subtitle: 'You have repeatable signals of demand, customers, or revenue.',
-    color: '#F59E0B',
-  },
-  {
-    id: 'growth',
-    title: 'Growth',
-    subtitle: 'You are scaling a working business model and team.',
-    color: '#E45757',
-  },
-]
+import {
+  scoreVentureBaseline,
+  computeStageBaselineScores,
+} from '../lib/stageScoring.js'
+import {
+  PATHWAY_STAGES,
+  getLegacyStageKey,
+  normalisePathwayStage,
+} from '../lib/pathwayStages.js'
 
 const ITEMS = [
   {
     id: 'problem',
     label: 'Problem clarity',
-    description: 'You can clearly explain the problem, who has it, and why it matters now.',
+    description:
+      'You can clearly explain the problem, who has it, and why it matters now.',
   },
   {
     id: 'customer',
     label: 'Customer evidence',
-    description: 'You have spoken to, tested with, or sold to real target customers.',
+    description:
+      'You have real conversations, tests, pilots, or paying customers in your target segment.',
   },
   {
     id: 'solution',
     label: 'Solution readiness',
-    description: 'You have a concept, prototype, MVP, or working product.',
+    description:
+      'You have a concept, prototype, MVP, or working product being used by real people.',
   },
   {
     id: 'business',
     label: 'Business model',
-    description: 'You understand how the venture can make money and what drives its economics.',
+    description:
+      'You understand how the venture makes money and what drives its economics.',
   },
   {
     id: 'traction',
     label: 'Market traction',
-    description: 'You have meaningful usage, pilots, revenue, retention, or growth signals.',
+    description:
+      'You can show repeated usage, revenue, retention, or growth—not just one‑off activity.',
   },
   {
     id: 'team',
     label: 'Team readiness',
-    description: 'You have the people, capabilities, or hiring plan needed for the next stage.',
+    description:
+      'You have the people, capabilities, or signed plans needed for the next 6–12 months.',
   },
   {
     id: 'capital',
     label: 'Capital readiness',
-    description: 'You understand your funding needs, runway, and likely funding path.',
+    description:
+      'You understand your funding needs, runway, and likely funding path.',
   },
 ]
 
 const STATUS_OPTIONS = [
   {
     id: 'not_started',
-    label: 'Not started',
-    shortLabel: 'Not started',
+    label: 'Not yet',
+    fullLabel: 'Not started',
+    shortLabel: 'Not yet',
     score: 0,
-    color: '#9CA3AF',
   },
   {
     id: 'early',
-    label: 'Early progress',
-    shortLabel: 'Early',
+    label: 'Just starting',
+    fullLabel: 'Early progress',
+    shortLabel: 'Starting',
     score: 1,
-    color: '#60A5FA',
   },
   {
     id: 'active',
-    label: 'Actively working',
-    shortLabel: 'Active',
+    label: 'In motion',
+    fullLabel: 'Actively working',
+    shortLabel: 'In motion',
     score: 2,
-    color: '#A78BFA',
   },
   {
     id: 'strong',
-    label: 'Strong evidence',
+    label: 'Strong & repeatable',
+    fullLabel: 'Strong evidence',
     shortLabel: 'Strong',
     score: 3,
-    color: '#34D399',
   },
 ]
 
+const PROGRESS_LEVELS = [
+  {
+    id: 'idea_only',
+    label: 'Idea only',
+    description: 'Clear problem and concept, no product yet.',
+  },
+  {
+    id: 'prototype',
+    label: 'Prototype / pilot',
+    description: 'Prototype or pilot in testing with early users.',
+  },
+  {
+    id: 'beta_live',
+    label: 'Live with early customers',
+    description: 'Working product with first active customers.',
+  },
+  {
+    id: 'revenue_early',
+    label: 'Early revenue',
+    description: 'Some paying customers, learning about value and retention.',
+  },
+  {
+    id: 'repeatable_growth',
+    label: 'Repeatable growth',
+    description: 'Recurring revenue with signs of repeatable demand.',
+  },
+]
+
+const TENSIONS = [
+  {
+    id: 'opportunity_focus',
+    label:
+      'I am not yet sure which opportunity or problem is worth committing to.',
+    stage: 'discover',
+  },
+  {
+    id: 'customer_evidence',
+    label:
+      'I need real customer evidence and willingness-to-pay, not just opinions.',
+    stage: 'explore',
+  },
+  {
+    id: 'product_value',
+    label:
+      'The product or offer exists, but I am not confident it creates repeatable value.',
+    stage: 'test',
+  },
+  {
+    id: 'traction_growth',
+    label:
+      'We have some traction, but growth and retention feel inconsistent or fragile.',
+    stage: 'launch',
+  },
+  {
+    id: 'economics',
+    label:
+      'Our pricing, unit economics, or path to profitability feel unclear or risky.',
+    stage: 'grow',
+  },
+  {
+    id: 'team_time_capital',
+    label:
+      'Team, time, or capital limits what we can safely do next.',
+    stage: 'build',
+  },
+  {
+    id: 'operations_resilience',
+    label:
+      'Operations, quality, controls, or resilience need strengthening.',
+    stage: 'optimise',
+  },
+  {
+    id: 'transition_future',
+    label:
+      'We need to think about succession, sale, merger, acquisition, ownership change, or another future transition.',
+    stage: 'transition',
+  },
+]
+
+const DECISIONS = [
+  {
+    id: 'choose_opportunity',
+    label: 'Which opportunity or customer problem to pursue.',
+    stage: 'discover',
+  },
+  {
+    id: 'validate_demand',
+    label: 'Whether there is real demand and willingness to pay.',
+    stage: 'test',
+  },
+  {
+    id: 'build_model',
+    label: 'What to build next and how the venture should work.',
+    stage: 'build',
+  },
+  {
+    id: 'launch_better',
+    label: 'How to launch, sell, and deliver better.',
+    stage: 'launch',
+  },
+  {
+    id: 'grow_repeatably',
+    label: 'How to turn early traction into repeatable growth.',
+    stage: 'grow',
+  },
+  {
+    id: 'expand_segment',
+    label:
+      'Whether expansion or a new segment is sensible and feasible.',
+    stage: 'expand',
+  },
+  {
+    id: 'strengthen_company',
+    label: 'How to strengthen economics, operations, or resilience.',
+    stage: 'optimise',
+  },
+  {
+    id: 'prepare_transition',
+    label: 'How to prepare for a future transition or exit.',
+    stage: 'transition',
+  },
+]
+
+const PRIORITIES = [
+  ['clarify_problem', 'Clarity about my opportunity and customer'],
+  ['validate_demand', 'Quality of customer evidence and insight'],
+  ['improve_product', 'Product / offer and customer value'],
+  ['gain_traction', 'Traction, growth, and retention'],
+  ['growth_systems', 'Team, operating rhythm, and systems'],
+  ['financial_model', 'Pricing, financial model, and economics'],
+  ['investor_readiness', 'Investor readiness and narrative'],
+]
+
+const WORKSHOP_RECOMMENDATIONS = {
+  discover: {
+    workshop: 'Opportunity Discovery',
+    reason:
+      'You are still exploring direction, comparing possibilities, or building early evidence before choosing one opportunity.',
+    modules: [
+      'Begin with yourself',
+      'Learn to notice opportunities',
+      'Map your environment',
+      'Observe people, behaviour, and workarounds',
+    ],
+    output: 'Founder Context Profile and an active Observation Log.',
+  },
+  explore: {
+    workshop: 'Opportunity Exploration',
+    reason:
+      'You have a possible direction, but need a clearer customer problem, segment, alternatives view, and evidence plan before committing to a solution.',
+    modules: [
+      'Define the opportunity',
+      'Understand the customer problem',
+      'Study alternatives and market context',
+      'Design your evidence plan',
+    ],
+    output:
+      'Customer/problem evidence brief and a decision to test or revisit.',
+  },
+  test: {
+    workshop: 'Customer, Demand and Economics Testing',
+    reason:
+      'You need behavioural, demand, willingness-to-pay, or economic evidence before investing further in a product, offer, or operating model.',
+    modules: [
+      'Design customer research',
+      'Run observations and interviews',
+      'Test a prototype, pilot, or MVP',
+      'Test price, channels, and unit economics',
+    ],
+    output:
+      'Evidence-backed test record and a continue, pivot, pause, or stop decision.',
+  },
+  build: {
+    workshop: 'Venture Build',
+    reason:
+      'You have enough early learning to shape a workable offer, business model, operating plan, financial foundation, and launch preparation.',
+    modules: [
+      'Business model and offer design',
+      'Pricing, costs, and financial model',
+      'Operations, suppliers, legal, and governance',
+      'Launch readiness',
+    ],
+    output: 'A coherent venture plan and launch-ready source work.',
+  },
+  launch: {
+    workshop: 'Launch and Early Operations',
+    reason:
+      'Your immediate work is bringing a prepared offer to market with a clear go-to-market plan, onboarding, delivery, feedback, and cash discipline.',
+    modules: [
+      'Go-to-market and channel plan',
+      'Customer onboarding and delivery',
+      'Marketing and content',
+      'First metrics, feedback, and operating rhythm',
+    ],
+    output:
+      'Launch plan, early-market evidence, and an operating review rhythm.',
+  },
+  grow: {
+    workshop: 'Sustainable Growth',
+    reason:
+      'You are working on repeatability: retention, segments, channels, pricing, economics, systems, team, leadership, and disciplined growth decisions.',
+    modules: [
+      'Segment revenue and unit economics',
+      'Retention and customer value',
+      'Channel performance and pricing',
+      'Systems, team, leadership, and capital options',
+    ],
+    output:
+      'Growth plan supported by performance evidence and operating priorities.',
+  },
+  expand: {
+    workshop: 'Expansion Readiness',
+    reason:
+      'You are assessing a new country, customer segment, product, channel, or partner and need a deliberate evidence and economics route.',
+    modules: [
+      'Market, country, corridor, and customer screen',
+      'Localisation and operating environment',
+      'Partners, supply chain, and regulation',
+      'Entry economics, scenarios, capital, and risk',
+    ],
+    output:
+      'Expansion decision brief and a credible entry plan or decision not to proceed yet.',
+  },
+  optimise: {
+    workshop: 'Optimise and Strengthen',
+    reason:
+      'You are strengthening the operating company through governance, reporting, profitability, quality, risk, process improvement, and resilience.',
+    modules: [
+      'Governance and reporting',
+      'Cash, profitability, and value drivers',
+      'Quality, controls, risk, and compliance',
+      'Leadership bench and company resilience',
+    ],
+    output:
+      'Operating improvement plan linked to measurable value drivers.',
+  },
+  transition: {
+    workshop: 'Transition Preparation',
+    reason:
+      'You are preparing the company and owner for succession, sale, merger, acquisition, ownership change, or another future transition decision.',
+    modules: [
+      'Owner goals and transition options',
+      'Company value drivers and readiness',
+      'Governance, finance, and data room',
+      'Buyer, partner, adviser, and transition plan',
+    ],
+    output:
+      'Transition readiness plan and decision preparation materials.',
+  },
+}
+
+const STEPS = [
+  {
+    id: 'context',
+    number: '01',
+    label: 'Context',
+    title: 'Where are you today?',
+    description:
+      'Describe your venture, progress, and what you are working through over the next 90 days.',
+  },
+  {
+    id: 'evidence',
+    number: '02',
+    label: 'Evidence',
+    title: 'What evidence do you have?',
+    description:
+      'Mark what is already in motion. This prevents PATH360 from asking you to repeat work you already did.',
+  },
+  {
+    id: 'focus',
+    number: '03',
+    label: 'Focus',
+    title: 'What matters next?',
+    description:
+      'Choose near-term priorities and add any context that should shape your recommended work.',
+  },
+]
+
+const PAGES_BY_STEP = {
+  context: ['snapshot', 'tension'],
+  evidence: ['evidence'],
+  focus: ['focus'],
+}
+
+const FLOW = STEPS.flatMap((step) =>
+  (PAGES_BY_STEP[step.id] || []).map((pageId) => ({
+    stepId: step.id,
+    pageId,
+  })),
+)
+
+const OVERLAY_Z_INDEX = 2147483646
+const MODAL_Z_INDEX = 2147483647
+
 function getStatusScore(status) {
   return STATUS_OPTIONS.find((option) => option.id === status)?.score ?? 0
-}
-
-function getStageFromScore(score) {
-  if (score <= 0.45) return 'idea'
-  if (score <= 1.1) return 'validation'
-  if (score <= 1.8) return 'mvp'
-  if (score <= 2.45) return 'traction'
-  return 'growth'
-}
-
-function getStageIndex(stageId) {
-  return Math.max(
-    0,
-    STAGES.findIndex((stage) => stage.id === stageId)
-  )
-}
-
-function scoreToPercent(score) {
-  return Math.max(0, Math.min(100, Math.round((score / 3) * 100)))
 }
 
 function createEmptyStatuses() {
@@ -135,12 +395,24 @@ function createEmptyStatuses() {
   }, {})
 }
 
-function normalizeAssessment(assessment) {
+function getStage(stageId) {
+  return PATHWAY_STAGES.find((stage) => stage.id === stageId) || PATHWAY_STAGES[0]
+}
+
+function legacyStageToPathway(stageId) {
+  return normalisePathwayStage(stageId)
+}
+
+function normaliseAssessment(assessment) {
   const fallback = createEmptyStatuses()
 
   return {
-    declaredStage: assessment?.declaredStage || '',
-    diagnosedStage: assessment?.diagnosedStage || '',
+    declaredStage: assessment?.declaredStage
+      ? legacyStageToPathway(assessment.declaredStage)
+      : '',
+    diagnosedStage: assessment?.diagnosedStage
+      ? legacyStageToPathway(assessment.diagnosedStage)
+      : '',
     statusByItem: {
       ...fallback,
       ...(assessment?.statusByItem || {}),
@@ -160,10 +432,1142 @@ function normalizeAssessment(assessment) {
     completedActivities: Array.isArray(assessment?.completedActivities)
       ? assessment.completedActivities
       : [],
+    ventureSummary: assessment?.ventureSummary || '',
+    ventureProblem: assessment?.ventureProblem || '',
+    ventureProgressLevel: assessment?.ventureProgressLevel || '',
+    recentProgress90Days: assessment?.recentProgress90Days || '',
+    mainTension: assessment?.mainTension || '',
+    pathDecision: assessment?.pathDecision || '',
     notes: assessment?.notes || '',
     completedAt: assessment?.completedAt || null,
     averageScore: Number(assessment?.averageScore || 0),
+    evidenceScorePercent: Number(assessment?.evidenceScorePercent || 0),
+    stageReadinessByStage: assessment?.stageReadinessByStage || null,
+    founderStageFromProgress: assessment?.founderStageFromProgress || '',
+    founderRecommendedAlignment: Number(
+      assessment?.founderRecommendedAlignment || 0,
+    ),
+    diagnosticRecommendedAlignment:
+      assessment?.diagnosticRecommendedAlignment ?? null,
+    constraintSeverity: Number(assessment?.constraintSeverity || 1),
   }
+}
+
+function getTensionStage(tensionId) {
+  return TENSIONS.find((item) => item.id === tensionId)?.stage || ''
+}
+
+function getDecisionStage(decisionId) {
+  return DECISIONS.find((item) => item.id === decisionId)?.stage || ''
+}
+
+function getEvidenceSuggestedStage({
+  productMaturity,
+  customerStatus,
+  revenuePattern,
+  goToMarketRepeatability,
+}) {
+  if (
+    productMaturity === 'idea' ||
+    customerStatus === 'none' ||
+    !customerStatus
+  ) {
+    return 'discover'
+  }
+
+  if (
+    customerStatus === 'conversations' ||
+    customerStatus === 'interviews'
+  ) {
+    return 'explore'
+  }
+
+  if (
+    customerStatus === 'pilots' ||
+    revenuePattern === 'pilot' ||
+    productMaturity === 'prototype'
+  ) {
+    return 'test'
+  }
+
+  if (
+    customerStatus === 'first_paying' ||
+    revenuePattern === 'one_off' ||
+    productMaturity === 'live_early'
+  ) {
+    return 'build'
+  }
+
+  if (
+    customerStatus === 'recurring_customers' &&
+    revenuePattern === 'recurring' &&
+    goToMarketRepeatability !== 'repeatable'
+  ) {
+    return 'launch'
+  }
+
+  if (
+    revenuePattern === 'predictable' ||
+    goToMarketRepeatability === 'repeatable' ||
+    productMaturity === 'repeatable'
+  ) {
+    return 'grow'
+  }
+
+  return 'explore'
+}
+
+function getScoreSuggestedStage(legacyStage) {
+  return normalisePathwayStage(legacyStage)
+}
+
+function getRecommendationStage({
+  selectedStage,
+  mainTension,
+  pathDecision,
+  evidenceSuggestedStage,
+  scoreSuggestedStage,
+}) {
+  if (selectedStage) return selectedStage
+
+  const tensionStage = getTensionStage(mainTension)
+  if (tensionStage) return tensionStage
+
+  const decisionStage = getDecisionStage(pathDecision)
+  if (decisionStage) return decisionStage
+
+  return evidenceSuggestedStage || scoreSuggestedStage || 'discover'
+}
+
+function getPathwayReason({
+  selectedStage,
+  ventureSummary,
+  ventureProblem,
+  ventureProgressLevel,
+  mainTension,
+  pathDecision,
+  evidenceSuggestedStage,
+  scoreSuggestedStage,
+}) {
+  const reasonParts = []
+
+  if (ventureSummary) {
+    reasonParts.push(`Your current venture focus: ${ventureSummary}.`)
+  }
+
+  if (ventureProblem) {
+    reasonParts.push(
+      `The problem and customer you described: ${ventureProblem}.`,
+    )
+  }
+
+  const progressChoice = PROGRESS_LEVELS.find(
+    (level) => level.id === ventureProgressLevel,
+  )
+  if (progressChoice) {
+    reasonParts.push(
+      `You see yourself at “${progressChoice.label}” (${progressChoice.description}).`,
+    )
+  }
+
+  const tension = TENSIONS.find((item) => item.id === mainTension)
+  if (tension?.label) {
+    reasonParts.push(`Main tension: ${tension.label}`)
+  }
+
+  const decision = DECISIONS.find((item) => item.id === pathDecision)
+  if (decision?.label) {
+    reasonParts.push(
+      `You want PATH360 to help you decide: ${decision.label}`,
+    )
+  }
+
+  if (selectedStage) {
+    const s = getStage(selectedStage)
+    reasonParts.push(
+      `You chose Stage ${s.number} · ${s.title} as the most useful context for your current work.`,
+    )
+  }
+
+  if (!selectedStage && evidenceSuggestedStage) {
+    const evidenceStage = getStage(evidenceSuggestedStage)
+    reasonParts.push(
+      `Your venture signals currently point most strongly toward Stage ${evidenceStage.number} · ${evidenceStage.title}.`,
+    )
+  }
+
+  if (!selectedStage && scoreSuggestedStage) {
+    const scoreStage = getStage(scoreSuggestedStage)
+    reasonParts.push(
+      `Your wider evidence snapshot is most aligned with Stage ${scoreStage.number} · ${scoreStage.title}.`,
+    )
+  }
+
+  return reasonParts.join(' ')
+}
+
+function getFocusAreas(statusByItem, priorities) {
+  const priorityLabels = Object.fromEntries(PRIORITIES)
+
+  const evidenceFocus = [...ITEMS]
+    .sort(
+      (a, b) =>
+        getStatusScore(statusByItem[a.id]) -
+        getStatusScore(statusByItem[b.id]),
+    )
+    .slice(0, 3)
+    .map((item) => ({
+      id: item.id,
+      label: item.label,
+      type: 'evidence',
+    }))
+
+  const priorityFocus = priorities.slice(0, 3).map((priority) => ({
+    id: priority,
+    label: priorityLabels[priority] || priority,
+    type: 'priority',
+  }))
+
+  const combined = [...priorityFocus, ...evidenceFocus]
+  const unique = []
+
+  combined.forEach((item) => {
+    if (!unique.some((existing) => existing.label === item.label)) {
+      unique.push(item)
+    }
+  })
+
+  return unique.slice(0, 3)
+}
+
+function PathwayModal({
+  open,
+  selectedStage,
+  recommendedStageId,
+  onClose,
+  onSelectStage,
+}) {
+  useEffect(() => {
+    if (!open) return undefined
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') onClose()
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open, onClose])
+
+  if (!open) return null
+
+  return createPortal(
+    <>
+      <div
+        aria-hidden="true"
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: OVERLAY_Z_INDEX,
+          background: 'rgba(17, 17, 15, 0.38)',
+          backdropFilter: 'blur(3px)',
+          WebkitBackdropFilter: 'blur(3px)',
+        }}
+      />
+
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pathway-modal-title"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: MODAL_Z_INDEX,
+          display: 'grid',
+          placeItems: 'center',
+          padding: 18,
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          className="p360-panel"
+          onClick={(event) => event.stopPropagation()}
+          style={{
+            width: '100%',
+            maxWidth: 880,
+            maxHeight: 'calc(100vh - 36px)',
+            overflowY: 'auto',
+            padding: 22,
+            pointerEvents: 'auto',
+            boxShadow: 'var(--shadow-lg)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 16,
+              marginBottom: 18,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div>
+              <div className="p360-kicker" style={{ marginBottom: 6 }}>
+                Founder pathways
+              </div>
+
+              <h2 id="pathway-modal-title" className="p360-title-md">
+                Explore every stage
+              </h2>
+
+              <p className="p360-body-sm" style={{ margin: '6px 0 0' }}>
+                You are never locked into one route. Select a pathway if it is
+                more useful than PATH360’s current recommendation.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className="p360-btn-ghost"
+              onClick={onClose}
+              aria-label="Close pathway browser"
+              style={{
+                minWidth: 34,
+                minHeight: 34,
+                padding: 0,
+                fontSize: 18,
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 10,
+            }}
+          >
+            {PATHWAY_STAGES.map((stage) => {
+              const selected = selectedStage === stage.id
+              const recommended = recommendedStageId === stage.id
+
+              return (
+                <button
+                  key={stage.id}
+                  type="button"
+                  className="p360-card-soft"
+                  onClick={() => {
+                    onSelectStage(stage.id)
+                    onClose()
+                  }}
+                  style={{
+                    padding: 14,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    borderColor: selected
+                      ? 'var(--green-600)'
+                      : recommended
+                        ? 'rgba(37, 104, 75, 0.3)'
+                        : 'var(--border)',
+                    background: selected
+                      ? 'var(--green-050)'
+                      : 'var(--surface)',
+                    boxShadow: selected
+                      ? '0 0 0 3px rgba(50, 122, 88, 0.09)'
+                      : 'none',
+                    transition:
+                      'border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'grid',
+                        width: 26,
+                        height: 26,
+                        placeItems: 'center',
+                        borderRadius: 8,
+                        background: selected
+                          ? 'var(--green-700)'
+                          : 'var(--surface-muted)',
+                        color: selected
+                          ? 'var(--white)'
+                          : 'var(--text-soft)',
+                        fontSize: 10,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {stage.number}
+                    </span>
+
+                    {recommended ? (
+                      <span className="p360-tag-learning">Suggested</span>
+                    ) : null}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 10,
+                      color: selected
+                        ? 'var(--green-800)'
+                        : 'var(--text)',
+                      fontSize: 13,
+                      fontWeight: 800,
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {stage.title}
+                  </div>
+
+                  <p
+                    style={{
+                      margin: '4px 0 0',
+                      color: 'var(--text-soft)',
+                      fontSize: 11.5,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {stage.focus}
+                  </p>
+                </button>
+              )
+            })}
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+              marginTop: 18,
+              paddingTop: 16,
+              borderTop: '1px solid var(--border)',
+            }}
+          >
+            <button
+              type="button"
+              className="p360-btn-ghost"
+              onClick={() => {
+                onSelectStage('')
+                onClose()
+              }}
+            >
+              Use PATH360 recommendation
+            </button>
+
+            <button
+              type="button"
+              className="p360-btn-secondary"
+              onClick={onClose}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </>,
+    document.body,
+  )
+}
+
+function StepNavigation({
+  activeStep,
+  onStepChange,
+  completedEvidence,
+  onboardingCompletion,
+  furthestStepIndex,
+}) {
+  const activeIndex = Math.max(
+    STEPS.findIndex((step) => step.id === activeStep),
+    0,
+  )
+
+  const progressPercent = ((activeIndex + 1) / STEPS.length) * 100
+
+  return (
+    <div style={{ minWidth: 280, flex: '1 1 320px' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          fontSize: 11.5,
+          color: 'var(--text-soft)',
+          marginBottom: 5,
+        }}
+      >
+        <span style={{ fontWeight: 700 }}>
+          Step {activeIndex + 1} of {STEPS.length}
+        </span>
+        <span>
+          {onboardingCompletion.stepsDone}/{onboardingCompletion.total} answered
+        </span>
+      </div>
+
+      <div
+        style={{
+          height: 4,
+          borderRadius: 999,
+          background: 'var(--surface-soft)',
+          overflow: 'hidden',
+          marginBottom: 10,
+        }}
+      >
+        <div
+          style={{
+            width: `${progressPercent}%`,
+            height: '100%',
+            borderRadius: 999,
+            background: 'linear-gradient(90deg, #163A2C 0%, #2D6A4F 100%)',
+            transition: 'width 0.25s ease',
+          }}
+        />
+      </div>
+
+      <div
+        aria-label="Onboarding steps"
+        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+      >
+        {STEPS.map((step, index) => {
+          const active = step.id === activeStep
+          const visited = index <= furthestStepIndex
+          const done = index < activeIndex
+          const available = visited || index <= furthestStepIndex + 1
+
+          return (
+            <div
+              key={step.id}
+              style={{ display: 'flex', alignItems: 'center', flex: 1 }}
+            >
+              <button
+                type="button"
+                onClick={() => available && onStepChange(step.id)}
+                disabled={!available}
+                aria-current={active ? 'step' : undefined}
+                title={step.title}
+                style={{
+                  flex: 1,
+                  minHeight: 34,
+                  padding: '0 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  borderRadius: 999,
+                  border: active
+                    ? '1px solid var(--green-700)'
+                    : '1px solid var(--border)',
+                  background: active ? 'var(--green-700)' : 'var(--surface)',
+                  color: active ? 'var(--white)' : 'var(--text-soft)',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  whiteSpace: 'nowrap',
+                  cursor: available ? 'pointer' : 'not-allowed',
+                  opacity: available ? 1 : 0.45,
+                  transition: 'all 0.18s ease',
+                }}
+              >
+                <span
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 999,
+                    display: 'grid',
+                    placeItems: 'center',
+                    flexShrink: 0,
+                    background: active
+                      ? 'rgba(255,255,255,0.18)'
+                      : done
+                        ? 'var(--green-700)'
+                        : 'var(--surface-soft)',
+                    color: active || done ? 'var(--white)' : 'var(--text-soft)',
+                    fontSize: 10.5,
+                  }}
+                >
+                  {done ? '\u2713' : index + 1}
+                </span>
+
+                {step.label}
+
+                {step.id === 'evidence' ? (
+                  <span style={{ opacity: 0.75, fontWeight: 700 }}>
+                    {completedEvidence}/{ITEMS.length}
+                  </span>
+                ) : null}
+              </button>
+
+              {index < STEPS.length - 1 ? (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 10,
+                    height: 2,
+                    flexShrink: 0,
+                    borderRadius: 999,
+                    background: done ? 'var(--green-700)' : 'var(--border)',
+                  }}
+                />
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function StepFooterNav({
+  flowIndex,
+  prevLabel,
+  nextLabel,
+  isLastPage,
+  isSaving,
+  onBack,
+  onNext,
+  onSave,
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        paddingTop: 14,
+        borderTop: '1px solid var(--border)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 12,
+        flexWrap: 'wrap',
+      }}
+    >
+      <button
+        type="button"
+        className="p360-btn-ghost"
+        onClick={onBack}
+        disabled={flowIndex === 0}
+        style={{
+          fontSize: 12.5,
+          cursor: flowIndex === 0 ? 'default' : 'pointer',
+          opacity: flowIndex === 0 ? 0.4 : 1,
+        }}
+      >
+        {flowIndex === 0 ? 'Back' : `Back to ${prevLabel}`}
+      </button>
+
+      <div
+        style={{
+          fontSize: 11.5,
+          color: 'var(--text-faint)',
+          flex: '1 1 auto',
+          textAlign: 'center',
+          minWidth: 120,
+        }}
+      >
+        {flowIndex + 1} of {FLOW.length}
+      </div>
+
+      {isLastPage ? (
+        <button
+          type="button"
+          className="p360-btn-primary"
+          onClick={onSave}
+          disabled={isSaving}
+          style={{ fontSize: 12.5 }}
+        >
+          {isSaving ? 'Saving' : 'Save baseline and finish'}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="p360-btn-primary"
+          onClick={onNext}
+          style={{ fontSize: 12.5 }}
+        >
+          Next: {nextLabel}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function StatTile({ label, value, hint }) {
+  return (
+    <div
+      style={{
+        padding: '10px 12px',
+        borderRadius: 12,
+        border: '1px solid var(--border)',
+        background: 'var(--surface-soft)',
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          color: 'var(--text-faint)',
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </div>
+
+      <div
+        style={{
+          fontSize: 18,
+          fontWeight: 800,
+          color: 'var(--text)',
+          letterSpacing: '-0.02em',
+          lineHeight: 1.1,
+        }}
+      >
+        {value}
+      </div>
+
+      {hint ? (
+        <div
+          style={{
+            marginTop: 3,
+            fontSize: 10.5,
+            color: 'var(--text-faint)',
+            lineHeight: 1.4,
+          }}
+        >
+          {hint}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function StagePageTopBar({
+  averageScore,
+  baselineScores,
+  recommendedStage,
+  recommendedStageId,
+  activeStep,
+  onboardingCompletion,
+  completedEvidence,
+  strongEvidence,
+  furthestStepIndex,
+  currentStep,
+  onStepChange,
+}) {
+  const evidenceScore = baselineScores.evidenceScorePercent ?? 0
+  const readinessScore =
+    baselineScores.stageReadinessByStage?.[recommendedStageId]?.score ?? 0
+  const alignmentScore = baselineScores.founderRecommendedAlignment ?? 0
+
+  const signalHint =
+    completedEvidence === 0
+      ? 'Nothing in motion yet'
+      : `${completedEvidence} of ${ITEMS.length} in motion, ${strongEvidence} strong`
+
+  return (
+    <section
+      className="p360-card-soft"
+      style={{
+        padding: 18,
+        marginBottom: 14,
+        borderRadius: 18,
+        background: 'var(--surface)',
+      }}
+    >
+      <div style={{ maxWidth: 720 }}>
+        <div className="p360-kicker" style={{ marginBottom: 5 }}>
+          Stage baseline
+        </div>
+
+        <h1
+          style={{
+            margin: 0,
+            fontSize: 21,
+            fontWeight: 800,
+            letterSpacing: '-0.025em',
+            color: 'var(--text)',
+            lineHeight: 1.25,
+          }}
+        >
+          Build a clear, evidence-based starting point for your venture
+        </h1>
+
+        <p
+          style={{
+            margin: '7px 0 0',
+            fontSize: 13,
+            lineHeight: 1.6,
+            color: 'var(--text-soft)',
+          }}
+        >
+          Answer three short steps once. PATH360 combines your view with its own
+          scoring to set your workshop stage, Academy path, and investor
+          readiness view.
+        </p>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))',
+          gap: 10,
+          marginTop: 14,
+        }}
+      >
+        <StatTile
+          label="Avg evidence"
+          value={averageScore.toFixed(2)}
+          hint="out of 3.00"
+        />
+        <StatTile
+          label="Evidence score"
+          value={`${evidenceScore}/100`}
+          hint={signalHint}
+        />
+        <StatTile
+          label="Stage readiness"
+          value={`${readinessScore}/100`}
+          hint={`Stage ${recommendedStage.number} baseline`}
+        />
+        <StatTile
+          label="Your alignment"
+          value={`${alignmentScore}/100`}
+          hint="Your view vs PATH360"
+        />
+      </div>
+
+      <div
+        style={{
+          marginTop: 16,
+          paddingTop: 14,
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 20,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ flex: '1 1 260px', maxWidth: 420 }}>
+          <div className="p360-kicker" style={{ marginBottom: 5 }}>
+            Step {currentStep.number}
+          </div>
+
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 800,
+              color: 'var(--text)',
+              lineHeight: 1.3,
+            }}
+          >
+            {currentStep.title}
+          </div>
+
+          <p
+            style={{
+              margin: '6px 0 0',
+              fontSize: 12.5,
+              lineHeight: 1.6,
+              color: 'var(--text-soft)',
+            }}
+          >
+            {currentStep.description}
+          </p>
+        </div>
+
+        <StepNavigation
+          activeStep={activeStep}
+          onStepChange={onStepChange}
+          completedEvidence={completedEvidence}
+          onboardingCompletion={onboardingCompletion}
+          furthestStepIndex={furthestStepIndex}
+        />
+      </div>
+    </section>
+  )
+}
+
+function RecommendationPanel({
+  recommendedStage,
+  selectedStage,
+  recommendation,
+  pathwayReason,
+  completedEvidence,
+  prioritiesCount,
+  focusAreas,
+  evidenceScorePercent,
+  readinessScore,
+  alignmentScore,
+  onExplorePathways,
+  onStartWorkshop,
+  onOpenAcademy,
+}) {
+  const isOverride = Boolean(selectedStage)
+  const choiceLabel = isOverride ? 'Your choice' : 'Suggested'
+
+  return (
+    <aside
+      className="p360-card"
+      style={{
+        position: 'sticky',
+        top: 12,
+        padding: 16,
+        alignSelf: 'start',
+        background: 'var(--surface-soft)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+        }}
+      >
+        <div className="p360-kicker">Your likely pathway</div>
+
+        <span className="p360-tag-learning">{choiceLabel}</span>
+      </div>
+
+      <div
+        style={{
+          marginTop: 8,
+          color: 'var(--text)',
+          fontSize: 18.5,
+          fontWeight: 800,
+          letterSpacing: '-0.03em',
+          lineHeight: 1.2,
+        }}
+      >
+        Stage {recommendedStage.number} · {recommendedStage.title}
+      </div>
+
+      <p
+        className="p360-body-sm"
+        style={{ margin: '8px 0 0', fontSize: 12.5 }}
+      >
+        {recommendation.reason}
+      </p>
+
+      <div
+        style={{
+          marginTop: 10,
+          padding: 10,
+          borderRadius: 10,
+          background: 'var(--surface-soft)',
+        }}
+      >
+        <div className="p360-kicker" style={{ marginBottom: 4 }}>
+          Next steps for this stage
+        </div>
+        <ul
+          style={{
+            margin: 0,
+            paddingLeft: 16,
+            fontSize: 12,
+            color: 'var(--text-soft)',
+            lineHeight: 1.5,
+          }}
+        >
+          <li>Start the {recommendation.workshop} workshop this week.</li>
+          <li>Complete at least one module on customer and evidence.</li>
+          <li>Update your baseline once new signals appear.</li>
+        </ul>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 8,
+          marginTop: 14,
+        }}
+      >
+        <div className="p360-card-soft" style={{ padding: 10 }}>
+          <div className="p360-kicker" style={{ marginBottom: 4 }}>
+            Evidence
+          </div>
+
+          <div
+            style={{
+              color: 'var(--text)',
+              fontSize: 18,
+              fontWeight: 800,
+            }}
+          >
+            {completedEvidence}/7
+          </div>
+
+          <div
+            style={{
+              marginTop: 2,
+              color: 'var(--text-faint)',
+              fontSize: 10.5,
+              lineHeight: 1.3,
+            }}
+          >
+            evidence areas active
+          </div>
+        </div>
+
+        <div className="p360-card-soft" style={{ padding: 10 }}>
+          <div className="p360-kicker" style={{ marginBottom: 4 }}>
+            Focus
+          </div>
+
+          <div
+            style={{
+              color: 'var(--text)',
+              fontSize: 18,
+              fontWeight: 800,
+            }}
+          >
+            {prioritiesCount}/3
+          </div>
+
+          <div
+            style={{
+              marginTop: 2,
+              color: 'var(--text-faint)',
+              fontSize: 10.5,
+              lineHeight: 1.3,
+            }}
+          >
+            priorities selected
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="p360-card-soft"
+        style={{ padding: 10, marginTop: 12 }}
+      >
+        <div className="p360-kicker" style={{ marginBottom: 4 }}>
+          Baseline diagnosis
+        </div>
+        <div
+          style={{
+            fontSize: 12,
+            color: 'var(--text-soft)',
+            lineHeight: 1.5,
+          }}
+        >
+          Evidence score: {evidenceScorePercent ?? 0}/100 · Stage readiness:{' '}
+          {readinessScore ?? 0}/100 · Founder–PATH360 alignment:{' '}
+          {alignmentScore ?? 0}/100
+        </div>
+      </div>
+
+      {focusAreas.length > 0 && (
+        <div
+          style={{
+            marginTop: 14,
+            paddingTop: 12,
+            borderTop: '1px solid var(--border)',
+          }}
+        >
+          <div className="p360-kicker" style={{ marginBottom: 6 }}>
+            What to emphasise
+          </div>
+          <ul
+            style={{
+              margin: 0,
+              paddingLeft: 16,
+              fontSize: 12,
+              color: 'var(--text-soft)',
+              lineHeight: 1.5,
+            }}
+          >
+            {focusAreas.map((area) => (
+              <li>{area.label}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div
+        style={{
+          marginTop: 16,
+          paddingTop: 15,
+          borderTop: '1px solid var(--border)',
+        }}
+      >
+        <div className="p360-kicker" style={{ marginBottom: 6 }}>
+          Why this fits
+        </div>
+
+        <p
+          style={{
+            margin: 0,
+            color: 'var(--text-soft)',
+            fontSize: 12,
+            lineHeight: 1.55,
+          }}
+        >
+          {pathwayReason ||
+            'Add your current context and PATH360 will refine this recommendation.'}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        className="p360-btn-primary"
+        onClick={onStartWorkshop}
+        style={{
+          width: '100%',
+          marginTop: 14,
+          fontSize: 12,
+        }}
+      >
+        Start {recommendation.workshop}
+      </button>
+
+      <button
+        type="button"
+        className="p360-btn-secondary"
+        onClick={onOpenAcademy}
+        style={{
+          width: '100%',
+          marginTop: 8,
+          fontSize: 12,
+        }}
+      >
+        Open Academy path for this stage
+      </button>
+
+      <button
+        type="button"
+        className="p360-btn-ghost"
+        onClick={onExplorePathways}
+        style={{
+          width: '100%',
+          marginTop: 10,
+          fontSize: 12,
+        }}
+      >
+        See all stages
+      </button>
+    </aside>
+  )
 }
 
 export default function StageOnboarding() {
@@ -172,62 +1576,79 @@ export default function StageOnboarding() {
   const user = useDiagnosticStore((state) => state.user)
   const founderProfile = useDiagnosticStore((state) => state.founderProfile)
   const stageAssessment = useDiagnosticStore((state) => state.stageAssessment)
+  const assessmentResults = useDiagnosticStore(
+    (state) => state.assessmentResults,
+  )
   const hasCompletedStageOnboarding = useDiagnosticStore(
-    (state) => state.hasCompletedStageOnboarding
+    (state) => state.hasCompletedStageOnboarding,
   )
   const setStageAssessment = useDiagnosticStore(
-    (state) => state.setStageAssessment
+    (state) => state.setStageAssessment,
   )
   const updateFounderProfile = useDiagnosticStore(
-    (state) => state.updateFounderProfile
+    (state) => state.updateFounderProfile,
   )
 
   const existing = useMemo(
-    () => normalizeAssessment(stageAssessment),
-    [stageAssessment]
+    () => normaliseAssessment(stageAssessment),
+    [stageAssessment],
   )
 
   const [selectedStage, setSelectedStage] = useState(existing.declaredStage)
   const [statusByItem, setStatusByItem] = useState(existing.statusByItem)
   const [notes, setNotes] = useState(existing.notes)
   const [showResults, setShowResults] = useState(
-    Boolean(hasCompletedStageOnboarding && existing.completedAt)
+    Boolean(hasCompletedStageOnboarding && existing.completedAt),
   )
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [activeStep, setActiveStep] = useState('context')
+  const [activePageId, setActivePageId] = useState(PAGES_BY_STEP.context[0])
+  const [furthestStepIndex, setFurthestStepIndex] = useState(0)
+  const [showPathways, setShowPathways] = useState(false)
 
   const [productMaturity, setProductMaturity] = useState(
-    existing.productMaturity
+    existing.productMaturity,
   )
   const [customerStatus, setCustomerStatus] = useState(
-    existing.customerStatus
+    existing.customerStatus,
   )
   const [revenuePattern, setRevenuePattern] = useState(
-    existing.revenuePattern
+    existing.revenuePattern,
   )
   const [goToMarketRepeatability, setGoToMarketRepeatability] = useState(
-    existing.goToMarketRepeatability
+    existing.goToMarketRepeatability,
   )
-  const [teamStructure, setTeamStructure] = useState(
-    existing.teamStructure
-  )
-  const [fundingStage, setFundingStage] = useState(
-    existing.fundingStage
-  )
+  const [teamStructure, setTeamStructure] = useState(existing.teamStructure)
+  const [fundingStage, setFundingStage] = useState(existing.fundingStage)
   const [priorities, setPriorities] = useState(existing.priorities)
   const [blockers, setBlockers] = useState(existing.blockers)
   const [completedActivities, setCompletedActivities] = useState(
-    existing.completedActivities
+    existing.completedActivities,
   )
 
+  const [ventureSummary, setVentureSummary] = useState(
+    existing.ventureSummary,
+  )
+  const [ventureProblem, setVentureProblem] = useState(
+    existing.ventureProblem,
+  )
+  const [ventureProgressLevel, setVentureProgressLevel] = useState(
+    existing.ventureProgressLevel,
+  )
+  const [recentProgress90Days, setRecentProgress90Days] = useState(
+    existing.recentProgress90Days,
+  )
+  const [mainTension, setMainTension] = useState(existing.mainTension)
+  const [pathDecision, setPathDecision] = useState(existing.pathDecision)
+
   useEffect(() => {
-    const next = normalizeAssessment(stageAssessment)
+    const next = normaliseAssessment(stageAssessment)
 
     setSelectedStage(next.declaredStage)
     setStatusByItem(next.statusByItem)
     setNotes(next.notes)
     setShowResults(Boolean(next.completedAt))
-
     setProductMaturity(next.productMaturity)
     setCustomerStatus(next.customerStatus)
     setRevenuePattern(next.revenuePattern)
@@ -237,12 +1658,18 @@ export default function StageOnboarding() {
     setPriorities(next.priorities)
     setBlockers(next.blockers)
     setCompletedActivities(next.completedActivities)
+    setVentureSummary(next.ventureSummary)
+    setVentureProblem(next.ventureProblem)
+    setVentureProgressLevel(next.ventureProgressLevel)
+    setRecentProgress90Days(next.recentProgress90Days)
+    setMainTension(next.mainTension)
+    setPathDecision(next.pathDecision)
   }, [stageAssessment])
 
   const averageScore = useMemo(() => {
     const total = ITEMS.reduce(
       (sum, item) => sum + getStatusScore(statusByItem[item.id]),
-      0
+      0,
     )
 
     return Number((total / ITEMS.length).toFixed(2))
@@ -250,7 +1677,7 @@ export default function StageOnboarding() {
 
   const baselineInput = useMemo(
     () => ({
-      declaredStage: selectedStage,
+      declaredStage: getLegacyStageKey(selectedStage || 'discover'),
       productMaturity,
       customerStatus,
       revenuePattern,
@@ -261,11 +1688,17 @@ export default function StageOnboarding() {
         Object.entries(statusByItem).map(([key, status]) => [
           key,
           getStatusScore(status),
-        ])
+        ]),
       ),
       priorities,
       blockers,
       completedActivities,
+      ventureSummary,
+      ventureProblem,
+      ventureProgressLevel,
+      recentProgress90Days,
+      mainTension,
+      pathDecision,
     }),
     [
       selectedStage,
@@ -279,72 +1712,156 @@ export default function StageOnboarding() {
       priorities,
       blockers,
       completedActivities,
-    ]
+      ventureSummary,
+      ventureProblem,
+      ventureProgressLevel,
+      recentProgress90Days,
+      mainTension,
+      pathDecision,
+    ],
   )
 
   const stageDiagnosis = useMemo(
     () => scoreVentureBaseline(baselineInput),
-    [baselineInput]
+    [baselineInput],
   )
 
-  const diagnosedStage = stageDiagnosis.diagnosedStage || 'idea'
-
-  const diagnosedStageData = useMemo(
-    () => STAGES.find((stage) => stage.id === diagnosedStage) || STAGES[0],
-    [diagnosedStage]
+  const evidenceSuggestedStage = useMemo(
+    () =>
+      getEvidenceSuggestedStage({
+        productMaturity,
+        customerStatus,
+        revenuePattern,
+        goToMarketRepeatability,
+      }),
+    [
+      productMaturity,
+      customerStatus,
+      revenuePattern,
+      goToMarketRepeatability,
+    ],
   )
 
-  const declaredStageData = useMemo(
-    () => STAGES.find((stage) => stage.id === selectedStage) || null,
-    [selectedStage]
+  const scoreSuggestedStage = useMemo(
+    () => getScoreSuggestedStage(stageDiagnosis.diagnosedStage),
+    [stageDiagnosis.diagnosedStage],
+  )
+
+  const recommendedStageId = useMemo(
+    () =>
+      getRecommendationStage({
+        selectedStage,
+        mainTension,
+        pathDecision,
+        evidenceSuggestedStage,
+        scoreSuggestedStage,
+      }),
+    [
+      selectedStage,
+      mainTension,
+      pathDecision,
+      evidenceSuggestedStage,
+      scoreSuggestedStage,
+    ],
+  )
+
+  const baselineScores = useMemo(
+    () =>
+      computeStageBaselineScores(
+        {
+          ...baselineInput,
+          recommendedStageId,
+        },
+        assessmentResults,
+      ),
+    [baselineInput, assessmentResults, recommendedStageId],
+  )
+
+  const recommendedStage = getStage(recommendedStageId)
+  const recommendation =
+    WORKSHOP_RECOMMENDATIONS[recommendedStageId] ||
+    WORKSHOP_RECOMMENDATIONS.discover
+  const selectedStageData = selectedStage ? getStage(selectedStage) : null
+
+  const focusAreas = useMemo(
+    () => getFocusAreas(statusByItem, priorities),
+    [statusByItem, priorities],
   )
 
   const completedItems = useMemo(
     () =>
-      ITEMS.filter(
-        (item) => getStatusScore(statusByItem[item.id]) >= 2
-      ).length,
-    [statusByItem]
+      ITEMS.filter((item) => getStatusScore(statusByItem[item.id]) >= 2)
+        .length,
+    [statusByItem],
   )
 
   const strongItems = useMemo(
     () =>
-      ITEMS.filter(
-        (item) => getStatusScore(statusByItem[item.id]) === 3
-      ).length,
-    [statusByItem]
+      ITEMS.filter((item) => getStatusScore(statusByItem[item.id]) === 3)
+        .length,
+    [statusByItem],
   )
 
-  const stageDifference = useMemo(() => {
-    if (!selectedStage) return 0
-
-    return getStageIndex(diagnosedStage) - getStageIndex(selectedStage)
-  }, [diagnosedStage, selectedStage])
-
-  const readinessLabel = useMemo(() => {
-    if (averageScore < 0.75) return 'Foundation-building'
-    if (averageScore < 1.5) return 'Early readiness'
-    if (averageScore < 2.25) return 'Developing readiness'
-    return 'Strong readiness'
-  }, [averageScore])
-
-  const nextFocusItems = useMemo(() => {
-    return [...ITEMS]
-      .sort(
-        (a, b) =>
-          getStatusScore(statusByItem[a.id]) -
-          getStatusScore(statusByItem[b.id])
-      )
-      .slice(0, 3)
-  }, [statusByItem])
-
-  const focusPriorities = useMemo(
-    () => (stageDiagnosis.priorityScores || []).slice(0, 3),
-    [stageDiagnosis.priorityScores]
+  const pathwayReason = useMemo(
+    () =>
+      getPathwayReason({
+        selectedStage,
+        ventureSummary,
+        ventureProblem,
+        ventureProgressLevel,
+        mainTension,
+        pathDecision,
+        evidenceSuggestedStage,
+        scoreSuggestedStage,
+      }),
+    [
+      selectedStage,
+      ventureSummary,
+      ventureProblem,
+      ventureProgressLevel,
+      mainTension,
+      pathDecision,
+      evidenceSuggestedStage,
+      scoreSuggestedStage,
+    ],
   )
+
+  const onboardingCompletion = useMemo(() => {
+    const hasNarrative = Boolean(ventureSummary && ventureProblem)
+    const hasProgressChoice = Boolean(ventureProgressLevel)
+    const hasTension = Boolean(mainTension)
+    const hasDecision = Boolean(pathDecision)
+    const hasEvidence = completedItems >= 3
+    const hasFocus = priorities.length >= 1
+
+    const stepsDone = [
+      hasNarrative && hasProgressChoice && hasTension && hasDecision,
+      hasEvidence,
+      hasFocus,
+    ].filter(Boolean).length
+
+    return {
+      stepsDone,
+      total: 3,
+      hasMinimum: stepsDone >= 2,
+    }
+  }, [
+    ventureSummary,
+    ventureProblem,
+    ventureProgressLevel,
+    mainTension,
+    pathDecision,
+    completedItems,
+    priorities,
+  ])
+
+  function markChanged() {
+    setShowResults(false)
+    setSaveError('')
+  }
 
   function updateStatus(itemId, status) {
-    setShowResults(false)
+    markChanged()
 
     setStatusByItem((current) => ({
       ...current,
@@ -352,1047 +1869,780 @@ export default function StageOnboarding() {
     }))
   }
 
-  function handleReset() {
-    setSelectedStage('')
-    setStatusByItem(createEmptyStatuses())
-    setNotes('')
-    setSaveError('')
-    setShowResults(false)
-
-    setProductMaturity('')
-    setCustomerStatus('')
-    setRevenuePattern('')
-    setGoToMarketRepeatability('')
-    setTeamStructure('')
-    setFundingStage('')
-    setPriorities([])
-    setBlockers([])
-    setCompletedActivities([])
+  function setPathwayOverride(stageId) {
+    setSelectedStage(stageId)
+    markChanged()
   }
 
-  async function handleComplete() {
-    setSaveError('')
+  function togglePriority(key) {
+    markChanged()
 
-    if (!selectedStage) {
-      setSaveError('Choose the stage that best describes your venture today.')
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+    setPriorities((current) => {
+      if (current.includes(key)) {
+        return current.filter((p) => p !== key)
+      }
+      if (current.length >= 3) {
+        return [...current.slice(1), key]
+      }
+      return [...current, key]
+    })
+  }
+
+  async function handleSaveAndContinue() {
+    if (!user?.id) {
+      setSaveError('Please sign in before saving your pathway.')
       return
-    }
-
-    if (
-      !productMaturity ||
-      !customerStatus ||
-      !revenuePattern ||
-      !goToMarketRepeatability
-    ) {
-      setSaveError(
-        'Complete the venture reality questions (product, customer, revenue, and go-to-market) before continuing.'
-      )
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-      return
-    }
-
-    const assessment = {
-      declaredStage: selectedStage,
-      diagnosedStage,
-      statusByItem,
-      notes: notes.trim(),
-      averageScore,
-      completedAt: new Date().toISOString(),
-      productMaturity,
-      customerStatus,
-      revenuePattern,
-      goToMarketRepeatability,
-      teamStructure,
-      fundingStage,
-      priorities,
-      blockers,
-      completedActivities,
-      stageScore: stageDiagnosis.stageScore,
-      stageConfidence: stageDiagnosis.stageConfidence,
-      stageReasons: stageDiagnosis.stageReasons,
-      recommendedAcademyPath: stageDiagnosis.recommendedAcademyPath,
-      recommendedMissionKeys: stageDiagnosis.recommendedMissionKeys,
-      priorityScores: stageDiagnosis.priorityScores,
-      stageBrief: stageDiagnosis.stageBrief,
     }
 
     setIsSaving(true)
+    setSaveError('')
 
     try {
-      setStageAssessment(assessment)
+      const completedAt = new Date().toISOString()
 
-      if (user?.id) {
-        try {
-          await updateFounderProfile({
-            ...(founderProfile || {}),
-            venturestage: selectedStage,
-          })
-        } catch (profileError) {
-          console.warn(
-            'Stage assessment was saved, but the profile update failed.',
-            profileError
-          )
-        }
+      const nextAssessment = {
+        declaredStage: recommendedStageId,
+        diagnosedStage: stageDiagnosis.diagnosedStage
+          ? legacyStageToPathway(stageDiagnosis.diagnosedStage)
+          : recommendedStageId,
+        statusByItem,
+        productMaturity,
+        customerStatus,
+        revenuePattern,
+        goToMarketRepeatability,
+        teamStructure,
+        fundingStage,
+        priorities,
+        blockers,
+        completedActivities,
+        ventureSummary,
+        ventureProblem,
+        ventureProgressLevel,
+        recentProgress90Days,
+        mainTension,
+        pathDecision,
+        notes,
+        completedAt,
+        averageScore,
+        evidenceScorePercent: baselineScores.evidenceScorePercent,
+        stageReadinessByStage: baselineScores.stageReadinessByStage,
+        founderStageFromProgress: baselineScores.founderStageFromProgress,
+        founderRecommendedAlignment: baselineScores.founderRecommendedAlignment,
+        diagnosticRecommendedAlignment:
+          baselineScores.diagnosticRecommendedAlignment,
+        constraintSeverity: baselineScores.constraintSeverity,
+      }
+
+      setStageAssessment(nextAssessment)
+
+      if (founderProfile) {
+        updateFounderProfile({
+          ...founderProfile,
+          venturestage: getLegacyStageKey(recommendedStageId),
+        })
       }
 
       setShowResults(true)
 
-      window.setTimeout(() => {
-        document
-          .getElementById('stage-results')
-          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 100)
-    } catch (error) {
-      console.error('Failed to save stage assessment', error)
-
+      navigate('/app/assessment', { replace: true })
+    } catch (err) {
+      console.error(err)
       setSaveError(
-        'We could not save your stage assessment. Please try again.'
+        err?.message ||
+          'Your stage snapshot could not be saved. Please try again.',
       )
     } finally {
       setIsSaving(false)
     }
   }
 
-  function goToDashboard() {
-    navigate('/app/dashboard')
+  function handleStartWorkshop() {
+    navigate(`/app/workshop?stage=${recommendedStageId}`)
   }
 
-  function goToAssessment() {
-    navigate('/app/assessment')
+  function handleOpenAcademy() {
+    navigate(`/app/academy?stage=${recommendedStageId}`)
+  }
+
+  const currentStepIndex = Math.max(
+    STEPS.findIndex((step) => step.id === activeStep),
+    0,
+  )
+  const currentStep = STEPS[currentStepIndex]
+
+  const flowIndex = Math.max(
+    FLOW.findIndex(
+      (entry) => entry.stepId === activeStep && entry.pageId === activePageId,
+    ),
+    0,
+  )
+
+  const isLastPage = flowIndex === FLOW.length - 1
+
+  const prevEntry = flowIndex > 0 ? FLOW[flowIndex - 1] : null
+  const nextEntry = !isLastPage ? FLOW[flowIndex + 1] : null
+
+  function labelForEntry(entry) {
+    if (!entry) return ''
+    const step = STEPS.find((item) => item.id === entry.stepId)
+    return step ? step.label : ''
+  }
+
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function goToFlowIndex(index) {
+    if (index < 0 || index >= FLOW.length) return
+
+    const entry = FLOW[index]
+    const stepIndex = STEPS.findIndex((step) => step.id === entry.stepId)
+
+    setActiveStep(entry.stepId)
+    setActivePageId(entry.pageId)
+    setFurthestStepIndex((current) => Math.max(current, stepIndex))
+    scrollToTop()
+  }
+
+  function goNext() {
+    goToFlowIndex(flowIndex + 1)
+  }
+
+  function goBack() {
+    goToFlowIndex(flowIndex - 1)
+  }
+
+  function goToStep(stepId) {
+    const index = FLOW.findIndex((entry) => entry.stepId === stepId)
+    if (index === -1) return
+    goToFlowIndex(index)
+  }
+
+  const stepFooterProps = {
+    flowIndex,
+    prevLabel: labelForEntry(prevEntry),
+    nextLabel: labelForEntry(nextEntry),
+    isLastPage,
+    isSaving,
+    onBack: goBack,
+    onNext: goNext,
+    onSave: handleSaveAndContinue,
   }
 
   return (
-    <div className="stage-page">
-      <style>{`
-        .stage-page {
-          min-height: 100%;
-          padding: 34px 20px 64px;
-          background:
-            radial-gradient(circle at 85% 0%, rgba(124, 92, 252, 0.12), transparent 28rem),
-            radial-gradient(circle at 5% 15%, rgba(45, 140, 255, 0.08), transparent 22rem),
-            #f7f8fc;
-          color: #182033;
-          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
+    <div className="fade-up" style={{ width: '100%' }}>
+      <StagePageTopBar
+        averageScore={averageScore}
+        baselineScores={baselineScores}
+        recommendedStage={recommendedStage}
+        recommendedStageId={recommendedStageId}
+        activeStep={activeStep}
+        onboardingCompletion={onboardingCompletion}
+        completedEvidence={completedItems}
+        strongEvidence={strongItems}
+        furthestStepIndex={furthestStepIndex}
+        currentStep={currentStep}
+        onStepChange={goToStep}
+      />
 
-        .stage-shell {
-          width: min(1120px, 100%);
-          margin: 0 auto;
-        }
-
-        .stage-eyebrow {
-          margin: 0 0 10px;
-          color: #7158dc;
-          font-size: 12px;
-          font-weight: 800;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-        }
-
-        .stage-title-row {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 24px;
-          margin-bottom: 10px;
-        }
-
-        .stage-title {
-          margin: 0;
-          font-size: clamp(30px, 4vw, 44px);
-          line-height: 1.08;
-          letter-spacing: -0.045em;
-        }
-
-        .stage-description {
-          max-width: 720px;
-          margin: 0;
-          color: #637087;
-          font-size: 16px;
-          line-height: 1.6;
-        }
-
-        .stage-card {
-          margin-top: 28px;
-          padding: clamp(20px, 4vw, 34px);
-          border: 1px solid rgba(28, 38, 64, 0.08);
-          border-radius: 24px;
-          background: rgba(255, 255, 255, 0.9);
-          box-shadow: 0 18px 45px rgba(38, 52, 84, 0.08);
-          backdrop-filter: blur(10px);
-        }
-
-        .stage-section-heading {
-          margin: 0;
-          font-size: 19px;
-          letter-spacing: -0.02em;
-        }
-
-        .stage-section-copy {
-          margin: 7px 0 20px;
-          color: #69758a;
-          font-size: 14px;
-          line-height: 1.55;
-        }
-
-        .stage-options {
-          display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
-          gap: 12px;
-        }
-
-        .stage-option {
-          position: relative;
-          min-height: 138px;
-          padding: 18px 14px;
-          overflow: hidden;
-          border: 1px solid #e6e9f1;
-          border-radius: 17px;
-          background: #fff;
-          color: #202a3c;
-          cursor: pointer;
-          text-align: left;
-          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
-        }
-
-        .stage-option:hover {
-          transform: translateY(-2px);
-          border-color: var(--stage-color);
-          box-shadow: 0 12px 24px rgba(24, 32, 51, 0.08);
-        }
-
-        .stage-option.is-selected {
-          border-color: var(--stage-color);
-          box-shadow: 0 0 0 3px color-mix(in srgb, var(--stage-color) 14%, transparent);
-        }
-
-        .stage-option-dot {
-          width: 10px;
-          height: 10px;
-          margin-bottom: 17px;
-          border-radius: 999px;
-          background: var(--stage-color);
-        }
-
-        .stage-option-title {
-          display: block;
-          margin-bottom: 7px;
-          font-size: 15px;
-          font-weight: 800;
-        }
-
-        .stage-option-copy {
-          display: block;
-          color: #718097;
-          font-size: 12px;
-          line-height: 1.45;
-        }
-
-        .readiness-grid {
-          display: grid;
-          gap: 15px;
-        }
-
-        .readiness-item {
-          padding: 18px;
-          border: 1px solid #e8ebf2;
-          border-radius: 18px;
-          background: #fff;
-        }
-
-        .readiness-item-top {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 18px;
-          margin-bottom: 14px;
-        }
-
-        .readiness-name {
-          margin: 0 0 4px;
-          font-size: 15px;
-          font-weight: 800;
-        }
-
-        .readiness-description {
-          max-width: 680px;
-          margin: 0;
-          color: #718097;
-          font-size: 13px;
-          line-height: 1.5;
-        }
-
-        .readiness-score {
-          flex: 0 0 auto;
-          padding: 6px 9px;
-          border-radius: 999px;
-          background: #f4f2ff;
-          color: #6a52d8;
-          font-size: 11px;
-          font-weight: 800;
-          white-space: nowrap;
-        }
-
-        .status-options {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-
-        .status-option {
-          padding: 9px 11px;
-          border: 1px solid #e4e8f0;
-          border-radius: 10px;
-          background: #fff;
-          color: #657187;
-          cursor: pointer;
-          font-size: 12px;
-          font-weight: 750;
-          transition: all 150ms ease;
-        }
-
-        .status-option:hover {
-          border-color: var(--status-color);
-          color: var(--status-color);
-        }
-
-        .status-option.is-active {
-          border-color: var(--status-color);
-          background: color-mix(in srgb, var(--status-color) 10%, white);
-          color: var(--status-color);
-          box-shadow: inset 0 0 0 1px var(--status-color);
-        }
-
-        .stage-notes {
-          width: 100%;
-          min-height: 118px;
-          box-sizing: border-box;
-          resize: vertical;
-          padding: 14px;
-          border: 1px solid #e3e7ef;
-          border-radius: 14px;
-          outline: none;
-          color: #263148;
-          font: inherit;
-          font-size: 14px;
-          line-height: 1.55;
-        }
-
-        .stage-notes:focus {
-          border-color: #7c5cfc;
-          box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.12);
-        }
-
-        .stage-actions {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 16px;
-          margin-top: 26px;
-        }
-
-        .stage-actions-right {
-          display: flex;
-          gap: 10px;
-        }
-
-        .stage-button {
-          min-height: 44px;
-          padding: 0 16px;
-          border: 0;
-          border-radius: 12px;
-          cursor: pointer;
-          font-size: 14px;
-          font-weight: 800;
-          transition: transform 150ms ease, opacity 150ms ease, box-shadow 150ms ease;
-        }
-
-        .stage-button:hover:not(:disabled) {
-          transform: translateY(-1px);
-        }
-
-        .stage-button:disabled {
-          cursor: not-allowed;
-          opacity: 0.65;
-        }
-
-        .stage-button-primary {
-          background: linear-gradient(135deg, #7454f7, #5e45d7);
-          color: #fff;
-          box-shadow: 0 10px 18px rgba(99, 70, 224, 0.24);
-        }
-
-        .stage-button-secondary {
-          border: 1px solid #e2e6ef;
-          background: #fff;
-          color: #48556b;
-        }
-
-        .stage-error {
-          margin: 20px 0 0;
-          padding: 12px 14px;
-          border: 1px solid #fecaca;
-          border-radius: 12px;
-          background: #fff1f2;
-          color: #b42318;
-          font-size: 13px;
-          font-weight: 650;
-        }
-                  .results-card {
-          scroll-margin-top: 24px;
-          border: 1px solid rgba(124, 92, 252, 0.18);
-          background:
-            radial-gradient(circle at 100% 0%, rgba(124, 92, 252, 0.12), transparent 23rem),
-            #fff;
-        }
-
-        .results-layout {
-          display: grid;
-          grid-template-columns: 1.1fr 0.9fr;
-          gap: 24px;
-          align-items: stretch;
-        }
-
-        .result-kicker {
-          margin: 0 0 8px;
-          color: #7454e7;
-          font-size: 12px;
-          font-weight: 850;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-        }
-
-        .result-title {
-          margin: 0;
-          font-size: clamp(26px, 3vw, 35px);
-          letter-spacing: -0.04em;
-        }
-
-        .result-copy {
-          margin: 12px 0 0;
-          color: #667289;
-          font-size: 15px;
-          line-height: 1.6;
-        }
-
-        .result-stage-pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          margin-top: 20px;
-          padding: 8px 11px;
-          border-radius: 999px;
-          background: color-mix(in srgb, var(--diagnosed-color) 12%, white);
-          color: var(--diagnosed-color);
-          font-size: 13px;
-          font-weight: 850;
-        }
-
-        .result-stage-pill::before {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: currentColor;
-          content: "";
-        }
-
-        .metrics-panel {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-        }
-
-        .metric {
-          min-height: 105px;
-          padding: 17px;
-          border: 1px solid #eaedf4;
-          border-radius: 17px;
-          background: rgba(250, 251, 255, 0.86);
-        }
-
-        .metric-value {
-          display: block;
-          margin-bottom: 7px;
-          color: #263148;
-          font-size: 25px;
-          font-weight: 850;
-          letter-spacing: -0.04em;
-        }
-
-        .metric-label {
-          display: block;
-          color: #738097;
-          font-size: 12px;
-          font-weight: 700;
-          line-height: 1.35;
-        }
-
-        .focus-list {
-          display: grid;
-          gap: 9px;
-          margin-top: 16px;
-        }
-
-        .focus-item {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 11px 12px;
-          border-radius: 12px;
-          background: #f8f9fd;
-          color: #4e5c72;
-          font-size: 13px;
-          font-weight: 700;
-        }
-
-        .focus-number {
-          display: grid;
-          width: 23px;
-          height: 23px;
-          flex: 0 0 auto;
-          place-items: center;
-          border-radius: 50%;
-          background: #eae6ff;
-          color: #654bd9;
-          font-size: 11px;
-          font-weight: 850;
-        }
-
-        .stage-match {
-          margin-top: 18px;
-          padding: 13px 14px;
-          border-radius: 13px;
-          background: #f7f8fb;
-          color: #647087;
-          font-size: 13px;
-          line-height: 1.5;
-        }
-
-        @media (max-width: 860px) {
-          .stage-options {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-
-          .results-layout {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        @media (max-width: 600px) {
-          .stage-page {
-            padding: 24px 14px 44px;
-          }
-
-          .stage-title-row,
-          .stage-actions,
-          .readiness-item-top {
-            display: block;
-          }
-
-          .stage-options {
-            grid-template-columns: 1fr;
-          }
-
-          .stage-actions-right {
-            margin-top: 12px;
-          }
-
-          .stage-button {
-            width: 100%;
-          }
-
-          .stage-actions-right {
-            display: grid;
-          }
-        }
-      `}</style>
-
-      <main className="stage-shell">
-        <p className="stage-eyebrow">Founder baseline</p>
-
-        <div className="stage-title-row">
-          <div>
-            <h1 className="stage-title">Where is your venture today?</h1>
-            <p className="stage-description">
-              Choose the stage that feels most accurate, then score the
-              evidence behind it. PATH360 uses this baseline to make guidance
-              more relevant to your next move.
-            </p>
-          </div>
-        </div>
-
-        <section className="stage-card">
-          <h2 className="stage-section-heading">
-            1. Choose your current venture stage
-          </h2>
-
-          <p className="stage-section-copy">
-            There is no wrong answer. Select the stage that best describes your
-            venture right now.
-          </p>
-
-          <div className="stage-options">
-            {STAGES.map((stage) => (
-              <button
-                key={stage.id}
-                type="button"
-                className={`stage-option ${
-                  selectedStage === stage.id ? 'is-selected' : ''
-                }`}
-                style={{ '--stage-color': stage.color }}
-                onClick={() => {
-                  setSelectedStage(stage.id)
-                  setShowResults(false)
-                  setSaveError('')
-                }}
-                aria-pressed={selectedStage === stage.id}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 2fr) minmax(320px, 1fr)',
+          gap: 20,
+          alignItems: 'start',
+        }}
+      >
+        <main style={{ display: 'grid', gap: 12 }}>
+          {activeStep === 'context' && activePageId === 'snapshot' && (
+            <section className="p360-card" style={{ padding: 16 }}>
+              <div className="p360-kicker" style={{ marginBottom: 6 }}>
+                Venture snapshot (your words)
+              </div>
+              <p
+                className="p360-body-sm"
+                style={{ margin: '0 0 10px', fontSize: 13 }}
               >
-                <span className="stage-option-dot" />
-                <span className="stage-option-title">{stage.title}</span>
-                <span className="stage-option-copy">{stage.subtitle}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+                Start with your own interpretation. Keep answers short, clear,
+                and focused on what is true for your venture today.
+              </p>
 
-        <section className="stage-card">
-          <h2 className="stage-section-heading">
-            2. Describe your current venture reality
-          </h2>
-
-          <p className="stage-section-copy">
-            These factual answers help PATH360 understand how far your venture has
-            progressed. Choose the single statement that is most accurate today.
-          </p>
-
-          <div className="readiness-grid">
-            <label className="stage-notes-label">
-              <span style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700 }}>
-                Product maturity
-              </span>
-
-              <select
-                value={productMaturity}
-                onChange={(event) => {
-                  setProductMaturity(event.target.value)
-                  setShowResults(false)
-                }}
-                style={{ width: '100%', height: 44, borderRadius: 12, border: '1px solid #e3e7ef', padding: '0 12px', fontSize: 13 }}
-              >
-                <option value="">Choose one</option>
-                <option value="idea">I am exploring a problem or idea</option>
-                <option value="prototype">I have a prototype or early concept</option>
-                <option value="live_early">
-                  I have a live offer with early users
-                </option>
-                <option value="live_growing">
-                  I have a live offer with growing usage
-                </option>
-                <option value="repeatable">
-                  I have a repeatable product or service model
-                </option>
-              </select>
-            </label>
-
-            <label className="stage-notes-label">
-              <span style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700 }}>
-                Strongest customer signal
-              </span>
-
-              <select
-                value={customerStatus}
-                onChange={(event) => {
-                  setCustomerStatus(event.target.value)
-                  setShowResults(false)
-                }}
-                style={{ width: '100%', height: 44, borderRadius: 12, border: '1px solid #e3e7ef', padding: '0 12px', fontSize: 13 }}
-              >
-                <option value="">Choose one</option>
-                <option value="none">
-                  I have not yet spoken to potential customers
-                </option>
-                <option value="conversations">
-                  I have informal customer conversations
-                </option>
-                <option value="interviews">
-                  I have conducted structured interviews
-                </option>
-                <option value="pilots">
-                  I am running a pilot or test
-                </option>
-                <option value="first_paying">
-                  I have first paying customers
-                </option>
-                <option value="recurring_customers">
-                  I have recurring customers or repeat usage
-                </option>
-              </select>
-            </label>
-
-            <label className="stage-notes-label">
-              <span style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700 }}>
-                Revenue pattern
-              </span>
-
-              <select
-                value={revenuePattern}
-                onChange={(event) => {
-                  setRevenuePattern(event.target.value)
-                  setShowResults(false)
-                }}
-                style={{ width: '100%', height: 44, borderRadius: 12, border: '1px solid #e3e7ef', padding: '0 12px', fontSize: 13 }}
-              >
-                <option value="">Choose one</option>
-                <option value="none">No revenue yet</option>
-                <option value="pilot">Pre-revenue or paid pilot</option>
-                <option value="one_off">One-off or occasional revenue</option>
-                <option value="recurring">Recurring revenue</option>
-                <option value="predictable">
-                  Predictable and growing revenue
-                </option>
-              </select>
-            </label>
-
-            <label className="stage-notes-label">
-              <span style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700 }}>
-                Customer acquisition / reach
-              </span>
-
-              <select
-                value={goToMarketRepeatability}
-                onChange={(event) => {
-                  setGoToMarketRepeatability(event.target.value)
-                  setShowResults(false)
-                }}
-                style={{ width: '100%', height: 44, borderRadius: 12, border: '1px solid #e3e7ef', padding: '0 12px', fontSize: 13 }}
-              >
-                <option value="">Choose one</option>
-                <option value="none">
-                  I have not tested a customer-acquisition approach
-                </option>
-                <option value="manual">
-                  Mostly founder-led and manual outreach
-                </option>
-                <option value="emerging">
-                  An early channel or process is showing promise
-                </option>
-                <option value="repeatable">
-                  I have a repeatable acquisition motion
-                </option>
-              </select>
-            </label>
-          </div>
-        </section>
-
-        <section className="stage-card">
-          <h2 className="stage-section-heading">
-            3. Your priorities for the next 14 days
-          </h2>
-
-          <p className="stage-section-copy">
-            Select up to three priorities. PATH360 will use them to personalise your
-            Academy trial and AI Strategist guidance.
-          </p>
-
-          <div className="status-options">
-            {[
-              ['clarify_problem', 'Clarify my problem and customer'],
-              ['validate_demand', 'Validate demand with real users'],
-              ['improve_product', 'Improve my product or offer'],
-              ['gain_traction', 'Gain customers and traction'],
-              ['growth_systems', 'Build growth systems'],
-              ['financial_model', 'Strengthen pricing and financial model'],
-              ['investor_readiness', 'Prepare for investors'],
-              ['team_operations', 'Build team and operations'],
-              ['founder_development', 'Develop myself as a founder'],
-            ].map(([id, label]) => {
-              const selected = priorities.includes(id)
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  className={`status-option ${
-                    selected ? 'is-active' : ''
-                  }`}
-                  style={{ '--status-color': selected ? '#7158DC' : '#e4e8f0' }}
-                  onClick={() => {
-                    setShowResults(false)
-                    setSaveError('')
-
-                    setPriorities((current) => {
-                      if (current.includes(id)) {
-                        return current.filter((value) => value !== id)
-                      }
-                      if (current.length >= 3) {
-                        return current
-                      }
-                      return [...current, id]
-                    })
+              <div style={{ marginBottom: 10 }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: 4,
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: 'var(--text)',
                   }}
                 >
-                  {label}
-                </button>
-              )
-            })}
-          </div>
+                  Describe your venture in one sentence.
+                </label>
+                <p
+                  className="p360-body-sm"
+                  style={{
+                    margin: '0 0 8px',
+                    fontSize: 12,
+                    color: 'var(--text-soft)',
+                  }}
+                >
+                  Use plain language. Imagine describing it to a smart friend in
+                  another field.
+                </p>
+                <input
+                  type="text"
+                  value={ventureSummary}
+                  onChange={(e) => {
+                    setVentureSummary(e.target.value)
+                    markChanged()
+                  }}
+                  placeholder="We help [who] [do what] so that [outcome]."
+                  style={{
+                    width: '100%',
+                    borderRadius: 10,
+                    border: '1px solid var(--border)',
+                    padding: '9px 11px',
+                    fontSize: 13,
+                  }}
+                />
+              </div>
 
-          <p className="stage-section-copy" style={{ marginTop: 10 }}>
-            {priorities.length}/3 priorities selected.
-          </p>
-        </section>
+              <div style={{ marginBottom: 10 }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: 4,
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: 'var(--text)',
+                  }}
+                >
+                  What problem are you solving, for whom, and why now?
+                </label>
+                <p
+                  className="p360-body-sm"
+                  style={{
+                    margin: '0 0 8px',
+                    fontSize: 12,
+                    color: 'var(--text-soft)',
+                  }}
+                >
+                  Be specific about the customer group, their situation, and why
+                  timing matters.
+                </p>
+                <textarea
+                  value={ventureProblem}
+                  onChange={(e) => {
+                    setVentureProblem(e.target.value)
+                    markChanged()
+                  }}
+                  rows={4}
+                  placeholder="e.g. Health clinics struggle to see which interventions work for which patients. We focus on clinics with 5–20 staff who lack analytics tools but feel pressure to prove outcomes."
+                  style={{
+                    width: '100%',
+                    borderRadius: 10,
+                    border: '1px solid var(--border)',
+                    padding: '9px 11px',
+                    fontSize: 13,
+                    resize: 'vertical',
+                  }}
+                />
+              </div>
 
-        <section className="stage-card">
-          <h2 className="stage-section-heading">
-            4. Score your current evidence
-          </h2>
+              <div style={{ marginBottom: 10 }}>
+                <div
+                  style={{
+                    marginBottom: 4,
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: 'var(--text)',
+                  }}
+                >
+                  How far along are you today?
+                </div>
+                <p
+                  className="p360-body-sm"
+                  style={{ margin: '0 0 8px', fontSize: 12 }}
+                >
+                  Pick the option that best matches what exists now, not your
+                  plan.
+                </p>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                    gap: 8,
+                  }}
+                >
+                  {PROGRESS_LEVELS.map((level) => {
+                    const active = ventureProgressLevel === level.id
+                    return (
+                      <button
+                        key={level.id}
+                        type="button"
+                        onClick={() => {
+                          setVentureProgressLevel(level.id)
+                          markChanged()
+                        }}
+                        className="p360-card-soft"
+                        style={{
+                          padding: 9,
+                          textAlign: 'left',
+                          borderColor: active
+                            ? 'var(--green-600)'
+                            : 'var(--border)',
+                          background: active
+                            ? 'var(--green-050)'
+                            : 'var(--surface-soft)',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            marginBottom: 3,
+                            color: active
+                              ? 'var(--green-800)'
+                              : 'var(--text)',
+                          }}
+                        >
+                          {level.label}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 11.5,
+                            color: 'var(--text-soft)',
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {level.description}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
 
-          <p className="stage-section-copy">
-            This is not a test. It identifies where you have evidence today
-            and where focused support will help most.
-          </p>
+              <div>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: 4,
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: 'var(--text)',
+                  }}
+                >
+                  What meaningful progress have you made in the last 90 days?
+                </label>
+                <p
+                  className="p360-body-sm"
+                  style={{
+                    margin: '0 0 8px',
+                    fontSize: 12,
+                    color: 'var(--text-soft)',
+                  }}
+                >
+                  Mention customer conversations, launches, revenue, or team
+                  changes.
+                </p>
+                <textarea
+                  value={recentProgress90Days}
+                  onChange={(e) => {
+                    setRecentProgress90Days(e.target.value)
+                    markChanged()
+                  }}
+                  rows={3}
+                  placeholder="e.g. Completed 12 customer interviews, launched a prototype with 3 clinics, and signed our first paid pilot."
+                  style={{
+                    width: '100%',
+                    borderRadius: 10,
+                    border: '1px solid var(--border)',
+                    padding: '9px 11px',
+                    fontSize: 13,
+                    resize: 'vertical',
+                  }}
+                />
+              </div>
 
-          <div className="readiness-grid">
-            {ITEMS.map((item) => {
-              const activeStatus = statusByItem[item.id]
-              const activeOption = STATUS_OPTIONS.find(
-                (option) => option.id === activeStatus
-              )
+              <StepFooterNav {...stepFooterProps} />
+            </section>
+          )}
 
-              return (
-                <div className="readiness-item" key={item.id}>
-                  <div className="readiness-item-top">
-                    <div>
-                      <h3 className="readiness-name">{item.label}</h3>
-                      <p className="readiness-description">
+          {activeStep === 'context' && activePageId === 'tension' && (
+            <section className="p360-card" style={{ padding: 16 }}>
+              <div style={{ marginBottom: 12 }}>
+                <div
+                  style={{
+                    marginBottom: 4,
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: 'var(--text)',
+                  }}
+                >
+                  Where does the work feel most stuck right now?
+                </div>
+                <p
+                  className="p360-body-sm"
+                  style={{ margin: '0 0 8px', fontSize: 12 }}
+                >
+                  Choose the tension that best matches your reality. This guides
+                  your stage; it is not a score.
+                </p>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                    gap: 8,
+                  }}
+                >
+                  {TENSIONS.map((tension) => {
+                    const active = mainTension === tension.id
+                    return (
+                      <button
+                        key={tension.id}
+                        type="button"
+                        onClick={() => {
+                          setMainTension(tension.id)
+                          markChanged()
+                        }}
+                        className="p360-card-soft"
+                        style={{
+                          padding: 9,
+                          textAlign: 'left',
+                          borderColor: active
+                            ? 'var(--green-600)'
+                            : 'var(--border)',
+                          background: active
+                            ? 'var(--green-050)'
+                            : 'var(--surface-soft)',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                        }}
+                      >
+                        {tension.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <div
+                  style={{
+                    marginBottom: 4,
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: 'var(--text)',
+                  }}
+                >
+                  If PATH360 ran a focused 2‑week sprint with you, what decision
+                  should it help you make?
+                </div>
+                <p
+                  className="p360-body-sm"
+                  style={{ margin: '0 0 8px', fontSize: 12 }}
+                >
+                  Choose the decision that best matches what you want to resolve
+                  next. This shapes your recommended workshop.
+                </p>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                    gap: 8,
+                  }}
+                >
+                  {DECISIONS.map((decision) => {
+                    const active = pathDecision === decision.id
+                    return (
+                      <button
+                        key={decision.id}
+                        type="button"
+                        onClick={() => {
+                          setPathDecision(decision.id)
+                          markChanged()
+                        }}
+                        className="p360-card-soft"
+                        style={{
+                          padding: 9,
+                          textAlign: 'left',
+                          borderColor: active
+                            ? 'var(--green-600)'
+                            : 'var(--border)',
+                          background: active
+                            ? 'var(--green-050)'
+                            : 'var(--surface-soft)',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                        }}
+                      >
+                        {decision.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <StepFooterNav {...stepFooterProps} />
+            </section>
+          )}
+
+          {activeStep === 'evidence' && activePageId === 'evidence' && (
+            <section className="p360-card" style={{ padding: 16 }}>
+              <div className="p360-kicker" style={{ marginBottom: 6 }}>
+                Venture evidence snapshot
+              </div>
+              <p
+                className="p360-body-sm"
+                style={{ margin: '0 0 10px', fontSize: 13 }}
+              >
+                Mark where you have strong proof, where work is in motion, and
+                where you have not yet started. This clarifies your stage and
+                prevents PATH360 from asking you to repeat work you have already
+                done.
+              </p>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: 10,
+                }}
+              >
+                {ITEMS.map((item) => {
+                  const status = statusByItem[item.id]
+                  return (
+                    <div
+                      key={item.id}
+                      className="p360-card-soft"
+                      style={{ padding: 10 }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          marginBottom: 4,
+                          color: 'var(--text)',
+                        }}
+                      >
+                        {item.label}
+                      </div>
+                      <p
+                        style={{
+                          margin: '0 0 8px',
+                          fontSize: 12,
+                          color: 'var(--text-soft)',
+                          lineHeight: 1.55,
+                        }}
+                      >
                         {item.description}
                       </p>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 6,
+                        }}
+                      >
+                        {STATUS_OPTIONS.map((option) => {
+                          const active = status === option.id
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() =>
+                                updateStatus(item.id, option.id)
+                              }
+                              style={{
+                                padding: '5px 8px',
+                                borderRadius: 999,
+                                border: active
+                                  ? '1px solid var(--green-700)'
+                                  : '1px solid var(--border)',
+                                background: active
+                                  ? 'var(--green-050)'
+                                  : 'var(--surface)',
+                                color: active
+                                  ? 'var(--green-800)'
+                                  : 'var(--text-soft)',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {option.shortLabel}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
+                  )
+                })}
+              </div>
 
-                    <span
-                      className="readiness-score"
+              <StepFooterNav {...stepFooterProps} />
+            </section>
+          )}
+
+          {activeStep === 'focus' && activePageId === 'focus' && (
+            <section className="p360-card" style={{ padding: 16 }}>
+              <div className="p360-kicker" style={{ marginBottom: 6 }}>
+                Near-term priorities
+              </div>
+              <p
+                className="p360-body-sm"
+                style={{ margin: '0 0 10px', fontSize: 13 }}
+              >
+                Pick up to three priorities that matter most over the next 3–6
+                months. Start with one if you are unsure; you can update this as
+                your evidence changes.
+              </p>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: 8,
+                }}
+              >
+                {PRIORITIES.map(([id, label]) => {
+                  const active = priorities.includes(id)
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => togglePriority(id)}
+                      className="p360-card-soft"
                       style={{
-                        color: activeOption?.color,
-                        background: `${activeOption?.color}18`,
+                        padding: 9,
+                        textAlign: 'left',
+                        borderColor: active
+                          ? 'var(--green-600)'
+                          : 'var(--border)',
+                        background: active
+                          ? 'var(--green-050)'
+                          : 'var(--surface-soft)',
+                        cursor: 'pointer',
+                        fontSize: 12,
                       }}
                     >
-                      {activeOption?.shortLabel || 'Not started'}
-                    </span>
-                  </div>
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
 
-                  <div className="status-options">
-                    {STATUS_OPTIONS.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        className={`status-option ${
-                          activeStatus === option.id ? 'is-active' : ''
-                        }`}
-                        style={{ '--status-color': option.color }}
-                        onClick={() => updateStatus(item.id, option.id)}
-                        aria-pressed={activeStatus === option.id}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
+              <div style={{ marginTop: 14 }}>
+                <div className="p360-kicker" style={{ marginBottom: 6 }}>
+                  Notes for PATH360
                 </div>
-              )
-            })}
-          </div>
-        </section>
+                <p
+                  className="p360-body-sm"
+                  style={{ margin: '0 0 8px', maxWidth: 560, fontSize: 12.5 }}
+                >
+                  Add any specific context, constraints, or ambitions you want
+                  PATH360 and the AI Strategist to keep in mind when guiding
+                  your work.
+                </p>
+                <textarea
+                  value={notes}
+                  onChange={(e) => {
+                    setNotes(e.target.value)
+                    markChanged()
+                  }}
+                  rows={4}
+                  className="p360-textarea"
+                  placeholder="e.g. We are pre-seed with 9 months of runway and need to prove recurring demand before raising again."
+                />
+              </div>
 
-        <section className="stage-card">
-          <h2 className="stage-section-heading">
-            3. Add any context that matters
-          </h2>
+              <StepFooterNav {...stepFooterProps} />
+            </section>
+          )}
 
-          <p className="stage-section-copy">
-            Optional. Share a milestone, constraint, funding plan, launch date,
-            or question you want PATH360 to keep in view.
-          </p>
+          {saveError ? (
+            <div
+              style={{
+                padding: 10,
+                borderRadius: 10,
+                border: '1px solid rgba(139,32,32,0.3)',
+                background: '#FDEAEA',
+                color: '#8B2020',
+                fontSize: 12.5,
+                lineHeight: 1.6,
+              }}
+            >
+              {saveError}
+            </div>
+          ) : null}
 
-          <textarea
-            className="stage-notes"
-            value={notes}
-            onChange={(event) => {
-              setNotes(event.target.value)
-              setShowResults(false)
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+              padding: '0 2px',
             }}
-            placeholder="For example: We have a clickable prototype, 14 customer interviews, and plan to launch a paid pilot this quarter."
-          />
-        </section>
-
-        {saveError ? <p className="stage-error">{saveError}</p> : null}
-
-        <div className="stage-actions">
-          <button
-            type="button"
-            className="stage-button stage-button-secondary"
-            onClick={handleReset}
-            disabled={isSaving}
           >
-            Reset answers
-          </button>
-
-          <div className="stage-actions-right">
-            {showResults ? (
-              <button
-                type="button"
-                className="stage-button stage-button-secondary"
-                onClick={() => setShowResults(false)}
-                disabled={isSaving}
-              >
-                Edit assessment
-              </button>
-            ) : null}
+            <div
+              style={{
+                fontSize: 11.5,
+                color: 'var(--text-faint)',
+                lineHeight: 1.5,
+                maxWidth: 460,
+              }}
+            >
+              {showResults
+                ? 'Baseline saved. You can refresh it any time your evidence changes.'
+                : `${onboardingCompletion.stepsDone} of ${onboardingCompletion.total} answers captured. Save once you reach the end of Step 03.`}
+            </div>
 
             <button
               type="button"
-              className="stage-button stage-button-primary"
-              onClick={handleComplete}
-              disabled={isSaving}
+              className="p360-btn-ghost"
+              onClick={() => setShowPathways(true)}
+              style={{ fontSize: 12 }}
             >
-              {isSaving
-                ? 'Saving baseline...'
-                : showResults
-                  ? 'Update baseline'
-                  : 'Complete stage baseline'}
+              Browse all stages
             </button>
           </div>
-        </div>
 
-        {showResults ? (
-          <section
-            id="stage-results"
-            className="stage-card results-card"
-            style={{ '--diagnosed-color': diagnosedStageData.color }}
-          >
-            <div className="results-layout">
-              <div>
-                <p className="result-kicker">Your PATH360 baseline</p>
+        </main>
 
-                <h2 className="result-title">
-                  Your evidence currently maps to {diagnosedStageData.title}.
-                </h2>
+        <RecommendationPanel
+          recommendedStage={recommendedStage}
+          selectedStage={selectedStageData}
+          recommendation={recommendation}
+          pathwayReason={pathwayReason}
+          completedEvidence={completedItems}
+          prioritiesCount={priorities.length}
+          focusAreas={focusAreas}
+          evidenceScorePercent={baselineScores.evidenceScorePercent}
+          readinessScore={
+            baselineScores.stageReadinessByStage?.[recommendedStageId]?.score ??
+            0
+          }
+          alignmentScore={baselineScores.founderRecommendedAlignment ?? 0}
+          onExplorePathways={() => setShowPathways(true)}
+          onStartWorkshop={handleStartWorkshop}
+          onOpenAcademy={handleOpenAcademy}
+        />
+      </div>
 
-                <p className="result-copy">
-                  Your self-selected stage is{' '}
-                  <strong>{declaredStageData?.title || 'not selected'}</strong>.
-                  {' '}The result below reflects the evidence you recorded
-                  across customer validation, product, traction, team, and
-                  capital readiness.
-                </p>
-
-                <span className="result-stage-pill">
-                  Diagnosed stage: {diagnosedStageData.title}
-                </span>
-
-                <span className="result-stage-pill">
-                  Confidence: {stageDiagnosis.stageConfidence || 'developing'}
-                </span>
-
-                <div className="stage-match">
-                  Recommended Academy path: <strong>
-                    {stageDiagnosis.recommendedAcademyPath
-                      ? STAGES.find((stage) =>
-                          stage.id === stageDiagnosis.recommendedAcademyPath
-                        )?.title || 'Idea'
-                      : 'Idea'}
-                  </strong>.
-                  PATH360 will use this to suggest the first trial missions in Academy.
-                </div>
-              </div>
-
-              <div className="metrics-panel">
-                <div className="metric">
-                  <span className="metric-value">
-                    {scoreToPercent(averageScore)}%
-                  </span>
-                  <span className="metric-label">{readinessLabel}</span>
-                </div>
-
-                <div className="metric">
-                  <span className="metric-value">{completedItems}/7</span>
-                  <span className="metric-label">
-                    Areas actively in motion
-                  </span>
-                </div>
-
-                <div className="metric">
-                  <span className="metric-value">{strongItems}</span>
-                  <span className="metric-label">
-                    Areas with strong evidence
-                  </span>
-                </div>
-
-                <div className="metric">
-                  <span className="metric-value">
-                    {declaredStageData?.title || '—'}
-                  </span>
-                  <span className="metric-label">
-                    Your declared stage
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <h3
-              className="stage-section-heading"
-              style={{ marginTop: 28 }}
-            >
-              Suggested next focus areas
-            </h3>
-
-            <p className="stage-section-copy">
-              These are the three areas with the least evidence in your current
-              baseline.
-            </p>
-
-            <div className="focus-list">
-              {focusPriorities.map((item, index) => (
-                <div className="focus-item" key={item.key}>
-                  <span className="focus-number">{index + 1}</span>
-                  <span>
-                    {item.label}{' '}
-                    <span style={{ fontSize: 11, color: '#7C7C75' }}>
-                      · Priority score: {item.score}/100
-                    </span>
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="stage-actions">
-              <button
-                type="button"
-                className="stage-button stage-button-secondary"
-                onClick={() => setShowResults(false)}
-              >
-                Refine answers
-              </button>
-
-              <div className="stage-actions-right">
-                <button
-                  type="button"
-                  className="stage-button stage-button-secondary"
-                  onClick={goToAssessment}
-                >
-                  Take full assessment
-                </button>
-
-                <button
-                  type="button"
-                  className="stage-button stage-button-primary"
-                  onClick={goToDashboard}
-                >
-                  Go to dashboard
-                </button>
-              </div>
-            </div>
-          </section>
-        ) : null}
-      </main>
+      {showPathways && (
+        <PathwayModal
+          open={showPathways}
+          selectedStage={selectedStage}
+          recommendedStageId={recommendedStageId}
+          onClose={() => setShowPathways(false)}
+          onSelectStage={setPathwayOverride}
+        />
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import supabase from '../lib/supabaseClient.js'
+import supabase, { signOut } from '../lib/supabaseClient.js'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 import AppLogo from './AppLogo.jsx'
 
@@ -14,7 +14,7 @@ const FEEDBACK_PAGES = [
   },
   {
     path: '/app/priority-progress',
-    label: 'Priority Progress',
+    label: 'Current Priorities',
     prompt:
       'What would make it easier to turn your priorities into action and evidence?',
   },
@@ -44,7 +44,7 @@ const FEEDBACK_PAGES = [
   },
   {
     path: '/app/environment',
-    label: 'Explore your environment',
+    label: 'Explore Environment',
     prompt:
       'What country, ecosystem, legal, or market information would be most useful here?',
   },
@@ -55,19 +55,19 @@ const FEEDBACK_PAGES = [
   },
   {
     path: '/app/reports',
-    label: 'Reports',
+    label: 'My Reports',
     prompt: 'What would make reviewing or exporting reports easier?',
   },
   {
     path: '/app/academy',
     label: 'Academy',
-    prompt: 'What would improve this learning experience?',
+    prompt: 'What would improve this founder-workshop experience?',
   },
   {
     path: '/app/resources',
-    label: 'Resource Centre',
+    label: 'Knowledge Library',
     prompt:
-      'What resource, tool, or source would make it easier to move your venture forward?',
+      'What resource, tool, case, or source would make it easier to move your venture forward?',
   },
   {
     path: '/app/assessment',
@@ -77,8 +77,9 @@ const FEEDBACK_PAGES = [
   },
   {
     path: '/app/stage-onboarding',
-    label: 'Stage Onboarding',
-    prompt: 'What would make selecting your venture stage easier?',
+    label: 'Founder Pathway',
+    prompt:
+      'What would make choosing or reviewing your founder pathway easier?',
   },
   {
     path: 'other',
@@ -91,48 +92,47 @@ const FEEDBACK_PAGES = [
 const OVERLAY_Z_INDEX = 2147483646
 const MODAL_Z_INDEX = 2147483647
 
-function getNavItemStyle(isActive, isLocked, isPreview) {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 11,
-    width: '100%',
-    padding: '10px 12px',
-    borderRadius: 12,
-    textDecoration: 'none',
-    marginBottom: 3,
-    background: isActive
-      ? '#EEF4EF'
-      : isLocked
-        ? 'rgba(245,240,255,0.5)'
-        : isPreview
-          ? '#F8F6F1'
-          : 'transparent',
-    border: isActive
-      ? '1px solid #CFE0D0'
-      : isLocked
-        ? '1px solid rgba(226,216,255,0.72)'
-        : isPreview
-          ? '1px solid #E7E1D7'
-          : '1px solid transparent',
-    color: isActive
-      ? '#1D6B4F'
-      : isLocked
-        ? '#76628D'
-        : isPreview
-          ? '#587365'
-          : '#6E6B65',
-    cursor: 'pointer',
-    transition: 'all 0.18s ease',
-    fontWeight: isActive ? 700 : 600,
-    boxSizing: 'border-box',
-  }
-}
-
 function getFeedbackPage(pagePath) {
   return (
     FEEDBACK_PAGES.find((page) => page.path === pagePath) ||
     FEEDBACK_PAGES[FEEDBACK_PAGES.length - 1]
+  )
+}
+
+function ModalShell({ titleId, onClose, children }) {
+  return createPortal(
+    <>
+      <div
+        aria-hidden="true"
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: OVERLAY_Z_INDEX,
+          background: 'rgba(17, 17, 15, 0.42)',
+          backdropFilter: 'blur(3px)',
+          WebkitBackdropFilter: 'blur(3px)',
+        }}
+      />
+
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: MODAL_Z_INDEX,
+          display: 'grid',
+          placeItems: 'center',
+          padding: 18,
+          pointerEvents: 'none',
+        }}
+      >
+        {children}
+      </div>
+    </>,
+    document.body,
   )
 }
 
@@ -222,369 +222,509 @@ function FeedbackModal({
     }
   }
 
-  const fieldStyle = {
-    width: '100%',
-    boxSizing: 'border-box',
-    borderRadius: 12,
-    border: '1px solid #D9D4CA',
-    background: '#FFFFFF',
-    padding: '0 12px',
-    fontSize: 13,
-    color: '#1C1C1A',
-    outline: 'none',
-  }
-
-  return createPortal(
-    <>
+  return (
+    <ModalShell titleId="feedback-modal-title" onClose={onClose}>
       <div
-        onClick={onClose}
-        aria-hidden="true"
+        className="p360-panel"
+        onClick={(event) => event.stopPropagation()}
         style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(20,24,22,0.42)',
-          backdropFilter: 'blur(3px)',
-          WebkitBackdropFilter: 'blur(3px)',
-          zIndex: OVERLAY_Z_INDEX,
-        }}
-      />
-
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="feedback-modal-title"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          display: 'grid',
-          placeItems: 'center',
-          zIndex: MODAL_Z_INDEX,
-          padding: 18,
-          pointerEvents: 'none',
+          width: '100%',
+          maxWidth: 520,
+          maxHeight: 'calc(100vh - 36px)',
+          overflowY: 'auto',
+          pointerEvents: 'auto',
+          boxShadow: 'var(--shadow-lg)',
         }}
       >
         <div
-          onClick={(event) => event.stopPropagation()}
           style={{
-            width: '100%',
-            maxWidth: 520,
-            maxHeight: 'calc(100vh - 36px)',
-            overflowY: 'auto',
-            background: '#FFFFFF',
-            borderRadius: 18,
-            border: '1px solid #E2DED6',
-            boxShadow: '0 24px 64px rgba(22,24,27,0.18)',
-            pointerEvents: 'auto',
+            padding: '18px 18px 14px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--surface-soft)',
           }}
         >
+          <div className="p360-kicker" style={{ marginBottom: 6 }}>
+            Founder feedback
+          </div>
+
+          <h2
+            id="feedback-modal-title"
+            style={{
+              margin: 0,
+              color: 'var(--text)',
+              fontSize: 18,
+              fontWeight: 800,
+              letterSpacing: '-0.025em',
+            }}
+          >
+            Help improve PATH360
+          </h2>
+
+          <p
+            className="p360-body-sm"
+            style={{ margin: '6px 0 0', fontSize: 12.5 }}
+          >
+            Tell us what felt confusing, missing, helpful, or broken.
+          </p>
+        </div>
+
+        <div style={{ padding: 18 }}>
+          {submitted ? (
+            <div
+              style={{
+                padding: 16,
+                border: '1px solid rgba(28, 91, 66, 0.2)',
+                borderRadius: 14,
+                background: 'var(--green-050)',
+              }}
+            >
+              <div
+                style={{
+                  color: 'var(--green-800)',
+                  fontSize: 14,
+                  fontWeight: 800,
+                  marginBottom: 6,
+                }}
+              >
+                Thanks — feedback received
+              </div>
+
+              <p
+                className="p360-body-sm"
+                style={{ margin: '0 0 14px', fontSize: 12.5 }}
+              >
+                Your note has been saved with the selected page context so it
+                can be reviewed in the right place.
+              </p>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="p360-btn-secondary"
+                style={{
+                  minHeight: 36,
+                  padding: '0 12px',
+                  fontSize: 12,
+                }}
+              >
+                Close
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={handleSubmit}
+              style={{ display: 'grid', gap: 14 }}
+            >
+              <div
+                style={{
+                  padding: 14,
+                  border: '1px solid rgba(28, 91, 66, 0.2)',
+                  borderRadius: 14,
+                  background: 'var(--green-050)',
+                }}
+              >
+                <div className="p360-kicker" style={{ marginBottom: 5 }}>
+                  You are sharing feedback about
+                </div>
+
+                <div
+                  style={{
+                    color: 'var(--text)',
+                    fontSize: 16,
+                    fontWeight: 800,
+                    letterSpacing: '-0.02em',
+                    marginBottom: 11,
+                  }}
+                >
+                  {selectedPage.label}
+                </div>
+
+                <label
+                  htmlFor="feedback-page"
+                  style={{
+                    display: 'block',
+                    color: 'var(--text)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    marginBottom: 6,
+                  }}
+                >
+                  Change feedback page
+                </label>
+
+                <select
+                  id="feedback-page"
+                  value={selectedPagePath}
+                  onChange={(event) =>
+                    setSelectedPagePath(event.target.value)
+                  }
+                  className="p360-select"
+                  style={{ height: 42 }}
+                >
+                  {FEEDBACK_PAGES.map((page) => (
+                    <option key={page.path} value={page.path}>
+                      {page.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="feedback-type"
+                  style={{
+                    display: 'block',
+                    color: 'var(--text)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    marginBottom: 6,
+                  }}
+                >
+                  Feedback type
+                </label>
+
+                <select
+                  id="feedback-type"
+                  value={feedbackType}
+                  onChange={(event) => setFeedbackType(event.target.value)}
+                  className="p360-select"
+                  style={{ height: 42 }}
+                >
+                  <option value="suggestion">Suggestion</option>
+                  <option value="bug">Bug</option>
+                  <option value="confusing">Confusing</option>
+                  <option value="missing_feature">Missing feature</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="feedback-message"
+                  style={{
+                    display: 'block',
+                    color: 'var(--text)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    marginBottom: 6,
+                  }}
+                >
+                  Your message
+                </label>
+
+                <textarea
+                  id="feedback-message"
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  placeholder={selectedPage.prompt}
+                  rows={6}
+                  className="p360-textarea"
+                  style={{
+                    minHeight: 150,
+                    padding: 12,
+                    lineHeight: 1.6,
+                  }}
+                />
+              </div>
+
+              {ventureName ? (
+                <div
+                  className="p360-card-soft"
+                  style={{
+                    padding: 12,
+                    borderRadius: 12,
+                    color: 'var(--text-soft)',
+                    fontSize: 12,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Venture:{' '}
+                  <strong style={{ color: 'var(--text)' }}>
+                    {ventureName}
+                  </strong>
+                </div>
+              ) : null}
+
+              {error ? (
+                <div
+                  style={{
+                    padding: 12,
+                    border: '1px solid rgba(139, 32, 32, 0.22)',
+                    borderRadius: 12,
+                    background: 'var(--danger-bg)',
+                    color: 'var(--danger)',
+                    fontSize: 12.5,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {error}
+                </div>
+              ) : null}
+
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: 10,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p360-btn-secondary"
+                  style={{
+                    minHeight: 40,
+                    padding: '0 13px',
+                    fontSize: 12.5,
+                  }}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={submitting || !message.trim()}
+                  className="p360-btn-primary"
+                  style={{
+                    minHeight: 40,
+                    padding: '0 14px',
+                    fontSize: 12.5,
+                  }}
+                >
+                  {submitting ? 'Sending…' : 'Submit feedback'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </ModalShell>
+  )
+}
+
+function AccountDataModal({ open, onClose }) {
+  const [deleteNoticeAcknowledged, setDeleteNoticeAcknowledged] =
+    useState(false)
+
+  useEffect(() => {
+    if (open) return
+    setDeleteNoticeAcknowledged(false)
+  }, [open])
+
+  if (!open) return null
+
+  return (
+    <ModalShell titleId="account-data-modal-title" onClose={onClose}>
+      <div
+        className="p360-panel"
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: 510,
+          pointerEvents: 'auto',
+          boxShadow: 'var(--shadow-lg)',
+        }}
+      >
+        <div
+          style={{
+            padding: '18px 18px 14px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--surface-soft)',
+          }}
+        >
+          <div className="p360-kicker" style={{ marginBottom: 6 }}>
+            Account and data
+          </div>
+
+          <h2
+            id="account-data-modal-title"
+            style={{
+              margin: 0,
+              color: 'var(--text)',
+              fontSize: 18,
+              fontWeight: 800,
+              letterSpacing: '-0.025em',
+            }}
+          >
+            Manage your PATH360 account
+          </h2>
+        </div>
+
+        <div style={{ padding: 18 }}>
+          <div className="p360-card-soft" style={{ padding: 14 }}>
+            <div
+              style={{
+                color: 'var(--text)',
+                fontSize: 13,
+                fontWeight: 800,
+                marginBottom: 5,
+              }}
+            >
+              Your founder data
+            </div>
+
+            <p
+              className="p360-body-sm"
+              style={{ margin: 0, fontSize: 12.5 }}
+            >
+              Your profile, assessments, evidence, journal work, saved
+              resources, Studio documents, files, and founder history are
+              linked to this account.
+            </p>
+          </div>
+
           <div
             style={{
-              padding: '18px 18px 14px',
-              borderBottom: '1px solid #ECE6DB',
-              background: '#F8F6F1',
+              marginTop: 16,
+              paddingTop: 16,
+              borderTop: '1px solid var(--border)',
             }}
           >
             <div
               style={{
-                fontSize: 11,
-                color: '#7158DC',
+                color: 'var(--danger)',
+                fontSize: 13,
                 fontWeight: 800,
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
                 marginBottom: 6,
               }}
             >
-              Founder feedback
+              Delete account
             </div>
 
-            <div
-              id="feedback-modal-title"
-              style={{
-                fontSize: 18,
-                fontWeight: 800,
-                color: '#1C1C1A',
-                marginBottom: 6,
-              }}
+            <p
+              className="p360-body-sm"
+              style={{ margin: 0, fontSize: 12.5 }}
             >
-              Help improve PATH360
-            </div>
+              Deleting an account is permanent. It must securely remove your
+              founder data, saved work, files, and authentication record. This
+              protected server-side deletion workflow is being connected before
+              the action can be enabled.
+            </p>
 
-            <div
+            <label
               style={{
-                fontSize: 12.5,
-                color: '#6B6965',
-                lineHeight: 1.65,
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 9,
+                marginTop: 14,
+                color: 'var(--text-soft)',
+                fontSize: 12,
+                lineHeight: 1.45,
+                cursor: 'pointer',
               }}
             >
-              Tell us what felt confusing, missing, helpful, or broken.
-            </div>
+              <input
+                type="checkbox"
+                checked={deleteNoticeAcknowledged}
+                onChange={(event) =>
+                  setDeleteNoticeAcknowledged(event.target.checked)
+                }
+                style={{ marginTop: 2 }}
+              />
+              I understand that account deletion is permanent and should only
+              be enabled when the full secure deletion process is available.
+            </label>
+
+            <button
+              type="button"
+              disabled
+              className="p360-btn-danger"
+              style={{
+                width: '100%',
+                marginTop: 14,
+                opacity: deleteNoticeAcknowledged ? 0.72 : 0.48,
+              }}
+            >
+              Delete account — secure workflow required
+            </button>
           </div>
 
-          <div style={{ padding: 18 }}>
-            {submitted ? (
-              <div
-                style={{
-                  background: '#EEF4EF',
-                  border: '1px solid #D6E4D7',
-                  borderRadius: 14,
-                  padding: 16,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    color: '#1D6B4F',
-                    marginBottom: 6,
-                  }}
-                >
-                  Thanks — feedback received
-                </div>
-
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    color: '#4D6357',
-                    lineHeight: 1.7,
-                    marginBottom: 14,
-                  }}
-                >
-                  Your note has been saved with the page you selected, so the
-                  team can review it in the right context.
-                </div>
-
-                <button
-                  type="button"
-                  onClick={onClose}
-                  style={{
-                    padding: '9px 12px',
-                    borderRadius: 10,
-                    border: '1px solid #CFE0D0',
-                    background: '#FFFFFF',
-                    color: '#1D6B4F',
-                    fontSize: 12.5,
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Close
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
-                <div
-                  style={{
-                    background: '#F5F0FF',
-                    border: '1px solid #DDD1FF',
-                    borderRadius: 14,
-                    padding: 14,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 10.5,
-                      color: '#7158DC',
-                      fontWeight: 800,
-                      letterSpacing: '0.09em',
-                      textTransform: 'uppercase',
-                      marginBottom: 5,
-                    }}
-                  >
-                    You are sharing feedback about
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: 17,
-                      color: '#3E3850',
-                      fontWeight: 800,
-                      marginBottom: 11,
-                    }}
-                  >
-                    {selectedPage.label}
-                  </div>
-
-                  <label
-                    htmlFor="feedback-page"
-                    style={{
-                      display: 'block',
-                      color: '#51486A',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      marginBottom: 6,
-                    }}
-                  >
-                    Change feedback page
-                  </label>
-
-                  <select
-                    id="feedback-page"
-                    value={selectedPagePath}
-                    onChange={(event) =>
-                      setSelectedPagePath(event.target.value)
-                    }
-                    style={{ ...fieldStyle, height: 42 }}
-                  >
-                    {FEEDBACK_PAGES.map((page) => (
-                      <option key={page.path} value={page.path}>
-                        {page.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="feedback-type"
-                    style={{
-                      display: 'block',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: '#1C1C1A',
-                      marginBottom: 6,
-                    }}
-                  >
-                    Feedback type
-                  </label>
-
-                  <select
-                    id="feedback-type"
-                    value={feedbackType}
-                    onChange={(event) => setFeedbackType(event.target.value)}
-                    style={{ ...fieldStyle, height: 42 }}
-                  >
-                    <option value="suggestion">Suggestion</option>
-                    <option value="bug">Bug</option>
-                    <option value="confusing">Confusing</option>
-                    <option value="missing_feature">Missing feature</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="feedback-message"
-                    style={{
-                      display: 'block',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: '#1C1C1A',
-                      marginBottom: 6,
-                    }}
-                  >
-                    Your message
-                  </label>
-
-                  <textarea
-                    id="feedback-message"
-                    value={message}
-                    onChange={(event) => setMessage(event.target.value)}
-                    placeholder={selectedPage.prompt}
-                    rows={6}
-                    style={{
-                      ...fieldStyle,
-                      minHeight: 150,
-                      padding: 12,
-                      resize: 'vertical',
-                      fontFamily: 'inherit',
-                      lineHeight: 1.6,
-                    }}
-                  />
-                </div>
-
-                {ventureName ? (
-                  <div
-                    style={{
-                      background: '#F8F6F1',
-                      border: '1px solid #ECE6DB',
-                      borderRadius: 12,
-                      padding: 12,
-                      fontSize: 12,
-                      color: '#6B6965',
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    Venture:{' '}
-                    <strong style={{ color: '#1C1C1A' }}>
-                      {ventureName}
-                    </strong>
-                  </div>
-                ) : null}
-
-                {error ? (
-                  <div
-                    style={{
-                      background: '#FBECEC',
-                      border: '1px solid #E8CACA',
-                      color: '#8A2F2F',
-                      borderRadius: 12,
-                      padding: 12,
-                      fontSize: 12.5,
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {error}
-                  </div>
-                ) : null}
-
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    gap: 10,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: 10,
-                      border: '1px solid #D9D4CA',
-                      background: '#FFFFFF',
-                      color: '#6B6965',
-                      fontSize: 12.5,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={submitting || !message.trim()}
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: 10,
-                      border: '1px solid #7158DC',
-                      background:
-                        submitting || !message.trim() ? '#B9ADC9' : '#7158DC',
-                      color: '#FFFFFF',
-                      fontSize: 12.5,
-                      fontWeight: 800,
-                      cursor:
-                        submitting || !message.trim() ? 'default' : 'pointer',
-                    }}
-                  >
-                    {submitting ? 'Sending…' : 'Submit feedback'}
-                  </button>
-                </div>
-              </form>
-            )}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              marginTop: 18,
+            }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              className="p360-btn-secondary"
+              style={{
+                minHeight: 40,
+                padding: '0 13px',
+                fontSize: 12.5,
+              }}
+            >
+              Close
+            </button>
           </div>
         </div>
       </div>
-    </>,
-    document.body,
+    </ModalShell>
+  )
+}
+
+function NavItem({ item, isLocked, isPreview, onClick }) {
+  return (
+    <NavLink
+      to={item.to}
+      onClick={onClick}
+      className={({ isActive }) =>
+        [
+          'p360-sidebar-link',
+          isActive ? 'active' : '',
+          isLocked ? 'is-locked' : '',
+          isPreview ? 'is-preview' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+      }
+      style={
+        isLocked
+          ? {
+              opacity: 0.72,
+              background: 'var(--surface-soft)',
+              borderColor: 'var(--border)',
+            }
+          : undefined
+      }
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 13,
+          color: isLocked ? 'var(--text-faint)' : 'currentColor',
+          fontSize: 13,
+          lineHeight: 1,
+          textAlign: 'center',
+        }}
+      >
+        {item.icon}
+      </span>
+
+      <span style={{ flex: 1, minWidth: 0 }}>{item.label}</span>
+
+      {isLocked ? (
+        <span className="p360-sidebar-badge">Set up first</span>
+      ) : null}
+
+      {!isLocked && isPreview ? (
+        <span className="p360-sidebar-badge">Preview</span>
+      ) : null}
+    </NavLink>
   )
 }
 
 export default function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
+
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
+  const [isAccountDataOpen, setIsAccountDataOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
 
   const user = useDiagnosticStore((state) => state.user)
   const founderProfile = useDiagnosticStore((state) => state.founderProfile)
@@ -593,6 +733,9 @@ export default function Sidebar() {
   )
   const startProgressReview = useDiagnosticStore(
     (state) => state.startProgressReview,
+  )
+  const clearSessionOnly = useDiagnosticStore(
+    (state) => state.clearSessionOnly,
   )
 
   const hasVentureSetup = useDiagnosticStore((state) =>
@@ -603,14 +746,14 @@ export default function Sidebar() {
     state.hasCompletedDiagnostic(),
   )
 
-  const NAV_GROUPS = useMemo(
+  const navGroups = useMemo(
     () => [
       {
-        label: 'Command Centre',
+        label: 'Workspace',
         items: [{ to: '/app/dashboard', label: 'Home', icon: '•' }],
       },
       {
-        label: 'Your Venture',
+        label: 'Build your venture',
         items: [
           {
             to: '/app/founder-profile',
@@ -632,25 +775,25 @@ export default function Sidebar() {
             icon: '•',
             requiresAssessment: true,
           },
-        ],
-      },
-      {
-        label: 'Your Environment',
-        items: [
           {
             to: '/app/environment',
-            label: 'Explore your environment',
+            label: 'Explore Environment',
             icon: '•',
             isPreview: !hasCompletedDiagnostic,
           },
         ],
       },
       {
-        label: 'Build & Move Forward',
+        label: 'Founder work',
         items: [
           {
+            to: '/app/stage-onboarding',
+            label: 'My Pathway',
+            icon: '•',
+          },
+          {
             to: '/app/priority-progress',
-            label: 'Priority Progress',
+            label: 'Current Priorities',
             icon: '•',
             requiresAssessment: true,
           },
@@ -660,9 +803,20 @@ export default function Sidebar() {
             icon: '•',
             requiresAssessment: true,
           },
+        ],
+      },
+      {
+        label: 'Tools',
+        items: [
           {
             to: '/app/resources',
-            label: 'Resource Centre',
+            label: 'Knowledge Library',
+            icon: '•',
+            requiresAssessment: true,
+          },
+          {
+            to: '/app/radar',
+            label: 'Opportunity Radar',
             icon: '•',
             requiresAssessment: true,
           },
@@ -674,7 +828,7 @@ export default function Sidebar() {
           },
           {
             to: '/app/reports',
-            label: 'Reports',
+            label: 'My Reports',
             icon: '•',
             requiresAssessment: true,
           },
@@ -709,6 +863,10 @@ export default function Sidebar() {
     founderProfile?.venturename ||
     founderProfile?.venture_name ||
     displayName
+
+  useEffect(() => {
+    setIsAccountMenuOpen(false)
+  }, [location.pathname])
 
   function handlePrimaryAction() {
     if (!hasVentureSetup) {
@@ -758,6 +916,22 @@ export default function Sidebar() {
     navigate('/app/assessment')
   }
 
+  async function handleLogout() {
+    if (isLoggingOut) return
+
+    setIsLoggingOut(true)
+
+    try {
+      await signOut()
+    } catch (error) {
+      console.error('Logout failed:', error)
+    } finally {
+      clearSessionOnly()
+      navigate('/', { replace: true })
+      setIsLoggingOut(false)
+    }
+  }
+
   function getPrimaryActionCopy() {
     if (!hasVentureSetup) {
       return {
@@ -771,7 +945,7 @@ export default function Sidebar() {
     if (!hasCompletedDiagnostic) {
       return {
         title: 'Start founder diagnostic',
-        subtitle: 'Unlock your personalised Path360 plan',
+        subtitle: 'Clarify evidence, readiness, and priorities',
         icon: '✦',
         isComplete: false,
       }
@@ -779,7 +953,7 @@ export default function Sidebar() {
 
     return {
       title: 'Review progress',
-      subtitle: 'Create a new version — prior work stays saved',
+      subtitle: 'Update your diagnostic when evidence changes',
       icon: '↺',
       isComplete: true,
     }
@@ -790,163 +964,125 @@ export default function Sidebar() {
   return (
     <>
       <div
+        className="p360-sidebar"
         style={{
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          background: '#F6F4EF',
-          fontFamily: "'Inter', 'DM Sans', sans-serif",
+          height: '100%',
+          minHeight: 0,
+          padding: '16px 14px 14px',
         }}
       >
         <div
           style={{
-            padding: '12px 14px 10px',
-            borderBottom: '1px solid #D9D4CA',
-            minHeight: 72,
-            display: 'flex',
-            alignItems: 'center',
+            flex: '0 0 auto',
+            padding: '2px 4px 11px',
+            borderBottom: '1px solid var(--border)',
           }}
         >
-          <AppLogo width={188} />
+          <AppLogo width={154} />
+
+          <div
+            style={{
+              marginTop: 7,
+              color: 'var(--text-faint)',
+              fontSize: 10.5,
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+            }}
+          >
+            Founder workspace
+          </div>
         </div>
 
         <nav
           aria-label="Workspace"
           style={{
-            padding: '18px 10px 14px',
-            flex: 1,
+            flex: '1 1 auto',
+            minHeight: 0,
             overflowY: 'auto',
+            padding: '11px 0 10px',
           }}
         >
-          {NAV_GROUPS.map((group, groupIndex) => (
-            <div
+          {navGroups.map((group, groupIndex) => (
+            <section
               key={group.label}
-              style={{ marginTop: groupIndex === 0 ? 0 : 18 }}
+              style={{ marginTop: groupIndex === 0 ? 0 : 12 }}
             >
               <div
+                className="p360-label"
                 style={{
+                  padding: '0 8px 5px',
+                  margin: 0,
+                  color: 'var(--text-faint)',
                   fontSize: 10,
-                  color: '#9A9388',
-                  letterSpacing: '0.16em',
-                  textTransform: 'uppercase',
-                  padding: '0 10px 8px',
-                  fontWeight: 800,
+                  letterSpacing: '0.12em',
                 }}
               >
                 {group.label}
               </div>
 
-              {group.items.map((item) => {
-                const isLocked = Boolean(
-                  item.requiresAssessment && !hasCompletedDiagnostic,
-                )
+              <div className="p360-sidebar-nav" style={{ gap: 2 }}>
+                {group.items.map((item) => {
+                  const isLocked = Boolean(
+                    item.requiresAssessment && !hasCompletedDiagnostic,
+                  )
 
-                const isPreview = Boolean(item.isPreview)
+                  const isPreview = Boolean(item.isPreview)
 
-                const onClick = isLocked
-                  ? handleLockedItemClick
-                  : item.to === '/app/environment'
-                    ? handleEnvironmentClick
-                    : undefined
+                  const onClick = isLocked
+                    ? handleLockedItemClick
+                    : item.to === '/app/environment'
+                      ? handleEnvironmentClick
+                      : undefined
 
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    onClick={onClick}
-                    style={({ isActive }) =>
-                      getNavItemStyle(isActive, isLocked, isPreview)
-                    }
-                  >
-                    <span
-                      style={{
-                        fontSize: 17,
-                        width: 18,
-                        textAlign: 'center',
-                        lineHeight: 1,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {item.icon}
-                    </span>
-
-                    <span
-                      style={{
-                        fontSize: 13,
-                        flex: 1,
-                        letterSpacing: '-0.01em',
-                      }}
-                    >
-                      {item.label}
-                    </span>
-
-                    {isLocked ? (
-                      <span
-                        style={{
-                          padding: '3px 6px',
-                          borderRadius: 999,
-                          background: '#E9E1FF',
-                          color: '#7158DC',
-                          fontSize: 9.5,
-                          fontWeight: 800,
-                          letterSpacing: '0.04em',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        Unlock
-                      </span>
-                    ) : null}
-
-                    {!isLocked && isPreview ? (
-                      <span
-                        style={{
-                          padding: '3px 6px',
-                          borderRadius: 999,
-                          background: '#EAF1EB',
-                          color: '#2A6A51',
-                          fontSize: 9.5,
-                          fontWeight: 800,
-                          letterSpacing: '0.04em',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        Preview
-                      </span>
-                    ) : null}
-                  </NavLink>
-                )
-              })}
-            </div>
+                  return (
+                    <NavItem
+                      key={item.to}
+                      item={item}
+                      isLocked={isLocked}
+                      isPreview={isPreview}
+                      onClick={onClick}
+                    />
+                  )
+                })}
+              </div>
+            </section>
           ))}
+        </nav>
 
-          <div
-            style={{
-              height: 1,
-              background: '#DDD7CC',
-              margin: '18px 8px',
-            }}
-          />
-
+        <div
+          style={{
+            flex: '0 0 auto',
+            paddingTop: 10,
+            borderTop: '1px solid var(--border)',
+          }}
+        >
           <button
             type="button"
             onClick={handlePrimaryAction}
+            className={
+              primaryAction.isComplete
+                ? 'p360-btn-secondary'
+                : 'p360-btn-primary'
+            }
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 11,
+              gap: 9,
               width: '100%',
-              padding: '13px',
-              borderRadius: 14,
-              border: '1px solid #7158DC',
-              background: primaryAction.isComplete ? '#F5F0FF' : '#7158DC',
-              color: primaryAction.isComplete ? '#7158DC' : '#FFFFFF',
-              cursor: 'pointer',
-              boxShadow: primaryAction.isComplete
-                ? 'none'
-                : '0 10px 20px rgba(113,88,220,0.18)',
+              minHeight: 45,
+              padding: '9px 10px',
+              textAlign: 'left',
             }}
           >
-            <span style={{ fontSize: 12, fontWeight: 800 }}>
+            <span
+              aria-hidden="true"
+              style={{
+                width: 16,
+                fontSize: 13,
+                fontWeight: 800,
+                textAlign: 'center',
+              }}
+            >
               {primaryAction.icon}
             </span>
 
@@ -954,120 +1090,117 @@ export default function Sidebar() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'flex-start',
                 gap: 2,
+                minWidth: 0,
               }}
             >
               <span style={{ fontSize: 12.5, fontWeight: 800 }}>
                 {primaryAction.title}
               </span>
 
-              <span style={{ fontSize: 10.5, opacity: 0.8, fontWeight: 600 }}>
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  lineHeight: 1.25,
+                  opacity: primaryAction.isComplete ? 0.76 : 0.82,
+                }}
+              >
                 {primaryAction.subtitle}
               </span>
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setIsFeedbackOpen(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 11,
-              width: '100%',
-              marginTop: 10,
-              padding: '11px 12px',
-              borderRadius: 13,
-              border: '1px solid #DDD7CC',
-              background: '#FFFFFF',
-              color: '#5F5B56',
-              cursor: 'pointer',
-            }}
-          >
-            <span
-              style={{
-                width: 19,
-                height: 19,
-                display: 'grid',
-                placeItems: 'center',
-                borderRadius: 999,
-                background: '#F5F0FF',
-                border: '1px solid #E2D8FF',
-                color: '#7158DC',
-                fontSize: 11,
-                fontWeight: 800,
-              }}
+          <div style={{ marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={() => setIsAccountMenuOpen((current) => !current)}
+              className="p360-sidebar-account-trigger"
+              aria-expanded={isAccountMenuOpen}
+              aria-haspopup="menu"
             >
-              ✦
-            </span>
-
-            <span
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-start',
-                gap: 1,
-              }}
-            >
-              <span style={{ fontSize: 12.5, fontWeight: 700 }}>
-                Share feedback
+              <span className="p360-sidebar-account-copy">
+                <strong>{displayName}</strong>
+                <small>
+                  {tierLabel} · {displayMeta}
+                </small>
               </span>
 
-              <span style={{ fontSize: 10.5, color: '#817B73' }}>
-                Help improve PATH360
+              <span
+                aria-hidden="true"
+                className={`p360-sidebar-account-chevron ${
+                  isAccountMenuOpen ? 'is-open' : ''
+                }`}
+              >
+                ⌄
               </span>
-            </span>
-          </button>
-        </nav>
+            </button>
 
-        <div
-          style={{
-            padding: '14px 14px 18px',
-            borderTop: '1px solid #D9D4CA',
-            background: 'rgba(255,255,255,0.32)',
-          }}
-        >
-          <div
-            style={{
-              border: '1px solid #D6E4D7',
-              borderRadius: 14,
-              background: '#EEF4EF',
-              padding: 12,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 10,
-                color: '#2A6A51',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                marginBottom: 5,
-                fontWeight: 700,
-              }}
-            >
-              {tierLabel}
-            </div>
+            {isAccountMenuOpen ? (
+              <div className="p360-sidebar-account-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsAccountMenuOpen(false)
+                    navigate('/app/founder-profile')
+                  }}
+                >
+                  Profile
+                </button>
 
-            <div
-              style={{
-                fontSize: 12.5,
-                color: '#1A1A18',
-                fontWeight: 700,
-              }}
-            >
-              {displayName}
-            </div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsAccountMenuOpen(false)
+                    setIsAccountDataOpen(true)
+                  }}
+                >
+                  Account & data
+                </button>
 
-            <div
-              style={{
-                fontSize: 11,
-                color: '#6E6B65',
-                marginTop: 3,
-              }}
-            >
-              {displayMeta}
-            </div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsAccountMenuOpen(false)
+                    setIsFeedbackOpen(true)
+                  }}
+                >
+                  Share feedback
+                </button>
+
+                <div
+                  className="p360-sidebar-account-menu-divider"
+                  role="separator"
+                />
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsAccountMenuOpen(false)
+                    handleLogout()
+                  }}
+                  disabled={isLoggingOut}
+                >
+                  {isLoggingOut ? 'Signing out…' : 'Log out'}
+                </button>
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="danger"
+                  onClick={() => {
+                    setIsAccountMenuOpen(false)
+                    setIsAccountDataOpen(true)
+                  }}
+                >
+                  Delete account
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1078,6 +1211,11 @@ export default function Sidebar() {
         pagePath={location.pathname}
         ventureName={ventureName}
         founderId={user?.id}
+      />
+
+      <AccountDataModal
+        open={isAccountDataOpen}
+        onClose={() => setIsAccountDataOpen(false)}
       />
     </>
   )

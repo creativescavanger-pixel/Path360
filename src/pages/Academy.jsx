@@ -4,6 +4,8 @@ import supabase from '../lib/supabaseClient.js'
 import MissionTwo from './MissionTwo.jsx'
 import MissionCompletionCard from './MissionCompletionCard.jsx'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
+import DiscoverWorkshopPage from './academy/DiscoverWorkshopPage.jsx'
+import { ACADEMY_MODULES } from './academy/academyModuleRegistry.js'
 
 const COURSE = {
   key: 'path360-founder-workshop',
@@ -801,6 +803,27 @@ export default function Academy() {
   const workshopParam = searchParams.get('workshop')
   const selectedWorkshopStage = workshopParam ? getWorkshopStage(workshopParam) : null
 
+  const discoverWorkshop = useMemo(() => {
+    if (!selectedWorkshopStage || selectedWorkshopStage.key !== 'discover') {
+      return null
+    }
+
+    return {
+      ...selectedWorkshopStage,
+      modules: ACADEMY_MODULES.filter((module) => module.stage === 'discover').map(
+        (module) => ({
+          key: module.key,
+          number: module.number,
+          title: module.title,
+          framework: 'Founder workshop framework',
+          output: module.output,
+          availability: 'live',
+          component: module.component,
+        }),
+      ),
+    }
+  }, [selectedWorkshopStage])
+
   const configuredKeys =
     assessmentResults?.recommendedmissionkeys ||
     stageAssessment?.recommendedMissionKeys ||
@@ -894,6 +917,25 @@ export default function Academy() {
     setFieldNoteOpen(false)
     setVideoOpen(false)
     setSearchParams({ workshop: key })
+  }
+
+  function openDiscoverModule(moduleKey) {
+    const discoverRouteMap = {
+      'founder-context-profile': 'opportunity-foundations',
+      'notice-friction': 'notice-friction',
+      'environment-map': 'opportunity-foundations',
+      'observation-workarounds': 'notice-friction',
+      'problems-needs-gaps': 'notice-friction',
+    }
+
+    const mappedMissionKey = discoverRouteMap[moduleKey]
+
+    if (mappedMissionKey) {
+      openMission(mappedMissionKey)
+      return
+    }
+
+    openStage('idea')
   }
 
   function openResources(stage = selectedWorkshopStage?.key || selectedPath) {
@@ -1001,6 +1043,20 @@ export default function Academy() {
   }
 
   if (activeMission) return <ComingSoonMission mission={activeMission} onBack={goHome} />
+
+  if (selectedWorkshopStage?.key === 'discover') {
+    return (
+      <DiscoverWorkshopPage
+        workshop={discoverWorkshop}
+        onBack={goHome}
+        onStart={() => openDiscoverModule(discoverWorkshop?.modules?.[0]?.key)}
+        onOpenModule={(moduleKey) => openDiscoverModule(moduleKey)}
+        onOpenResources={() => openResources('discover')}
+        onBrowseCases={() => navigate('/app/resources?view=cases&stage=discover')}
+        onBrowseFrameworks={() => navigate('/app/resources?view=frameworks&stage=discover')}
+      />
+    )
+  }
 
   if (selectedWorkshopStage) {
     return (

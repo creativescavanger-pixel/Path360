@@ -1,3 +1,5 @@
+// src/components/AIStrategistRail.jsx
+
 import { useState, useRef, useEffect } from 'react'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 import { askAgent, AGENTS } from '../lib/agentOrchestrator.js'
@@ -15,12 +17,18 @@ const STARTER_MESSAGES = {
   venture_strategist:
     "I've reviewed your assessment. Your biggest strategic gap is clearly defined by your current stage and traction.",
   investor_readiness:
-    'Based on your investor readiness score, there are 2-3 things a VC will pick apart before they fund this deal.',
+    'Based on your investor readiness score, there are 2–3 things a VC will pick apart before they fund this deal.',
   business_model:
     'Your business model has strong revenue potential but there are monetisation and defensibility choices you should sharpen.',
   founder_cognition:
     "I've been observing patterns in how you think about your venture. There are clear strengths and recurring blind spots to address.",
 }
+
+const SUGGESTED_PROMPTS = [
+  "What's my biggest investor readiness gap?",
+  'What would a VC say about my traction?',
+  'Diagnose my top execution risk',
+]
 
 export default function AIStrategistRail() {
   const activeAgent = useDiagnosticStore((s) => s.activeAgent)
@@ -30,6 +38,8 @@ export default function AIStrategistRail() {
   const setConversation = useDiagnosticStore((s) => s.setConversation)
   const getFounderContext = useDiagnosticStore((s) => s.getFounderContext)
   const user = useDiagnosticStore((s) => s.user)
+  const stageAssessment = useDiagnosticStore((s) => s.stageAssessment)
+  const founderProfile = useDiagnosticStore((s) => s.founderProfile)
 
   const [input, setInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
@@ -47,14 +57,23 @@ export default function AIStrategistRail() {
       ? [
           {
             role: 'assistant',
-            content: STARTER_MESSAGES[activeAgent] ?? 'How can I help you today?',
+            content:
+              STARTER_MESSAGES[activeAgent] ??
+              'How can I help you today?',
           },
         ]
       : messages
 
+  const currentStage =
+    stageAssessment?.declaredStage ||
+    stageAssessment?.diagnosedStage ||
+    ''
+  const stageLabel = currentStage
+    ? `Stage: ${currentStage}`
+    : 'Stage baseline active'
+
   async function handleSend() {
     const text = input.trim()
-
     if (!text || isTyping) return
 
     setInput('')
@@ -65,10 +84,12 @@ export default function AIStrategistRail() {
 
     addMessage(activeAgent, userMsg)
 
-    const apiMessages = [...existingMessages.slice(-10), userMsg].map((m) => ({
-      role: m.role,
-      content: m.content,
-    }))
+    const apiMessages = [...existingMessages.slice(-10), userMsg].map(
+      (m) => ({
+        role: m.role,
+        content: m.content,
+      }),
+    )
 
     setIsTyping(true)
     setStreamingText('')
@@ -98,7 +119,9 @@ export default function AIStrategistRail() {
       setStreamingText('')
 
       if (user?.id) {
-        saveConversation(user.id, activeAgent, updatedMessages).catch(console.error)
+        saveConversation(user.id, activeAgent, updatedMessages).catch(
+          console.error,
+        )
       }
     } catch (err) {
       const errorMsg = {
@@ -120,14 +143,36 @@ export default function AIStrategistRail() {
     }
   }
 
+  function handlePromptClick(prompt) {
+    if (isTyping) return
+    setInput(prompt)
+  }
+
   return (
-    <aside className="p360-rail">
-      <div className="p360-rail-head">
+    <aside
+      className="p360-rail"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        background: '#FFFFFF',
+      }}
+    >
+      {/* header */}
+      <div
+        className="p360-rail-head"
+        style={{
+          padding: '10px 14px 8px',
+          borderBottom: '1px solid #E2DED6',
+          background: '#FCF8EE',
+        }}
+      >
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 8,
+            marginBottom: 8,
           }}
         >
           <div
@@ -151,12 +196,75 @@ export default function AIStrategistRail() {
           >
             AI Strategist
           </span>
-          <span className="p360-tag p360-tag-neutral" style={{ fontSize: 10 }}>
+          <span
+            className="p360-tag p360-tag-neutral"
+            style={{ fontSize: 10 }}
+          >
             {AGENTS?.[activeAgent]?.model ?? 'AI'}
           </span>
         </div>
 
-        <div className="p360-rail-prompts">
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 8,
+            alignItems: 'flex-start',
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 11.5,
+                color: '#6B6965',
+                lineHeight: 1.6,
+              }}
+            >
+              I use your stage baseline, assessment, and venture profile to help
+              you make sharper, investor‑ready decisions.
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              gap: 4,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                padding: '3px 8px',
+                borderRadius: 999,
+                border: '1px solid #D8D3C9',
+                background: '#FFFFFF',
+                color: '#6B6965',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {stageLabel}
+            </div>
+            {founderProfile?.firstname && (
+              <div
+                style={{
+                  fontSize: 10.5,
+                  color: '#8C8A84',
+                }}
+              >
+                Working with {founderProfile.firstname}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* agent selection pills */}
+        <div
+          className="p360-rail-prompts"
+          style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}
+        >
           {AGENT_LIST.map((agent) => {
             const isActive = activeAgent === agent.id
 
@@ -164,10 +272,19 @@ export default function AIStrategistRail() {
               <button
                 key={agent.id}
                 onClick={() => setActiveAgent(agent.id)}
-                className={isActive ? 'p360-tag p360-tag-success' : 'p360-tag p360-tag-neutral'}
+                className={
+                  isActive
+                    ? 'p360-tag p360-tag-success'
+                    : 'p360-tag p360-tag-neutral'
+                }
                 style={{
-                  border: `1px solid ${isActive ? 'rgba(26,122,74,0.18)' : 'var(--border)'}`,
+                  border: `1px solid ${
+                    isActive
+                      ? 'rgba(26,122,74,0.18)'
+                      : 'var(--border)'
+                  }`,
                   cursor: 'pointer',
+                  fontSize: 11,
                 }}
               >
                 {agent.label}
@@ -177,14 +294,25 @@ export default function AIStrategistRail() {
         </div>
       </div>
 
-      <div className="p360-rail-chat">
+      {/* chat body */}
+      <div
+        className="p360-rail-chat"
+        style={{
+          flex: 1,
+          padding: '10px 14px 12px',
+          overflowY: 'auto',
+          background: '#F7F5F0',
+        }}
+      >
         {displayMessages.map((msg, i) => (
           <div
             key={i}
             style={{
               display: 'flex',
               flexDirection: 'column',
-              alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+              alignItems:
+                msg.role === 'user' ? 'flex-end' : 'flex-start',
+              marginBottom: 8,
             }}
           >
             {msg.role === 'assistant' && (
@@ -198,11 +326,16 @@ export default function AIStrategistRail() {
                   marginBottom: 5,
                 }}
               >
-                {AGENT_LIST.find((a) => a.id === activeAgent)?.label ?? 'AI'}
+                {AGENT_LIST.find((a) => a.id === activeAgent)?.label ??
+                  'AI'}
               </div>
             )}
 
-            <div className={`p360-chat-bubble ${msg.role === 'user' ? 'user' : 'assistant'}`}>
+            <div
+              className={`p360-chat-bubble ${
+                msg.role === 'user' ? 'user' : 'assistant'
+              }`}
+            >
               {msg.content}
             </div>
           </div>
@@ -214,6 +347,7 @@ export default function AIStrategistRail() {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'flex-start',
+              marginBottom: 8,
             }}
           >
             <div
@@ -226,7 +360,8 @@ export default function AIStrategistRail() {
                 marginBottom: 5,
               }}
             >
-              {AGENT_LIST.find((a) => a.id === activeAgent)?.label ?? 'AI'}
+              {AGENT_LIST.find((a) => a.id === activeAgent)?.label ??
+                'AI'}
             </div>
 
             <div className="p360-chat-bubble assistant">
@@ -266,49 +401,40 @@ export default function AIStrategistRail() {
         <div ref={bottomRef} />
       </div>
 
-      {messages.length === 0 && (
+      {/* bottom: suggestions + compose */}
+      <div
+        className="p360-rail-compose"
+        style={{
+          borderTop: '1px solid #E2DED6',
+          padding: '8px 10px 10px',
+          background: '#FFFFFF',
+        }}
+      >
         <div
-          className="p360-card-soft"
           style={{
-            padding: 12,
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 6,
+            marginBottom: 6,
           }}
         >
-          <p
-            style={{
-              fontSize: 11,
-              color: 'var(--text-faint)',
-              marginBottom: 8,
-              fontWeight: 600,
-            }}
-          >
-            Try asking
-          </p>
-
-          {[
-            "What's my biggest investor readiness gap?",
-            'What would a VC say about my traction?',
-            'Diagnose my top execution risk',
-          ].map((prompt, i) => (
+          {SUGGESTED_PROMPTS.map((prompt) => (
             <button
-              key={i}
-              onClick={() => setInput(prompt)}
+              key={prompt}
+              type="button"
+              onClick={() => handlePromptClick(prompt)}
               className="p360-btn-secondary"
               style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'left',
-                marginBottom: i === 2 ? 0 : 6,
-                padding: '9px 10px',
-                fontSize: 12,
+                padding: '6px 9px',
+                borderRadius: 999,
+                fontSize: 11,
               }}
             >
               {prompt}
             </button>
           ))}
         </div>
-      )}
 
-      <div className="p360-rail-compose">
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <textarea
             value={input}
