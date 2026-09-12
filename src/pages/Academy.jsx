@@ -794,10 +794,12 @@ export default function Academy() {
     'idea'
 
   const recommendedPath = normalisePathKey(rawStagePath)
-  const selectedLegacyPath = searchParams.get('stage')
-  const selectedPath = selectedLegacyPath && ACADEMY_PATHS[selectedLegacyPath]
-    ? selectedLegacyPath
-    : recommendedPath
+
+const selectedStage = searchParams.get('stage')
+
+const selectedPath = selectedStage
+  ? normalisePathKey(selectedStage)
+  : recommendedPath
   const path = ACADEMY_PATHS[selectedPath]
   const recommendedWorkshopStage = getWorkshopStageFromLegacyPath(recommendedPath)
   const workshopParam = searchParams.get('workshop')

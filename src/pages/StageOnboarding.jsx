@@ -1956,9 +1956,13 @@ export default function StageOnboarding() {
     }
   }
 
-  function handleStartWorkshop() {
-    navigate(`/app/workshop?stage=${recommendedStageId}`)
-  }
+ function handleStartWorkshop() {
+  navigate(
+    `/app/academy?stage=${recommendedStageId}&workshop=${encodeURIComponent(
+      recommendation.workshop,
+    )}&view=workshop`,
+  )
+}
 
   function handleOpenAcademy() {
     navigate(`/app/academy?stage=${recommendedStageId}`)
