@@ -548,6 +548,8 @@ function getPathwayReason({
   pathDecision,
   evidenceSuggestedStage,
   scoreSuggestedStage,
+  primaryConstraint,
+  recommendedStageId,
 }) {
   const reasonParts = []
 
@@ -589,20 +591,11 @@ function getPathwayReason({
     )
   }
 
-  if (!selectedStage && evidenceSuggestedStage) {
-    const evidenceStage = getStage(evidenceSuggestedStage)
-    reasonParts.push(
-      `Your venture signals currently point most strongly toward Stage ${evidenceStage.number} · ${evidenceStage.title}.`,
-    )
-  }
+const finalStage = getStage(recommendedStageId)
 
-  if (!selectedStage && scoreSuggestedStage) {
-    const scoreStage = getStage(scoreSuggestedStage)
-    reasonParts.push(
-      `Your wider evidence snapshot is most aligned with Stage ${scoreStage.number} · ${scoreStage.title}.`,
-    )
-  }
-
+reasonParts.push(
+  `PATH360 recommends Stage ${finalStage.number} · ${finalStage.title} as the most useful focus for your current work.`,
+)
   return reasonParts.join(' ')
 }
 
@@ -1813,6 +1806,7 @@ export default function StageOnboarding() {
         pathDecision,
         evidenceSuggestedStage,
         scoreSuggestedStage,
+        recommendedStageId,
       }),
     [
       selectedStage,
@@ -1823,6 +1817,7 @@ export default function StageOnboarding() {
       pathDecision,
       evidenceSuggestedStage,
       scoreSuggestedStage,
+      recommendedStageId,
     ],
   )
 
