@@ -6,6 +6,8 @@ import MissionCompletionCard from './MissionCompletionCard.jsx'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 import DiscoverWorkshopPage from './academy/DiscoverWorkshopPage.jsx'
 import { ACADEMY_MODULES } from './academy/academyModuleRegistry.js'
+import { normalisePathKey } from './academy/stageMap.js'
+import { transitionPreparationWorkshop } from './academy/workshops/transitionPreparation.workshop.js'
 
 const COURSE = {
   key: 'path360-founder-workshop',
@@ -753,21 +755,16 @@ function statusColor(status) {
   }
 }
 
-function normalisePathKey(raw) {
-  const key = String(raw || '').toLowerCase()
-  if (ACADEMY_PATHS[key]) return key
-  if (key === 'traction_growth' || key === 'tractionstage' || key === 'traction-stage') return 'traction'
-  if (key === 'growthstage' || key === 'growth-stage') return 'growth'
-  if (key === 'discover' || key === 'explore') return 'idea'
-  if (key === 'test') return 'validation'
-  if (key === 'build') return 'mvp'
-  if (key === 'launch') return 'traction'
-  if (key === 'grow' || key === 'expand' || key === 'optimise' || key === 'transition') return 'growth'
-  return 'idea'
-}
 
 function getWorkshopStage(key) {
-  return WORKSHOP_STAGES.find((stage) => stage.key === key) || WORKSHOP_STAGES[0]
+  if (key === 'transition') {
+    return transitionPreparationWorkshop
+  }
+
+  return (
+    WORKSHOP_STAGES.find((stage) => stage.key === key) ||
+    WORKSHOP_STAGES[0]
+  )
 }
 
 function getWorkshopStageFromLegacyPath(path) {

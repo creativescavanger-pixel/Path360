@@ -1,6 +1,7 @@
 // src/pages/StageOnboarding.jsx
 
 import { useEffect, useMemo, useState } from 'react'
+
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
@@ -13,7 +14,7 @@ import {
   getLegacyStageKey,
   normalisePathwayStage,
 } from '../lib/pathwayStages.js'
-
+import PathwayChoiceComparison from './PathwayChoiceComparison.jsx'
 const ITEMS = [
   {
     id: 'problem',
@@ -1302,6 +1303,8 @@ function StagePageTopBar({
 function RecommendationPanel({
   recommendedStage,
   selectedStage,
+  path360RecommendedStage,
+  activeStageId,
   recommendation,
   pathwayReason,
   completedEvidence,
@@ -1310,10 +1313,13 @@ function RecommendationPanel({
   evidenceScorePercent,
   readinessScore,
   alignmentScore,
+  onUseSelectedPath,
+  onUseRecommendedPath,
   onExplorePathways,
   onStartWorkshop,
   onOpenAcademy,
 }) {
+
   const isOverride = Boolean(selectedStage)
   const choiceLabel = isOverride ? 'Your choice' : 'Suggested'
 
@@ -1328,18 +1334,10 @@ function RecommendationPanel({
         background: 'var(--surface-soft)',
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 10,
-        }}
-      >
-        <div className="p360-kicker">Your likely pathway</div>
-
-        <span className="p360-tag-learning">{choiceLabel}</span>
-      </div>
+   <div className="p360-pathway-card-header">
+  <div className="p360-kicker">Your likely pathway</div>
+  <span className="p360-tag-learning">{choiceLabel}</span>
+</div>
 
       <div
         style={{
@@ -1496,7 +1494,13 @@ function RecommendationPanel({
           </ul>
         </div>
       )}
-
+<PathwayChoiceComparison
+  userSelectedStage={selectedStage}
+  path360RecommendedStage={path360RecommendedStage}
+  activeStageId={activeStageId}
+  onUseSelectedPath={onUseSelectedPath}
+  onUseRecommendedPath={onUseRecommendedPath}
+/>
       <div
         style={{
           marginTop: 16,
@@ -1739,6 +1743,22 @@ export default function StageOnboarding() {
     () => getScoreSuggestedStage(stageDiagnosis.diagnosedStage),
     [stageDiagnosis.diagnosedStage],
   )
+const path360RecommendedStageId = useMemo(
+  () =>
+    getRecommendationStage({
+      selectedStage: '',
+      mainTension,
+      pathDecision,
+      evidenceSuggestedStage,
+      scoreSuggestedStage,
+    }),
+  [
+    mainTension,
+    pathDecision,
+    evidenceSuggestedStage,
+    scoreSuggestedStage,
+  ],
+)
 
   const recommendedStageId = useMemo(
     () =>
@@ -1770,11 +1790,15 @@ export default function StageOnboarding() {
     [baselineInput, assessmentResults, recommendedStageId],
   )
 
-  const recommendedStage = getStage(recommendedStageId)
-  const recommendation =
-    WORKSHOP_RECOMMENDATIONS[recommendedStageId] ||
-    WORKSHOP_RECOMMENDATIONS.discover
-  const selectedStageData = selectedStage ? getStage(selectedStage) : null
+ const recommendedStage = getStage(recommendedStageId)
+
+const path360RecommendedStage = getStage(path360RecommendedStageId)
+
+const recommendation =
+  WORKSHOP_RECOMMENDATIONS[recommendedStageId] ||
+  WORKSHOP_RECOMMENDATIONS.discover
+
+const selectedStageData = selectedStage ? getStage(selectedStage) : null
 
   const focusAreas = useMemo(
     () => getFocusAreas(statusByItem, priorities),
@@ -1865,9 +1889,14 @@ export default function StageOnboarding() {
   }
 
   function setPathwayOverride(stageId) {
-    setSelectedStage(stageId)
-    markChanged()
-  }
+  setSelectedStage(stageId)
+  markChanged()
+
+  setStageAssessment({
+    ...stageAssessment,
+    declaredStage: stageId,
+  })
+}
 
   function togglePriority(key) {
     markChanged()
@@ -1896,7 +1925,7 @@ export default function StageOnboarding() {
       const completedAt = new Date().toISOString()
 
       const nextAssessment = {
-        declaredStage: recommendedStageId,
+        declaredStage: selectedStage,
         diagnosedStage: stageDiagnosis.diagnosedStage
           ? legacyStageToPathway(stageDiagnosis.diagnosedStage)
           : recommendedStageId,
@@ -2617,6 +2646,8 @@ export default function StageOnboarding() {
           recommendedStage={recommendedStage}
           selectedStage={selectedStageData}
           recommendation={recommendation}
+          path360RecommendedStage={path360RecommendedStage}
+  activeStageId={recommendedStageId}
           pathwayReason={pathwayReason}
           completedEvidence={completedItems}
           prioritiesCount={priorities.length}
@@ -2626,11 +2657,19 @@ export default function StageOnboarding() {
             baselineScores.stageReadinessByStage?.[recommendedStageId]?.score ??
             0
           }
-          alignmentScore={baselineScores.founderRecommendedAlignment ?? 0}
-          onExplorePathways={() => setShowPathways(true)}
-          onStartWorkshop={handleStartWorkshop}
-          onOpenAcademy={handleOpenAcademy}
-        />
+           alignmentScore={baselineScores.founderRecommendedAlignment ?? 0}
+  onUseSelectedPath={() => {
+    if (selectedStage) {
+      setPathwayOverride(selectedStage)
+    }
+  }}
+  onUseRecommendedPath={() => {
+    setPathwayOverride(path360RecommendedStageId)
+  }}
+  onExplorePathways={() => setShowPathways(true)}
+  onStartWorkshop={handleStartWorkshop}
+  onOpenAcademy={handleOpenAcademy}
+/>
       </div>
 
       {showPathways && (

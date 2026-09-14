@@ -1041,3 +1041,120 @@ svg {
     grid-template-columns: 1fr;
   }
 }
+/* Recommendation-panel label spacing */
+.p360-path-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+
+.p360-path-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.p360-path-card__eyebrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 38px;
+  margin-bottom: 10px;
+}
+
+.p360-path-card__eyebrow .p360-tag {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 4px 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+
+@media (max-width: 1180px) {
+  .p360-path-comparison {
+    grid-template-columns: 1fr;
+  }
+}
+/* Keep pathway comparison labels and badges on separate lines */
+.p360-path-card__eyebrow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 50px;
+}
+
+.p360-path-card__eyebrow .p360-tag {
+  position: static;
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 4px 7px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
+
+.p360-path-card__eyebrow > span:not(.p360-tag) {
+  display: block;
+  line-height: 1.2;
+}
+/* Recommendation panel: keep pathway label and badge readable */
+.p360-pathway-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px 8px;
+}
+
+.p360-pathway-card-header .p360-kicker {
+  min-width: 0;
+  flex: 1 1 100%;
+  line-height: 1.25;
+}
+
+.p360-pathway-card-header .p360-tag-learning {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 4px 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
+/* Keep the pathway title and status tag from overlapping */
+.p360-pathway-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px 8px;
+}
+
+.p360-pathway-card-header .p360-kicker {
+  flex: 1 1 100%;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.p360-pathway-card-header .p360-tag-learning {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 4px 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
