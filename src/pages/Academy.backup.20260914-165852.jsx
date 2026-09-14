@@ -6,10 +6,7 @@ import MissionCompletionCard from './MissionCompletionCard.jsx'
 import useDiagnosticStore from '../stores/useDiagnosticStore.js'
 import DiscoverWorkshopPage from './academy/DiscoverWorkshopPage.jsx'
 import { ACADEMY_MODULES } from './academy/academyModuleRegistry.js'
-import {
-  normalisePathKey,
-  normaliseStageKey,
-} from './academy/stageMap.js'
+import { normalisePathKey } from './academy/stageMap.js'
 import { transitionPreparationWorkshop } from './academy/workshops/transitionPreparation.workshop.js'
 
 
@@ -796,27 +793,15 @@ export default function Academy() {
 
   const recommendedPath = normalisePathKey(rawStagePath)
 
-  const selectedStageParam = searchParams.get('stage')
-  const workshopParam = searchParams.get('workshop')
+const selectedStage = searchParams.get('stage')
 
-  const selectedStageKey = selectedStageParam
-    ? normaliseStageKey(selectedStageParam)
-    : null
-
-  const selectedPath = selectedStageKey
-    ? normalisePathKey(selectedStageKey)
-    : recommendedPath
-
-  const path = ACADEMY_PATHS[selectedPath] || ACADEMY_PATHS.idea
+const selectedPath = selectedStage
+  ? normalisePathKey(selectedStage)
+  : recommendedPath
+  const path = ACADEMY_PATHS[selectedPath]
   const recommendedWorkshopStage = getWorkshopStageFromLegacyPath(recommendedPath)
-
-  const selectedWorkshopStage = selectedStageKey
-    ? getWorkshopStage(selectedStageKey)
-    : workshopParam && WORKSHOP_STAGES.some(
-        (stage) => stage.key === normaliseStageKey(workshopParam),
-      )
-      ? getWorkshopStage(normaliseStageKey(workshopParam))
-      : null
+  const workshopParam = searchParams.get('workshop')
+  const selectedWorkshopStage = workshopParam ? getWorkshopStage(workshopParam) : null
 
   const discoverWorkshop = useMemo(() => {
     if (!selectedWorkshopStage || selectedWorkshopStage.key !== 'discover') {
@@ -905,7 +890,7 @@ export default function Academy() {
   }
 
   function goHome() {
-    setSearchParams({})
+    setSearchParams(selectedPath === recommendedPath ? {} : { stage: selectedPath })
     setError('')
     setNotice('')
   }
@@ -913,13 +898,7 @@ export default function Academy() {
   function openMission(key) {
     setFieldNoteOpen(false)
     setVideoOpen(false)
-    setSearchParams({
-      stage:
-        selectedWorkshopStage?.key ||
-        selectedStageKey ||
-        recommendedWorkshopStage.key,
-      mission: key,
-    })
+    setSearchParams({ stage: selectedPath, mission: key })
   }
 
   function openMissionForStage(stageKey, missionKey) {
@@ -937,7 +916,7 @@ export default function Academy() {
   function openWorkshop(key) {
     setFieldNoteOpen(false)
     setVideoOpen(false)
-    setSearchParams({ stage: normaliseStageKey(key) })
+    setSearchParams({ workshop: key })
   }
 
   function openDiscoverModule(moduleKey) {

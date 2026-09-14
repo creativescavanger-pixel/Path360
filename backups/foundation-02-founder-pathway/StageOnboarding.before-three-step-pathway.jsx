@@ -478,11 +478,15 @@ function getRecommendationStage({
 
 function getPathwayReason({
   selectedStage,
-  currentSituation,
-  currentDecision,
+  ventureSummary,
+  ventureProblem,
+  ventureProgressLevel,
+  mainTension,
+  pathDecision,
   evidenceSuggestedStage,
   scoreSuggestedStage,
   primaryConstraint,
+  recommendedStageId,
 }) {
   const reasonParts = []
 
@@ -759,6 +763,7 @@ export default function StageOnboarding() {
         evidenceSuggestedStage,
         scoreSuggestedStage,
         primaryConstraint,
+        recommendedStageId,
       }),
     [
       selectedStage,
@@ -767,6 +772,7 @@ export default function StageOnboarding() {
       evidenceSuggestedStage,
       scoreSuggestedStage,
       primaryConstraint,
+      recommendedStageId,
     ],
   )
 

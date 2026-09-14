@@ -2,10 +2,14 @@ export const transitionPreparationWorkshop = {
   key: 'transition',
   number: '08',
   label: 'Transition',
+  legacyPath: 'growth',
   question: 'What ownership or transaction path fits the company?',
   title: 'Prepare for Succession, Sale, Merger, Acquisition, or Private Equity',
   description:
     'Clarify owner goals, build transaction readiness, organise diligence materials, understand company value drivers, and prepare for professional advice.',
+  duration: '2–6 weeks self-guided · adviser-supported when appropriate',
+  capitalFocus:
+    'Clarify the resources, professional advice, records, governance, and decision readiness needed before beginning a succession, sale, merger, acquisition, or private-equity process.',
   modules: [
     {
       key: 'transition-owner-goals',
@@ -35,5 +39,29 @@ export const transitionPreparationWorkshop = {
       framework: 'Data Room Checklist and Adviser Brief',
       output: 'Transition Readiness Pack',
     },
+  ],
+  fieldwork: [
+    'Clarify owner, family, leadership-team, and stakeholder goals before selecting a transaction route.',
+    'Review financial, legal, operational, customer, people, governance, and intellectual-property records.',
+    'Identify readiness gaps, material risks, missing documents, and decisions that require specialist advice.',
+    'Prepare focused questions for accountants, lawyers, corporate-finance advisers, and potential buyers or partners.',
+  ],
+  outputs: [
+    'Owner Goals Statement',
+    'Transition Direction',
+    'Value Driver Assessment',
+    'Value Improvement Plan',
+    'Transaction Readiness Review',
+    'Readiness Gap Map',
+    'Data Room Checklist',
+    'Adviser Brief',
+    'Transition Readiness Pack',
+  ],
+  decisions: [
+    'Continue building value before a transaction process',
+    'Prepare a succession pathway',
+    'Begin focused adviser conversations',
+    'Prepare for a sale, merger, acquisition, or private-equity process',
+    'Pause and resolve readiness gaps first',
   ],
 }
