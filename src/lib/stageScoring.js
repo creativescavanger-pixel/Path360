@@ -1,151 +1,308 @@
-const DEFAULT_PRIORITY_LABELS = {
-  clarify_problem: 'Clarify my problem and customer',
-  validate_demand: 'Validate demand with real users',
-  improve_product: 'Improve my product or offer',
-  gain_traction: 'Gain customers and traction',
-  growth_systems: 'Build growth systems',
-  financial_model: 'Strengthen pricing and financial model',
-  investor_readiness: 'Prepare for investors',
-  team_operations: 'Build team and operations',
-  founder_development: 'Develop myself as a founder',
-}
+// src/lib/stageScoring.js
 
-const STAGE_THRESHOLDS = [30, 50, 70, 85]
-const STAGES = ['idea', 'validation', 'mvp', 'traction', 'growth']
-
-function toStage(score) {
-  if (score <= STAGE_THRESHOLDS[0]) return 'idea'
-  if (score <= STAGE_THRESHOLDS[1]) return 'validation'
-  if (score <= STAGE_THRESHOLDS[2]) return 'mvp'
-  if (score <= STAGE_THRESHOLDS[3]) return 'traction'
-  return 'growth'
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value))
-}
-
-function normalizeScore(value, map) {
-  return map[value] ?? 0
-}
-
-const PRODUCT_MATURITY_SCORE = {
-  idea: 0,
-  prototype: 12,
-  live_early: 24,
-  live_growing: 34,
-  repeatable: 42,
-}
-
-const CUSTOMER_STATUS_SCORE = {
-  none: 0,
-  conversations: 10,
-  interviews: 18,
-  pilots: 28,
-  first_paying: 34,
-  recurring_customers: 42,
-}
-
-const REVENUE_PATTERN_SCORE = {
-  none: 0,
-  pilot: 10,
-  one_off: 18,
-  recurring: 28,
-  predictable: 42,
-}
-
-const GTM_REPEATABILITY_SCORE = {
-  none: 0,
-  manual: 12,
-  emerging: 24,
-  repeatable: 40,
-}
-
-const STAGE_LABELS = {
-  idea: 'Idea',
-  validation: 'Validation',
-  mvp: 'MVP',
-  traction: 'Traction',
-  growth: 'Growth',
-}
-
-export function scoreVentureBaseline(input = {}) {
-  const statusValues = input.statusByItem || {}
-  const statusScores = Object.values(statusValues).map((value) => Number(value) || 0)
-  const statusAverage = statusScores.length
-    ? statusScores.reduce((sum, value) => sum + value, 0) / statusScores.length
-    : 0
-
-  const productScore = normalizeScore(input.productMaturity, PRODUCT_MATURITY_SCORE)
-  const customerScore = normalizeScore(input.customerStatus, CUSTOMER_STATUS_SCORE)
-  const revenueScore = normalizeScore(input.revenuePattern, REVENUE_PATTERN_SCORE)
-  const gtmScore = normalizeScore(input.goToMarketRepeatability, GTM_REPEATABILITY_SCORE)
-
-  const stageScore = clamp(
-    Math.round(
-      statusAverage * 15 +
-        productScore * 0.6 +
-        customerScore * 0.5 +
-        revenueScore * 0.35 +
-        gtmScore * 0.35
-    ),
-    0,
-    100
-  )
-
-  const diagnosedStage = toStage(stageScore)
-
-  const confidence = clamp(
-    55 + Math.round((stageScore - 30) * 0.4),
-    55,
-    95
-  )
-
-  const reasons = []
-  if (!input.productMaturity) {
-    reasons.push('Product maturity is not yet defined.')
-  }
-  if (!input.customerStatus) {
-    reasons.push('Customer signal is still developing.')
-  }
-  if (!input.revenuePattern) {
-    reasons.push('Revenue pattern has not been established.')
-  }
-  if (!input.goToMarketRepeatability) {
-    reasons.push('Go-to-market repeatability needs clarity.')
-  }
-  if (reasons.length === 0) {
-    reasons.push('Your baseline includes a clearer product, customer, revenue, and go-to-market picture.')
+function getEvidenceSuggestedStage({
+  productMaturity,
+  customerStatus,
+  revenuePattern,
+  goToMarketRepeatability,
+}) {
+  if (productMaturity === 'idea' || customerStatus === 'none' || !customerStatus) {
+    return 'discover'
   }
 
-  const recommendedAcademyPath = diagnosedStage
-  const recommendedMissionKeys = []
-  if (diagnosedStage === 'idea') {
-    recommendedMissionKeys.push('opportunity-foundations')
-  } else if (diagnosedStage === 'validation') {
-    recommendedMissionKeys.push('notice-friction')
-  } else if (diagnosedStage === 'mvp') {
-    recommendedMissionKeys.push('choose-a-user')
+  if (customerStatus === 'conversations' || customerStatus === 'interviews') {
+    return 'explore'
   }
 
-  const priorityScores = Array.isArray(input.priorities)
-    ? input.priorities.map((key) => ({
-        key,
-        label: DEFAULT_PRIORITY_LABELS[key] || key,
-        score: 90,
-      }))
-    : []
+  if (
+    customerStatus === 'pilots' ||
+    revenuePattern === 'pilot' ||
+    productMaturity === 'prototype'
+  ) {
+    return 'test'
+  }
 
-  const stageBrief = `Your baseline indicates ${STAGE_LABELS[diagnosedStage] || 'Idea'} stage readiness with a ${confidence}% confidence score and a focus on ${recommendedAcademyPath} learning.`
+  if (
+    customerStatus === 'first_paying' ||
+    revenuePattern === 'one_off' ||
+    productMaturity === 'live_early'
+  ) {
+    return 'build'
+  }
+
+  if (
+    customerStatus === 'recurring_customers' &&
+    revenuePattern === 'recurring' &&
+    goToMarketRepeatability !== 'repeatable'
+  ) {
+    return 'launch'
+  }
+
+  if (
+    revenuePattern === 'predictable' ||
+    goToMarketRepeatability === 'repeatable' ||
+    productMaturity === 'repeatable'
+  ) {
+    return 'grow'
+  }
+
+  return 'explore'
+}
+
+// Lightweight baseline scorer used by Assessment/StageOnboarding
+export function scoreVentureBaseline(baselineInput = {}) {
+  const {
+    declaredStage = 'discover',
+    ventureProgressLevel = '',
+    productMaturity,
+    customerStatus,
+    revenuePattern,
+    goToMarketRepeatability,
+  } = baselineInput
+
+  const progressToStage = {
+    idea_only: 'discover',
+    prototype: 'test',
+    beta_live: 'launch',
+    revenue_early: 'grow',
+    repeatable_growth: 'grow',
+  }
+
+  const evidenceSuggestedStage = getEvidenceSuggestedStage({
+    productMaturity,
+    customerStatus,
+    revenuePattern,
+    goToMarketRepeatability,
+  })
+
+  const stageFromProgress = progressToStage[ventureProgressLevel] || null
+
+  const diagnosedStage =
+    evidenceSuggestedStage || stageFromProgress || declaredStage || 'discover'
 
   return {
     diagnosedStage,
-    stageScore,
-    stageConfidence: confidence,
-    stageReasons: reasons,
-    recommendedAcademyPath,
-    recommendedMissionKeys,
-    priorityScores,
-    stageBrief,
+    evidenceSuggestedStage,
+    stageFromProgress,
+    declaredStage,
+  }
+}
+
+export function computeStageBaselineScores(
+  baselineInput = {},
+  assessmentResults = null,
+) {
+  const evidenceItems = [
+    'problem',
+    'customer',
+    'solution',
+    'business',
+    'traction',
+    'team',
+    'capital',
+  ]
+
+  const statusScores = baselineInput.statusByItem || {}
+
+  let evidenceScoreRaw = 0
+  evidenceItems.forEach((id) => {
+    const s = Number(statusScores[id] ?? 0)
+    evidenceScoreRaw += s
+  })
+
+  const evidenceScoreMax = evidenceItems.length * 3
+  const evidenceScorePercent =
+    evidenceScoreMax > 0
+      ? Math.round((evidenceScoreRaw / evidenceScoreMax) * 100)
+      : 0
+
+  const weightsByStage = {
+    discover: {
+      problem: 3,
+      customer: 2,
+      solution: 1,
+      business: 1,
+      traction: 0,
+      team: 1,
+      capital: 0,
+    },
+    explore: {
+      problem: 3,
+      customer: 3,
+      solution: 1,
+      business: 1,
+      traction: 0,
+      team: 1,
+      capital: 0,
+    },
+    test: {
+      problem: 3,
+      customer: 3,
+      solution: 2,
+      business: 2,
+      traction: 1,
+      team: 1,
+      capital: 1,
+    },
+    build: {
+      problem: 2,
+      customer: 2,
+      solution: 3,
+      business: 3,
+      traction: 1,
+      team: 2,
+      capital: 2,
+    },
+    launch: {
+      problem: 2,
+      customer: 2,
+      solution: 2,
+      business: 2,
+      traction: 3,
+      team: 2,
+      capital: 2,
+    },
+    grow: {
+      problem: 1,
+      customer: 2,
+      solution: 2,
+      business: 3,
+      traction: 3,
+      team: 3,
+      capital: 2,
+    },
+    expand: {
+      problem: 1,
+      customer: 2,
+      solution: 2,
+      business: 3,
+      traction: 3,
+      team: 3,
+      capital: 3,
+    },
+    optimise: {
+      problem: 1,
+      customer: 1,
+      solution: 1,
+      business: 3,
+      traction: 3,
+      team: 3,
+      capital: 3,
+    },
+    transition: {
+      problem: 0,
+      customer: 1,
+      solution: 1,
+      business: 3,
+      traction: 2,
+      team: 3,
+      capital: 3,
+    },
+  }
+
+  const stageReadinessByStage = {}
+
+  Object.entries(weightsByStage).forEach(([stageId, weights]) => {
+    let weightedSum = 0
+    let maxWeightedSum = 0
+
+    evidenceItems.forEach((id) => {
+      const w = Number(weights[id] ?? 0)
+      const s = Number(statusScores[id] ?? 0)
+      weightedSum += s * w
+      maxWeightedSum += 3 * w
+    })
+
+    const percent =
+      maxWeightedSum > 0
+        ? Math.round((weightedSum / maxWeightedSum) * 100)
+        : 0
+
+    stageReadinessByStage[stageId] = {
+      score: percent,
+      weightedSum,
+      maxWeightedSum,
+    }
+  })
+
+  const stageOrder = {
+    discover: 0,
+    explore: 1,
+    test: 2,
+    build: 3,
+    launch: 4,
+    grow: 5,
+    expand: 6,
+    optimise: 7,
+    transition: 8,
+  }
+
+  const progressToStage = {
+    idea_only: 'discover',
+    prototype: 'test',
+    beta_live: 'launch',
+    revenue_early: 'grow',
+    repeatable_growth: 'grow',
+  }
+
+  const ventureProgressLevel = baselineInput.ventureProgressLevel || ''
+  const founderStageFromProgress =
+    progressToStage[ventureProgressLevel] || 'discover'
+
+  const recommendedStageId = baselineInput.recommendedStageId || 'discover'
+
+  let diagnosticStageId = null
+  if (assessmentResults?.venturestageresult) {
+    diagnosticStageId = assessmentResults.venturestageresult
+  }
+
+  function alignmentScore(fromStage, toStage) {
+    const fromOrd = stageOrder[fromStage] ?? stageOrder.discover
+    const toOrd = stageOrder[toStage] ?? stageOrder.discover
+    const distance = Math.abs(fromOrd - toOrd)
+
+    if (distance === 0) return 100
+    if (distance === 1) return 80
+    if (distance === 2) return 60
+    if (distance === 3) return 40
+    return 20
+  }
+
+  const founderRecommendedAlignment = alignmentScore(
+    founderStageFromProgress,
+    recommendedStageId,
+  )
+
+  const diagnosticRecommendedAlignment = diagnosticStageId
+    ? alignmentScore(diagnosticStageId, recommendedStageId)
+    : null
+
+  const mainTension = baselineInput.mainTension || ''
+  let constraintSeverity = 1
+
+  const highTensionIds = [
+    'economics',
+    'team_time_capital',
+    'operations_resilience',
+    'transition_future',
+  ]
+
+  if (highTensionIds.includes(mainTension)) {
+    constraintSeverity = 3
+  } else if (mainTension) {
+    constraintSeverity = 2
+  }
+
+  return {
+    evidenceScoreRaw,
+    evidenceScoreMax,
+    evidenceScorePercent,
+    stageReadinessByStage,
+    founderStageFromProgress,
+    recommendedStageId,
+    diagnosticStageId,
+    founderRecommendedAlignment,
+    diagnosticRecommendedAlignment,
+    constraintSeverity,
   }
 }

@@ -1,0 +1,67 @@
+export const transitionPreparationWorkshop = {
+  key: 'transition',
+  number: '08',
+  label: 'Transition',
+  legacyPath: 'growth',
+  question: 'What ownership or transaction path fits the company?',
+  title: 'Prepare for Succession, Sale, Merger, Acquisition, or Private Equity',
+  description:
+    'Clarify owner goals, build transaction readiness, organise diligence materials, understand company value drivers, and prepare for professional advice.',
+  duration: '2–6 weeks self-guided · adviser-supported when appropriate',
+  capitalFocus:
+    'Clarify the resources, professional advice, records, governance, and decision readiness needed before beginning a succession, sale, merger, acquisition, or private-equity process.',
+  modules: [
+    {
+      key: 'transition-owner-goals',
+      number: '8.1',
+      title: 'Clarify owner goals and transition options',
+      framework: 'Owner Goals and Transition Options',
+      output: 'Transition Direction',
+    },
+    {
+      key: 'transition-value-drivers',
+      number: '8.2',
+      title: 'Understand company value drivers',
+      framework: 'Value Driver Assessment',
+      output: 'Value Improvement Plan',
+    },
+    {
+      key: 'transition-readiness',
+      number: '8.3',
+      title: 'Prepare governance and financial readiness',
+      framework: 'Transaction Readiness Review',
+      output: 'Readiness Gap Map',
+    },
+    {
+      key: 'transition-data-room',
+      number: '8.4',
+      title: 'Organise the data room and adviser brief',
+      framework: 'Data Room Checklist and Adviser Brief',
+      output: 'Transition Readiness Pack',
+    },
+  ],
+  fieldwork: [
+    'Clarify owner, family, leadership-team, and stakeholder goals before selecting a transaction route.',
+    'Review financial, legal, operational, customer, people, governance, and intellectual-property records.',
+    'Identify readiness gaps, material risks, missing documents, and decisions that require specialist advice.',
+    'Prepare focused questions for accountants, lawyers, corporate-finance advisers, and potential buyers or partners.',
+  ],
+  outputs: [
+    'Owner Goals Statement',
+    'Transition Direction',
+    'Value Driver Assessment',
+    'Value Improvement Plan',
+    'Transaction Readiness Review',
+    'Readiness Gap Map',
+    'Data Room Checklist',
+    'Adviser Brief',
+    'Transition Readiness Pack',
+  ],
+  decisions: [
+    'Continue building value before a transaction process',
+    'Prepare a succession pathway',
+    'Begin focused adviser conversations',
+    'Prepare for a sale, merger, acquisition, or private-equity process',
+    'Pause and resolve readiness gaps first',
+  ],
+}

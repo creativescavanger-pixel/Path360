@@ -1587,12 +1587,6 @@ export default function StageOnboarding() {
   const updateFounderProfile = useDiagnosticStore(
     (state) => state.updateFounderProfile,
   )
-    const founderRoute = useDiagnosticStore(
-    (state) => state.journeyStatus?.founderRoute || null,
-  )
-
-  const isExplorer = founderRoute === 'explorer'
-
 const saveStageDraft = useDiagnosticStore((state) => state.saveStageDraft)
 
 const loadStageDraft = useDiagnosticStore((state) => state.loadStageDraft)
@@ -1654,81 +1648,9 @@ const [hasLoadedDraft, setHasLoadedDraft] = useState(false)
   )
   const [mainTension, setMainTension] = useState(existing.mainTension)
   const [pathDecision, setPathDecision] = useState(existing.pathDecision)
-    const contextCopy = isExplorer
-    ? {
-        pageTitle: 'Find a direction worth exploring',
-        pageDescription:
-          'You do not need a venture, product, customers, or revenue yet. Tell PATH360 what you are noticing and what you would like to understand better.',
-        summaryLabel:
-          'What opportunity, people, or area would you like to understand better?',
-        summaryHelp:
-          'A few words are enough. You can start with a community, an everyday frustration, an industry, or a change you have noticed.',
-        summaryPlaceholder:
-          'For example: helping small shops manage stock, youth employment, affordable health services, or better access to local markets.',
-        problemLabel:
-          'What have you noticed that feels difficult, inefficient, unfair, or underserved?',
-        problemHelp:
-          'Describe a situation, person, or group. You do not need to know the solution yet.',
-        problemPlaceholder:
-          'For example: Small shop owners often track stock by memory or paper notes, which leads to lost sales and wasted money.',
-        progressLabel: 'How clear is your direction so far?',
-        progressHelp:
-          'Choose what is true today. There is no wrong starting point.',
-        recentProgressLabel:
-          'What have you noticed, learned, or explored recently?',
-        recentProgressHelp:
-          'This can be a conversation, observation, article, experience, or problem you keep seeing.',
-        recentProgressPlaceholder:
-          'For example: I spoke with three small shop owners and noticed they all struggle to know which items are running out.',
-      }
-    : {
-        pageTitle: 'Venture snapshot (your words)',
-        pageDescription:
-          'Start with your own interpretation. Keep answers short, clear, and focused on what is true for your venture today.',
-        summaryLabel: 'Describe your venture in one sentence.',
-        summaryHelp:
-          'Use plain language. Imagine describing it to a smart friend in another field.',
-        summaryPlaceholder: 'We help [who] [do what] so that [outcome].',
-        problemLabel: 'What problem are you solving, for whom, and why now?',
-        problemHelp:
-          'Be specific about the customer group, their situation, and why timing matters.',
-        problemPlaceholder:
-          'e.g. Health clinics struggle to see which interventions work for which patients. We focus on clinics with 5–20 staff who lack analytics tools but feel pressure to prove outcomes.',
-        progressLabel: 'How far along are you today?',
-        progressHelp:
-          'Pick the option that best matches what exists now, not your plan.',
-        recentProgressLabel:
-          'What meaningful progress have you made in the last 90 days?',
-        recentProgressHelp:
-          'Mention customer conversations, launches, revenue, or team changes.',
-        recentProgressPlaceholder:
-          'e.g. Completed 12 customer interviews, launched a prototype with 3 clinics, and signed our first paid pilot.',
-      }
   useEffect(() => {
     const next = normaliseAssessment(stageAssessment)
-
-    setSelectedStage(next.declaredStage)
-    setStatusByItem(next.statusByItem)
-    setNotes(next.notes)
-    setShowResults(Boolean(next.completedAt))
-    setProductMaturity(next.productMaturity)
-    setCustomerStatus(next.customerStatus)
-    setRevenuePattern(next.revenuePattern)
-    setGoToMarketRepeatability(next.goToMarketRepeatability)
-    setTeamStructure(next.teamStructure)
-    setFundingStage(next.fundingStage)
-    setPriorities(next.priorities)
-    setBlockers(next.blockers)
-    setCompletedActivities(next.completedActivities)
-    setVentureSummary(next.ventureSummary)
-    setVentureProblem(next.ventureProblem)
-    setVentureProgressLevel(next.ventureProgressLevel)
-    setRecentProgress90Days(next.recentProgress90Days)
-    setMainTension(next.mainTension)
-    setPathDecision(next.pathDecision)
-  }, [stageAssessment])
-
-  useEffect(() => {
+useEffect(() => {
   if (hasLoadedDraft) return
 
   if (hasCompletedStageOnboarding || stageAssessment?.completedAt) {
@@ -1776,78 +1698,27 @@ const [hasLoadedDraft, setHasLoadedDraft] = useState(false)
   stageAssessment,
   loadStageDraft,
 ])
-useEffect(() => {
-  if (!hasLoadedDraft || hasCompletedStageOnboarding || !user?.id) {
-    return undefined
-  }
+    setSelectedStage(next.declaredStage)
+    setStatusByItem(next.statusByItem)
+    setNotes(next.notes)
+    setShowResults(Boolean(next.completedAt))
+    setProductMaturity(next.productMaturity)
+    setCustomerStatus(next.customerStatus)
+    setRevenuePattern(next.revenuePattern)
+    setGoToMarketRepeatability(next.goToMarketRepeatability)
+    setTeamStructure(next.teamStructure)
+    setFundingStage(next.fundingStage)
+    setPriorities(next.priorities)
+    setBlockers(next.blockers)
+    setCompletedActivities(next.completedActivities)
+    setVentureSummary(next.ventureSummary)
+    setVentureProblem(next.ventureProblem)
+    setVentureProgressLevel(next.ventureProgressLevel)
+    setRecentProgress90Days(next.recentProgress90Days)
+    setMainTension(next.mainTension)
+    setPathDecision(next.pathDecision)
+  }, [stageAssessment])
 
-  const hasDraftContent = Boolean(
-    selectedStage ||
-      ventureSummary.trim() ||
-      ventureProblem.trim() ||
-      ventureProgressLevel ||
-      recentProgress90Days.trim() ||
-      mainTension ||
-      pathDecision ||
-      notes.trim() ||
-      priorities.length ||
-      blockers.length ||
-      completedActivities.length ||
-      Object.values(statusByItem).some((status) => status !== 'not_started'),
-  )
-
-  if (!hasDraftContent) {
-    return undefined
-  }
-
-  const timeoutId = window.setTimeout(() => {
-    saveStageDraft({
-      selectedStage,
-      statusByItem,
-      notes,
-      productMaturity,
-      customerStatus,
-      revenuePattern,
-      goToMarketRepeatability,
-      teamStructure,
-      fundingStage,
-      priorities,
-      blockers,
-      completedActivities,
-      ventureSummary,
-      ventureProblem,
-      ventureProgressLevel,
-      recentProgress90Days,
-      mainTension,
-      pathDecision,
-    })
-  }, 700)
-
-  return () => window.clearTimeout(timeoutId)
-}, [
-  hasLoadedDraft,
-  hasCompletedStageOnboarding,
-  user?.id,
-  selectedStage,
-  statusByItem,
-  notes,
-  productMaturity,
-  customerStatus,
-  revenuePattern,
-  goToMarketRepeatability,
-  teamStructure,
-  fundingStage,
-  priorities,
-  blockers,
-  completedActivities,
-  ventureSummary,
-  ventureProblem,
-  ventureProgressLevel,
-  recentProgress90Days,
-  mainTension,
-  pathDecision,
-  saveStageDraft,
-])
   const averageScore = useMemo(() => {
     const total = ITEMS.reduce(
       (sum, item) => sum + getStatusScore(statusByItem[item.id]),
@@ -2143,7 +2014,6 @@ const selectedStageData = selectedStage ? getStage(selectedStage) : null
       }
 saveLocalStage(user.id, nextAssessment)
       setStageAssessment(nextAssessment)
-      clearStageDraft()
 
       if (founderProfile) {
         updateFounderProfile({
@@ -2244,124 +2114,45 @@ saveLocalStage(user.id, nextAssessment)
 
   return (
     <div className="fade-up" style={{ width: '100%' }}>
-
       {draftRestored ? (
   <div
-    role="presentation"
+    role="status"
     style={{
-      position: 'fixed',
-      inset: 0,
-      zIndex: 2147483647,
-      display: 'grid',
-      placeItems: 'center',
-      padding: 20,
-      background: 'rgba(17, 24, 20, 0.48)',
-      backdropFilter: 'blur(4px)',
-      WebkitBackdropFilter: 'blur(4px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      marginBottom: 12,
+      padding: '10px 12px',
+      border: '1px solid rgba(45, 106, 79, 0.24)',
+      borderRadius: 12,
+      background: 'var(--green-050)',
+      color: 'var(--green-800)',
+      fontSize: 12.5,
+      lineHeight: 1.5,
     }}
   >
-    <section
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="draft-restored-title"
-      aria-describedby="draft-restored-description"
+    <span>
+      Welcome back — your Founder Baseline draft has been restored.
+    </span>
+
+    <button
+      type="button"
+      onClick={() => setDraftRestored(false)}
+      aria-label="Dismiss restored draft message"
       style={{
-        width: 'min(100%, 520px)',
-        padding: 28,
-        border: '1px solid var(--border, #DDE2DC)',
-        borderRadius: 20,
-        background: 'var(--surface, #FFFFFF)',
-        boxShadow: '0 22px 65px rgba(17, 24, 20, 0.28)',
+        border: 0,
+        background: 'transparent',
+        color: 'inherit',
+        cursor: 'pointer',
+        fontSize: 17,
+        lineHeight: 1,
       }}
     >
-      <div
-        style={{
-          display: 'grid',
-          width: 46,
-          height: 46,
-          placeItems: 'center',
-          marginBottom: 16,
-          borderRadius: 14,
-          background: 'var(--green-050, #EAF5EE)',
-          color: 'var(--green-700, #1A704D)',
-          fontSize: 22,
-          fontWeight: 900,
-        }}
-      >
-        ✓
-      </div>
-
-      <p
-        style={{
-          margin: '0 0 8px',
-          color: 'var(--green-700, #1A704D)',
-          fontSize: 10,
-          fontWeight: 850,
-          letterSpacing: '.12em',
-          textTransform: 'uppercase',
-        }}
-      >
-        Progress restored
-      </p>
-
-      <h2
-        id="draft-restored-title"
-        style={{
-          margin: '0 0 12px',
-          color: 'var(--text, #151614)',
-          fontSize: 28,
-          fontWeight: 800,
-          letterSpacing: '-.04em',
-          lineHeight: 1.15,
-        }}
-      >
-        Welcome back
-      </h2>
-
-      <p
-        id="draft-restored-description"
-        style={{
-          margin: 0,
-          color: 'var(--text-soft, #5D635D)',
-          fontSize: 14,
-          lineHeight: 1.65,
-        }}
-      >
-        Your Founder Baseline draft has been restored. Continue from where you
-        left off—your answers are still here.
-      </p>
-
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          marginTop: 24,
-        }}
-      >
-        <button
-          type="button"
-          autoFocus
-          onClick={() => setDraftRestored(false)}
-          style={{
-            minHeight: 42,
-            padding: '10px 16px',
-            border: '1px solid var(--green-700, #1A704D)',
-            borderRadius: 10,
-            background: 'var(--green-700, #1A704D)',
-            color: '#FFFFFF',
-            font: 'inherit',
-            fontSize: 13,
-            fontWeight: 800,
-            cursor: 'pointer',
-          }}
-        >
-          Continue my baseline
-        </button>
-      </div>
-    </section>
+      ×
+    </button>
   </div>
 ) : null}
-      
       <StagePageTopBar
         averageScore={averageScore}
         baselineScores={baselineScores}
@@ -2388,18 +2179,18 @@ saveLocalStage(user.id, nextAssessment)
           {activeStep === 'context' && activePageId === 'snapshot' && (
             <section className="p360-card" style={{ padding: 16 }}>
               <div className="p360-kicker" style={{ marginBottom: 6 }}>
-  {contextCopy.pageTitle}
-</div>
+                Venture snapshot (your words)
+              </div>
               <p
-  className="p360-body-sm"
-  style={{ margin: '0 0 10px', fontSize: 13 }}
->
-  {contextCopy.pageDescription}
-</p>
+                className="p360-body-sm"
+                style={{ margin: '0 0 10px', fontSize: 13 }}
+              >
+                Start with your own interpretation. Keep answers short, clear,
+                and focused on what is true for your venture today.
+              </p>
 
               <div style={{ marginBottom: 10 }}>
                 <label
-                htmlFor="venture-summary"
                   style={{
                     display: 'block',
                     marginBottom: 4,
@@ -2408,7 +2199,7 @@ saveLocalStage(user.id, nextAssessment)
                     color: 'var(--text)',
                   }}
                 >
-                  {contextCopy.summaryLabel}
+                  Describe your venture in one sentence.
                 </label>
                 <p
                   className="p360-body-sm"
@@ -2418,19 +2209,17 @@ saveLocalStage(user.id, nextAssessment)
                     color: 'var(--text-soft)',
                   }}
                 >
-                 {contextCopy.summaryHelp}
+                  Use plain language. Imagine describing it to a smart friend in
+                  another field.
                 </p>
                 <input
-                id="venture-summary"
-  name="ventureSummary"
-  autoComplete="organization"
                   type="text"
                   value={ventureSummary}
                   onChange={(e) => {
                     setVentureSummary(e.target.value)
                     markChanged()
                   }}
-                placeholder={contextCopy.summaryPlaceholder}
+                  placeholder="We help [who] [do what] so that [outcome]."
                   style={{
                     width: '100%',
                     borderRadius: 10,
@@ -2443,7 +2232,6 @@ saveLocalStage(user.id, nextAssessment)
 
               <div style={{ marginBottom: 10 }}>
                 <label
-                htmlFor="venture-problem"
                   style={{
                     display: 'block',
                     marginBottom: 4,
@@ -2452,7 +2240,7 @@ saveLocalStage(user.id, nextAssessment)
                     color: 'var(--text)',
                   }}
                 >
-                  {contextCopy.problemLabel}
+                  What problem are you solving, for whom, and why now?
                 </label>
                 <p
                   className="p360-body-sm"
@@ -2462,18 +2250,17 @@ saveLocalStage(user.id, nextAssessment)
                     color: 'var(--text-soft)',
                   }}
                 >
-                 {contextCopy.problemHelp}
+                  Be specific about the customer group, their situation, and why
+                  timing matters.
                 </p>
                 <textarea
-                id="venture-problem"
-  name="ventureProblem"
                   value={ventureProblem}
                   onChange={(e) => {
                     setVentureProblem(e.target.value)
                     markChanged()
                   }}
                   rows={4}
-                  placeholder={contextCopy.problemPlaceholder}
+                  placeholder="e.g. Health clinics struggle to see which interventions work for which patients. We focus on clinics with 5–20 staff who lack analytics tools but feel pressure to prove outcomes."
                   style={{
                     width: '100%',
                     borderRadius: 10,
@@ -2494,13 +2281,14 @@ saveLocalStage(user.id, nextAssessment)
                     color: 'var(--text)',
                   }}
                 >
-                 {contextCopy.progressLabel}
+                  How far along are you today?
                 </div>
                 <p
                   className="p360-body-sm"
                   style={{ margin: '0 0 8px', fontSize: 12 }}
                 >
-                  {contextCopy.progressHelp}
+                  Pick the option that best matches what exists now, not your
+                  plan.
                 </p>
                 <div
                   style={{
@@ -2561,7 +2349,6 @@ saveLocalStage(user.id, nextAssessment)
 
               <div>
                 <label
-                htmlFor="recent-progress-90-days"
                   style={{
                     display: 'block',
                     marginBottom: 4,
@@ -2570,7 +2357,7 @@ saveLocalStage(user.id, nextAssessment)
                     color: 'var(--text)',
                   }}
                 >
-                  {contextCopy.recentProgressLabel}
+                  What meaningful progress have you made in the last 90 days?
                 </label>
                 <p
                   className="p360-body-sm"
@@ -2580,18 +2367,17 @@ saveLocalStage(user.id, nextAssessment)
                     color: 'var(--text-soft)',
                   }}
                 >
-                  {contextCopy.recentProgressHelp}.
+                  Mention customer conversations, launches, revenue, or team
+                  changes.
                 </p>
                 <textarea
-                id="recent-progress-90-days"
-  name="recentProgress90Days"
                   value={recentProgress90Days}
                   onChange={(e) => {
                     setRecentProgress90Days(e.target.value)
                     markChanged()
                   }}
                   rows={3}
-                 placeholder={contextCopy.recentProgressPlaceholder}
+                  placeholder="e.g. Completed 12 customer interviews, launched a prototype with 3 clinics, and signed our first paid pilot."
                   style={{
                     width: '100%',
                     borderRadius: 10,
@@ -2872,13 +2658,9 @@ saveLocalStage(user.id, nextAssessment)
               </div>
 
               <div style={{ marginTop: 14 }}>
-                <label
-  htmlFor="path360-notes"
-  className="p360-kicker"
-  style={{ display: 'block', marginBottom: 6 }}
->
-  Notes for PATH360
-</label>
+                <div className="p360-kicker" style={{ marginBottom: 6 }}>
+                  Notes for PATH360
+                </div>
                 <p
                   className="p360-body-sm"
                   style={{ margin: '0 0 8px', maxWidth: 560, fontSize: 12.5 }}
@@ -2888,8 +2670,6 @@ saveLocalStage(user.id, nextAssessment)
                   your work.
                 </p>
                 <textarea
-                id="path360-notes"
-  name="notes"
                   value={notes}
                   onChange={(e) => {
                     setNotes(e.target.value)
@@ -3065,10 +2845,10 @@ saveLocalStage(user.id, nextAssessment)
               </p>
 
               <p style={{ margin: 0 }}>
-  Next, Venture Intelligence will help PATH360 understand your market,
-  business model, operating context, and ambitions—so its guidance is
-  more relevant to your venture.
-</p>
+                Next, Founder Diagnostic will help you understand the
+                capabilities, evidence, and practical gaps that matter most
+                for your next move.
+              </p>
             </div>
 
             <div
@@ -3099,15 +2879,15 @@ saveLocalStage(user.id, nextAssessment)
                   cursor: 'pointer',
                 }}
               >
-                Review my baseline
+                Open my workshop
               </button>
 
               <button
                 type="button"
                 onClick={() => {
-  setShowCompletion(false)
-  navigate('/app/venture-intelligence-setup', { replace: true })
-}}
+                  setShowCompletion(false)
+                  navigate('/app/assessment', { replace: true })
+                }}
                 style={{
                   minHeight: 40,
                   padding: '9px 15px',
@@ -3121,7 +2901,7 @@ saveLocalStage(user.id, nextAssessment)
                   cursor: 'pointer',
                 }}
               >
-                Continue to Venture Intelligence →
+                Start Founder Diagnostic →
               </button>
             </div>
           </section>

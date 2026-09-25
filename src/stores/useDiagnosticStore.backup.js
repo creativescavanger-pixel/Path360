@@ -32,7 +32,6 @@ const DEFAULT_AGENT = 'venture_strategist'
 
 const STAGE_KEY_PREFIX = 'path360_stage_assessment:'
 const STAGE_COMPLETED_KEY_PREFIX = 'path360_stage_completed:'
-const STAGE_DRAFT_KEY_PREFIX = 'path360_stage_draft:'
 const PENDING_STAGE_KEY = 'path360_pending_stage_assessment'
 
 function getStageKeys(userId) {
@@ -41,7 +40,6 @@ function getStageKeys(userId) {
   return {
     assessment: `${STAGE_KEY_PREFIX}${safeUserId}`,
     completed: `${STAGE_COMPLETED_KEY_PREFIX}${safeUserId}`,
-    draft: `${STAGE_DRAFT_KEY_PREFIX}${safeUserId}`,
   }
 }
 
@@ -95,8 +93,7 @@ function loadLocalStage(userId) {
     }
 
     return emptyLocalStage()
-  } catch (error) {
-    console.warn('Unable to restore local Founder Baseline.', error)
+  } catch {
     return emptyLocalStage()
   }
 }
@@ -126,64 +123,14 @@ function saveLocalStage(userId, assessment) {
       window.localStorage?.setItem(keys.assessment, JSON.stringify(assessment))
       window.localStorage?.setItem(keys.completed, 'true')
       window.localStorage?.removeItem(PENDING_STAGE_KEY)
-      window.localStorage?.removeItem(keys.draft)
       return
     }
 
     window.localStorage?.removeItem(keys.assessment)
     window.localStorage?.removeItem(keys.completed)
     window.localStorage?.removeItem(PENDING_STAGE_KEY)
-  } catch (error) {
-    console.warn('Unable to save local Founder Baseline.', error)
-  }
-}
-
-function loadLocalStageDraft(userId) {
-  if (typeof window === 'undefined' || !userId) return null
-
-  try {
-    const { draft } = getStageKeys(userId)
-    const rawDraft = window.localStorage?.getItem(draft)
-    const parsedDraft = rawDraft ? JSON.parse(rawDraft) : null
-
-    return parsedDraft && typeof parsedDraft === 'object' ? parsedDraft : null
-  } catch (error) {
-    console.warn('Unable to restore Founder Baseline draft.', error)
-    return null
-  }
-}
-
-function saveLocalStageDraft(userId, draft) {
-  if (typeof window === 'undefined' || !userId) return
-
-  try {
-    const { draft: draftKey } = getStageKeys(userId)
-
-    if (!draft || typeof draft !== 'object') {
-      window.localStorage?.removeItem(draftKey)
-      return
-    }
-
-    window.localStorage?.setItem(
-      draftKey,
-      JSON.stringify({
-        ...draft,
-        savedAt: new Date().toISOString(),
-      }),
-    )
-  } catch (error) {
-    console.warn('Unable to save Founder Baseline draft.', error)
-  }
-}
-
-function clearLocalStageDraft(userId) {
-  if (typeof window === 'undefined' || !userId) return
-
-  try {
-    const { draft } = getStageKeys(userId)
-    window.localStorage?.removeItem(draft)
-  } catch (error) {
-    console.warn('Unable to clear Founder Baseline draft.', error)
+  } catch {
+    // Local storage is a convenience layer only.
   }
 }
 
@@ -343,47 +290,10 @@ function hasCompletedFounderDiagnostic(assessment) {
   )
 }
 
-function getJourneyStatus(profile) {
-  const rawStatus =
-    profile?.journeystatus &&
-    typeof profile.journeystatus === 'object' &&
-    !Array.isArray(profile.journeystatus)
-      ? profile.journeystatus
-      : {}
-
-  return {
-    founderRoute:
-      rawStatus.founderRoute ||
-      rawStatus.founder_route ||
-      null,
-
-    maturityBand:
-      rawStatus.maturityBand ||
-      rawStatus.maturity_band ||
-      null,
-
-    startingPointViewedAt:
-      rawStatus.startingPointViewedAt ||
-      rawStatus.starting_point_viewed_at ||
-      null,
-
-    firstActionStartedAt:
-      rawStatus.firstActionStartedAt ||
-      rawStatus.first_action_started_at ||
-      null,
-  }
-}
-
 const useDiagnosticStore = create((set, get) => ({
   user: null,
   founderProfile: null,
-  journeyStatus: {
-    founderRoute: null,
-    maturityBand: null,
-    startingPointViewedAt: null,
-    firstActionStartedAt: null,
-  },
-  workspaceHydrated: false,
+
   assessmentResults: null,
   investorReadyPercent: 0,
   diagnosedStage: null,
@@ -411,20 +321,8 @@ const useDiagnosticStore = create((set, get) => ({
 
   stageAssessment: null,
   hasCompletedStageOnboarding: false,
-  stageStorageReady: false,
 
-  setUser: (user) => {
-    const userId = user?.id || null
-    const localStage = userId ? loadLocalStage(userId) : emptyLocalStage()
-
-    set({
-  user: user || null,
-  stageAssessment: localStage.assessment,
-  hasCompletedStageOnboarding: localStage.completed,
-  stageStorageReady: Boolean(userId),
-  workspaceHydrated: false,
-})
-  },
+  setUser: (user) => set({ user }),
 
   hasVentureSetup: () => {
     return hasCompletedVentureSetup(get().ventureIntelligenceProfile)
@@ -444,7 +342,6 @@ const useDiagnosticStore = create((set, get) => ({
 
     set({
       founderProfile: profile,
-      journeyStatus: getJourneyStatus(profile),
       assessmentResults: derived.assessment,
       investorReadyPercent: derived.readinessPercent,
       diagnosedStage: derived.stage,
@@ -454,36 +351,7 @@ const useDiagnosticStore = create((set, get) => ({
       recommendedAcademyPath: derived.recommendedAcademyPath,
     })
   },
-    setFounderRoute: async (founderRoute) => {
-    const allowedRoutes = ['explorer', 'active_venture']
 
-    if (!allowedRoutes.includes(founderRoute)) {
-      throw new Error('Please choose a valid PATH360 starting route.')
-    }
-
-    const currentProfile = get().founderProfile || {}
-    const currentJourneyStatus = getJourneyStatus(currentProfile)
-
-    const nextJourneyStatus = {
-      ...currentJourneyStatus,
-      founderRoute,
-      maturityBand:
-        currentJourneyStatus.maturityBand ||
-        (founderRoute === 'explorer' ? 'discover' : null),
-    }
-
-    const saved = await get().updateFounderProfile({
-      journeystatus: nextJourneyStatus,
-    })
-
-    set({
-      journeyStatus: getJourneyStatus(saved),
-    })
-
-    return saved
-  },
-
-  getJourneyStatus: () => getJourneyStatus(get().founderProfile),
   setAssessmentResults: (results) => {
     const profile = get().founderProfile
     const derived = deriveAssessmentState(profile, results || null)
@@ -600,36 +468,18 @@ const useDiagnosticStore = create((set, get) => ({
     set({
       stageAssessment: nextAssessment,
       hasCompletedStageOnboarding: Boolean(nextAssessment),
-      stageStorageReady: Boolean(userId),
     })
 
     saveLocalStage(userId, nextAssessment)
   },
 
-  saveStageDraft: (draft) => {
-    const userId = get().user?.id
-    saveLocalStageDraft(userId, draft)
-  },
-
-  loadStageDraft: () => {
-    const userId = get().user?.id
-    return loadLocalStageDraft(userId)
-  },
-
-  clearStageDraft: () => {
-    const userId = get().user?.id
-    clearLocalStageDraft(userId)
-  },
-
   clearStageAssessment: () => {
     const userId = get().user?.id
     saveLocalStage(userId, null)
-    clearLocalStageDraft(userId)
 
     set({
       stageAssessment: null,
       hasCompletedStageOnboarding: false,
-      stageStorageReady: Boolean(userId),
     })
   },
 
@@ -761,7 +611,6 @@ const useDiagnosticStore = create((set, get) => ({
 
       set({
         founderProfile: saved,
-        journeyStatus: getJourneyStatus(saved),
         assessmentResults: derived.assessment,
         investorReadyPercent: derived.readinessPercent,
         diagnosedStage: derived.stage,
@@ -887,8 +736,7 @@ const useDiagnosticStore = create((set, get) => ({
       throw error
     }
   },
-
-  startProgressReview: () => {
+   startProgressReview: () => {
     const currentAssessment = get().assessmentResults
     const history = normaliseAssessmentHistory(get().assessmentHistory)
 
@@ -1213,15 +1061,8 @@ const useDiagnosticStore = create((set, get) => ({
       state.corridor ||
       (corridorKey ? GLOBAL_CORRIDOR_MATRIX[corridorKey] : null)
     const ventureIntelligence = state.ventureIntelligenceProfile
-const journeyStatus = state.journeyStatus || getJourneyStatus(profile)
+
     return {
-    journey: {
-  founder_route: journeyStatus.founderRoute,
-  maturity_band: journeyStatus.maturityBand,
-  starting_point_viewed_at: journeyStatus.startingPointViewedAt,
-  first_action_started_at: journeyStatus.firstActionStartedAt,
-},
-      
       profile: profile
         ? {
             venture_name:
@@ -1268,9 +1109,7 @@ const journeyStatus = state.journeyStatus || getJourneyStatus(profile)
               state.investorReadyPercent ??
               null,
             financial_maturity:
-              assessment.financialmaturity ??
-              assessment.financial_maturity ??
-              null,
+              assessment.financialmaturity ?? assessment.financial_maturity ?? null,
             venture_stage_result:
               assessment.venturestageresult ??
               assessment.venturestage ??
@@ -1362,134 +1201,90 @@ const journeyStatus = state.journeyStatus || getJourneyStatus(profile)
   },
 
   hydrateWorkspace: async (userId) => {
-    if (!userId) {
-      throw new Error('No authenticated user found.')
-    }
-
-    const localStage = loadLocalStage(userId)
-
-    set({
-      stageAssessment: localStage.assessment,
-      hasCompletedStageOnboarding: localStage.completed,
-      stageStorageReady: true,
-    })
-
-    const [workspaceResult, intelligenceResult, complianceResult] =
-      await Promise.allSettled([
+    try {
+      const [workspace, intelligenceProfile, savedCompliance] = await Promise.all([
         loadFounderWorkspace(userId),
         getVentureIntelligenceProfile(userId),
         getComplianceProgress(userId),
       ])
 
-    const workspace =
-      workspaceResult.status === 'fulfilled' ? workspaceResult.value : null
+      const complianceProgress = (Array.isArray(savedCompliance)
+        ? savedCompliance
+        : []
+      ).reduce((accumulator, record) => {
+        const countryCode = record?.country_code
 
-    const intelligenceProfile =
-      intelligenceResult.status === 'fulfilled' ? intelligenceResult.value : null
+        if (!countryCode) return accumulator
 
-    const savedCompliance =
-      complianceResult.status === 'fulfilled' ? complianceResult.value : []
+        accumulator[countryCode] = {
+          ...(record?.profile_data || {}),
+          countryCode,
+          countryName: record?.country_name || null,
+          stage: record?.stage || null,
+          corridor: record?.corridor || null,
+          updatedAt: record?.updated_at || null,
+          completedCount: record?.completed_count ?? 0,
+          inProgressCount: record?.in_progress_count ?? 0,
+          totalCount: record?.total_count ?? 0,
+        }
 
-    const complianceProgress = (Array.isArray(savedCompliance)
-      ? savedCompliance
-      : []
-    ).reduce((accumulator, record) => {
-      const countryCode = record?.country_code
+        return accumulator
+      }, {})
 
-      if (!countryCode) return accumulator
+      const localStage = loadLocalStage(userId)
+      const profile = workspace?.founderProfile ?? null
+      const assessment = workspace?.assessmentResults ?? null
+      const derived = deriveAssessmentState(profile, assessment)
 
-      accumulator[countryCode] = {
-        ...(record?.profile_data || {}),
-        countryCode,
-        countryName: record?.country_name || null,
-        stage: record?.stage || null,
-        corridor: record?.corridor || null,
-        updatedAt: record?.updated_at || null,
-        completedCount: record?.completed_count ?? 0,
-        inProgressCount: record?.in_progress_count ?? 0,
-        totalCount: record?.total_count ?? 0,
-      }
+      set({
+        founderProfile: profile,
+        assessmentResults: derived.assessment,
+        assessmentHistory: normaliseAssessmentHistory(
+          workspace?.assessmentHistory,
+        ),
+        progressReviewDraft: null,
+        memories: Array.isArray(workspace?.memories) ? workspace.memories : [],
+        documents: Array.isArray(workspace?.documents) ? workspace.documents : [],
+        founderFiles: Array.isArray(workspace?.founderFiles)
+          ? workspace.founderFiles
+          : [],
+        conversations: workspace?.conversations || {},
+        qaPairs: Array.isArray(workspace?.assessmentResults?.rawqa)
+          ? workspace.assessmentResults.rawqa
+          : [],
+        documentIntakes: Array.isArray(workspace?.documentIntakes)
+          ? workspace.documentIntakes
+          : [],
+        progressEvents: Array.isArray(workspace?.progressEvents)
+          ? workspace.progressEvents
+          : [],
+        complianceProgress,
+        stageAssessment: localStage.assessment,
+        hasCompletedStageOnboarding: localStage.completed,
+        investorReadyPercent: derived.readinessPercent,
+        diagnosedStage: derived.stage,
+        vulnerabilityFlags: derived.flags,
+        corridorKey: derived.corridorKey,
+        corridor: derived.corridor,
+        recommendedAcademyPath: derived.recommendedAcademyPath,
+        ventureIntelligenceProfile: intelligenceProfile || null,
+        hasCompletedVentureIntelligenceSetup:
+          hasCompletedVentureSetup(intelligenceProfile),
+      })
 
-      return accumulator
-    }, {})
-
-    const profile = workspace?.founderProfile ?? null
-    const assessment = workspace?.assessmentResults ?? null
-    const derived = deriveAssessmentState(profile, assessment)
-
-    set({
-      founderProfile: profile,
-      journeyStatus: getJourneyStatus(profile),
-      workspaceHydrated: true,
-      assessmentResults: derived.assessment,
-      assessmentHistory: normaliseAssessmentHistory(
-        workspace?.assessmentHistory,
-      ),
-      progressReviewDraft: null,
-      memories: Array.isArray(workspace?.memories) ? workspace.memories : [],
-      documents: Array.isArray(workspace?.documents) ? workspace.documents : [],
-      founderFiles: Array.isArray(workspace?.founderFiles)
-        ? workspace.founderFiles
-        : [],
-      conversations: workspace?.conversations || {},
-      qaPairs: Array.isArray(workspace?.assessmentResults?.rawqa)
-        ? workspace.assessmentResults.rawqa
-        : [],
-      documentIntakes: Array.isArray(workspace?.documentIntakes)
-        ? workspace.documentIntakes
-        : [],
-      progressEvents: Array.isArray(workspace?.progressEvents)
-        ? workspace.progressEvents
-        : [],
-      complianceProgress,
-      stageAssessment: localStage.assessment,
-      hasCompletedStageOnboarding: localStage.completed,
-      stageStorageReady: true,
-      investorReadyPercent: derived.readinessPercent,
-      diagnosedStage: derived.stage,
-      vulnerabilityFlags: derived.flags,
-      corridorKey: derived.corridorKey,
-      corridor: derived.corridor,
-      recommendedAcademyPath: derived.recommendedAcademyPath,
-      ventureIntelligenceProfile: intelligenceProfile || null,
-      hasCompletedVentureIntelligenceSetup:
-        hasCompletedVentureSetup(intelligenceProfile),
-    })
-
-    if (workspaceResult.status === 'rejected') {
-      console.warn(
-        'Workspace data could not be fully loaded. Local Founder Baseline remains available.',
-        workspaceResult.reason,
-      )
+      return workspace
+    } catch (error) {
+      console.error('hydrateWorkspace failed', error)
+      throw error
     }
-
-    if (intelligenceResult.status === 'rejected') {
-      console.warn(
-        'Venture Intelligence data could not be loaded.',
-        intelligenceResult.reason,
-      )
-    }
-
-    if (complianceResult.status === 'rejected') {
-      console.warn(
-        'Compliance progress could not be loaded.',
-        complianceResult.reason,
-      )
-    }
-
-    return workspace
   },
 
   clearWorkspace: () => {
+    const userId = get().user?.id
+    saveLocalStage(userId, null)
+
     set({
       founderProfile: null,
-      journeyStatus: {
-  founderRoute: null,
-  maturityBand: null,
-  startingPointViewedAt: null,
-  firstActionStartedAt: null,
-},
-  workspaceHydrated: false,
       assessmentResults: null,
       investorReadyPercent: 0,
       diagnosedStage: null,
@@ -1512,7 +1307,6 @@ const journeyStatus = state.journeyStatus || getJourneyStatus(profile)
       complianceProgress: {},
       stageAssessment: null,
       hasCompletedStageOnboarding: false,
-      stageStorageReady: false,
     })
   },
 
@@ -1520,13 +1314,6 @@ const journeyStatus = state.journeyStatus || getJourneyStatus(profile)
     set({
       user: null,
       founderProfile: null,
-      journeyStatus: {
-  founderRoute: null,
-  maturityBand: null,
-  startingPointViewedAt: null,
-  firstActionStartedAt: null,
-},
-workspaceHydrated: false,
       assessmentResults: null,
       investorReadyPercent: 0,
       diagnosedStage: null,
@@ -1549,19 +1336,8 @@ workspaceHydrated: false,
       complianceProgress: {},
       stageAssessment: null,
       hasCompletedStageOnboarding: false,
-      stageStorageReady: false,
     })
   },
 }))
-
-export {
-  clearLocalStageDraft,
-  getStageKeys,
-  isCompletedStageAssessment,
-  loadLocalStage,
-  loadLocalStageDraft,
-  saveLocalStage,
-  saveLocalStageDraft,
-}
-
+export { saveLocalStage }
 export default useDiagnosticStore
