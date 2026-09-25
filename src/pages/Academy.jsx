@@ -11,8 +11,8 @@ import {
   normaliseStageKey,
 } from './academy/stageMap.js'
 import { transitionPreparationWorkshop } from './academy/workshops/transitionPreparation.workshop.js'
-
-
+import { getLesson } from './academy/lessonRegistry.js'
+import LessonPage from './academy/LessonPage.jsx'
 const COURSE = {
   key: 'path360-founder-workshop',
   title: 'PATH360 Academy',
@@ -797,11 +797,16 @@ export default function Academy() {
   const recommendedPath = normalisePathKey(rawStagePath)
 
   const selectedStageParam = searchParams.get('stage')
-  const workshopParam = searchParams.get('workshop')
+const workshopParam = searchParams.get('workshop')
 
-  const selectedStageKey = selectedStageParam
-    ? normaliseStageKey(selectedStageParam)
-    : null
+const lessonParam = searchParams.get('lesson')
+const selectedLesson = lessonParam
+  ? getLesson(lessonParam)
+  : null
+
+const selectedStageKey = selectedStageParam
+  ? normaliseStageKey(selectedStageParam)
+  : null
 
   const selectedPath = selectedStageKey
     ? normalisePathKey(selectedStageKey)
@@ -939,25 +944,43 @@ export default function Academy() {
     setVideoOpen(false)
     setSearchParams({ stage: normaliseStageKey(key) })
   }
+function openLesson({ stageKey, workshopKey, lessonKey }) {
+  setFieldNoteOpen(false)
+  setVideoOpen(false)
 
+  setSearchParams({
+    stage: stageKey,
+    workshop: workshopKey,
+    lesson: lessonKey,
+    view: 'lesson',
+  })
+}
   function openDiscoverModule(moduleKey) {
-    const discoverRouteMap = {
-      'founder-context-profile': 'opportunity-foundations',
-      'notice-friction': 'notice-friction',
-      'environment-map': 'opportunity-foundations',
-      'observation-workarounds': 'notice-friction',
-      'problems-needs-gaps': 'notice-friction',
-    }
-
-    const mappedMissionKey = discoverRouteMap[moduleKey]
-
-    if (mappedMissionKey) {
-      openMission(mappedMissionKey)
-      return
-    }
-
-    openStage('idea')
+  if (moduleKey === 'founder-context-profile') {
+    openLesson({
+      stageKey: 'discover',
+      workshopKey: 'discover-opportunities',
+      lessonKey: 'begin-with-yourself',
+    })
+    return
   }
+
+  const discoverRouteMap = {
+    'notice-friction': 'notice-friction',
+    'environment-map': 'opportunity-foundations',
+    'observation-workarounds': 'notice-friction',
+    'problems-needs-gaps': 'notice-friction',
+  }
+
+  const mappedMissionKey = discoverRouteMap[moduleKey]
+
+  if (mappedMissionKey) {
+    openMission(mappedMissionKey)
+    return
+  }
+
+  openWorkshop('discover')
+}
 
   function openResources(stage = selectedWorkshopStage?.key || selectedPath) {
     navigate(`/app/resources?stage=${encodeURIComponent(stage)}`)
@@ -1064,7 +1087,23 @@ export default function Academy() {
   }
 
   if (activeMission) return <ComingSoonMission mission={activeMission} onBack={goHome} />
+if (selectedLesson) {
+  return (
+    <LessonPage
+      lesson={selectedLesson}
+      onBackToWorkshop={() => {
+        setFieldNoteOpen(false)
+        setVideoOpen(false)
 
+        setSearchParams({
+          stage: selectedLesson.stageKey,
+          workshop: selectedLesson.workshopKey,
+          view: 'workshop',
+        })
+      }}
+    />
+  )
+}
   if (selectedWorkshopStage?.key === 'discover') {
     return (
       <DiscoverWorkshopPage

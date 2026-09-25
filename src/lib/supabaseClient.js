@@ -117,6 +117,14 @@ export async function saveFounderProfile(userId, profile) {
 
   delete normalizedProfile.foundername
 
+  if (
+    !normalizedProfile.journeystatus ||
+    typeof normalizedProfile.journeystatus !== 'object' ||
+    Array.isArray(normalizedProfile.journeystatus)
+  ) {
+    delete normalizedProfile.journeystatus
+  }
+
   const { data, error } = await supabase
     .from('founderprofiles')
     .upsert(

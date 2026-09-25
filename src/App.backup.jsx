@@ -22,9 +22,7 @@ import Reports from './pages/Reports.jsx'
 import Academy from './pages/Academy.jsx'
 import KnowledgeResourceCentre from './pages/KnowledgeResourceCentre.jsx'
 import FounderProfile from './pages/FounderProfile.jsx'
-import FounderProfileOnboarding from './pages/FounderProfileOnboarding.jsx'
 import StageOnboarding from './pages/StageOnboarding.jsx'
-import JourneyStart from './pages/JourneyStart.jsx'
 import VentureIntelligenceSetup from './pages/VentureIntelligenceSetup.jsx'
 import VentureIntelligence from './pages/VentureIntelligence.jsx'
 import Environment from './pages/Environment.jsx'
@@ -68,29 +66,23 @@ function Protected({ children }) {
   const hasFinishedInitialLoad = useRef(false)
   const location = useLocation()
 
-  const hydrateWorkspace = useDiagnosticStore(
-    (state) => state.hydrateWorkspace,
-  )
+  const hydrateWorkspace = useDiagnosticStore((state) => state.hydrateWorkspace)
   const setUser = useDiagnosticStore((state) => state.setUser)
   const clearSessionOnly = useDiagnosticStore(
     (state) => state.clearSessionOnly,
   )
-  const hasCompletedStageOnboarding = useDiagnosticStore(
-    (state) => state.hasCompletedStageOnboarding,
+
+  const stageAssessment = useDiagnosticStore(
+    (state) => state.stageAssessment,
   )
-  const stageStorageReady = useDiagnosticStore(
-    (state) => state.stageStorageReady,
-  )
+
   const hasCompletedVentureIntelligenceSetup = useDiagnosticStore(
     (state) => state.hasCompletedVentureIntelligenceSetup,
   )
+
   const hasCompletedDiagnostic = useDiagnosticStore((state) =>
     state.hasCompletedDiagnostic(),
   )
-  const founderRoute = useDiagnosticStore(
-    (state) => state.journeyStatus?.founderRoute || null,
-  )
-  const founderProfile = useDiagnosticStore((state) => state.founderProfile)
 
   useEffect(() => {
     let mounted = true
@@ -115,6 +107,7 @@ function Protected({ children }) {
         }
 
         setUser(sessionValue.user)
+
         await hydrateWorkspace(sessionValue.user.id)
 
         if (!mounted) return
@@ -178,7 +171,7 @@ function Protected({ children }) {
       mounted = false
       listener.subscription.unsubscribe()
     }
-  }, [clearSessionOnly, hydrateWorkspace, setUser])
+  }, [hydrateWorkspace, clearSessionOnly, setUser])
 
   if (session === undefined || bootstrapping) {
     return <FullScreenLoader />
@@ -188,87 +181,53 @@ function Protected({ children }) {
     return <Navigate to="/auth?mode=login" replace />
   }
 
-  if (!stageStorageReady) {
-    return <FullScreenLoader />
-  }
-
-  const isOnJourneyStartRoute = location.pathname === '/app/journey-start'
-  const isOnFounderProfileRoute = location.pathname === '/app/founder-profile'
-  const isProfileOnboarding =
-    isOnFounderProfileRoute &&
-    new URLSearchParams(location.search).get('onboarding') === '1'
   const isOnStageOnboardingRoute =
     location.pathname === '/app/stage-onboarding'
+
   const isOnVentureIntelligenceSetupRoute =
     location.pathname === '/app/venture-intelligence-setup'
+
   const isOnAssessmentRoute = location.pathname === '/app/assessment'
-  const isOnDashboardRoute = location.pathname === '/app/dashboard'
+
   const isAssessmentReview =
     isOnAssessmentRoute &&
     new URLSearchParams(location.search).get('review') === '1'
 
-  const hasBasicProfile = Boolean(
-    founderProfile?.foundername ||
-      founderProfile?.fullname ||
-      founderProfile?.name,
-  )
-
-  if (!founderRoute && !isOnJourneyStartRoute) {
-    return <Navigate to="/app/journey-start" replace />
-  }
-
-  if (
-    founderRoute &&
-    !hasBasicProfile &&
-    !isOnJourneyStartRoute &&
-    !isProfileOnboarding
-  ) {
-    return <Navigate to="/app/founder-profile?onboarding=1" replace />
-  }
-
-  if (
-    founderRoute &&
-    hasBasicProfile &&
-    !hasCompletedStageOnboarding &&
-    !isOnJourneyStartRoute &&
-    !isProfileOnboarding &&
-    !isOnStageOnboardingRoute
-  ) {
+  if (!stageAssessment && !isOnStageOnboardingRoute) {
     return <Navigate to="/app/stage-onboarding" replace />
   }
 
-  if (
-  founderRoute === 'active_venture' &&
-  hasCompletedStageOnboarding &&
-  !hasCompletedVentureIntelligenceSetup &&
-  !isOnStageOnboardingRoute &&
-  !isOnVentureIntelligenceSetupRoute
-) {
-  return <Navigate to="/app/venture-intelligence-setup" replace />
-}
-
 if (
-  founderRoute === 'explorer' &&
-  hasCompletedStageOnboarding &&
-  !isOnStageOnboardingRoute &&
-  !isOnAssessmentRoute
-) {
-  return <Navigate to="/app/assessment" replace />
-}
-
-  if (
-  hasCompletedStageOnboarding &&
-  (founderRoute === 'explorer' || hasCompletedVentureIntelligenceSetup) &&
-  !hasCompletedDiagnostic &&
+  stageAssessment &&
+  !hasCompletedVentureIntelligenceSetup &&
   !isOnStageOnboardingRoute &&
   !isOnVentureIntelligenceSetupRoute &&
   !isOnAssessmentRoute
 ) {
-  return <Navigate to="/app/assessment" replace />
+  return <Navigate to="/app/venture-intelligence-setup" replace />
 }
 
   if (
-    hasCompletedStageOnboarding &&
+    stageAssessment &&
+    hasCompletedVentureIntelligenceSetup &&
+    isOnVentureIntelligenceSetupRoute
+  ) {
+    return <Navigate to="/app/assessment" replace />
+  }
+
+  if (
+    stageAssessment &&
+    hasCompletedVentureIntelligenceSetup &&
+    !hasCompletedDiagnostic &&
+    !isOnStageOnboardingRoute &&
+    !isOnVentureIntelligenceSetupRoute &&
+    !isOnAssessmentRoute
+  ) {
+    return <Navigate to="/app/assessment" replace />
+  }
+
+  if (
+    stageAssessment &&
     hasCompletedVentureIntelligenceSetup &&
     hasCompletedDiagnostic &&
     isOnAssessmentRoute &&
@@ -277,25 +236,9 @@ if (
     return <Navigate to="/app/dashboard" replace />
   }
 
-  if (
-    hasCompletedStageOnboarding &&
-    hasCompletedVentureIntelligenceSetup &&
-    hasCompletedDiagnostic &&
-    location.pathname === '/app'
-  ) {
-    return <Navigate to="/app/dashboard" replace />
-  }
-
   return children
 }
-function FounderProfileRoute() {
-  const location = useLocation()
 
-  const isOnboarding =
-    new URLSearchParams(location.search).get('onboarding') === '1'
-
-  return isOnboarding ? <FounderProfileOnboarding /> : <FounderProfile />
-}
 export default function App() {
   return (
     <BrowserRouter>
@@ -311,9 +254,10 @@ export default function App() {
             </Protected>
           }
         >
-          <Route index element={<Navigate to="/app/dashboard" replace />} />
-
-          <Route path="journey-start" element={<JourneyStart />} />
+          <Route
+            index
+            element={<Navigate to="/app/dashboard" replace />}
+          />
 
           <Route
             path="stage-onboarding"
@@ -327,16 +271,15 @@ export default function App() {
 
           <Route path="assessment" element={<Assessment />} />
           <Route path="dashboard" element={<Dashboard />} />
-
           <Route
             path="priority-progress"
             element={<PriorityProgress />}
           />
 
           <Route
-  path="founder-profile"
-  element={<FounderProfileRoute />}
-/>
+            path="founder-profile"
+            element={<FounderProfile />}
+          />
 
           <Route
             path="venture-intelligence"

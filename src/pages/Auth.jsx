@@ -72,9 +72,9 @@ export default function Auth() {
         setUser(user)
         identifyUser?.(user.id, { email: user.email })
 
-        // Send returning founders to Stage Onboarding first
-        navigate('/app/stage-onboarding', { replace: true })
-        return
+        // Protected routing will take the founder to their next PATH360 step.
+navigate('/app/stage-onboarding', { replace: true })
+return
       }
 
       const authData = await signUp(form.email, form.password)
@@ -98,9 +98,9 @@ export default function Auth() {
       })
 
       setFounderProfile(profile)
+// New founders begin by choosing the PATH360 route that fits their reality.
+navigate('/app/journey-start', { replace: true })
 
-      // New founders also start at Stage Onboarding
-      navigate('/app/stage-onboarding', { replace: true })
     } catch (err) {
       setError(err.message || 'Something went wrong.')
     } finally {
